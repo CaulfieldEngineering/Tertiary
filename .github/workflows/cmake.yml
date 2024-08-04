@@ -1,0 +1,334 @@
+name: Build and Upload
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        #os: [macos-latest, windows-latest]
+        build_type: [Release]
+        include:
+          - os: windows-latest
+            cmake_arch: -A x64
+          - os: macos-latest
+            cmake_arch: -DCMAKE_OSX_ARCHITECTURES=x86_64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Cache Dependencies
+    # ==========================================================================================
+    # - name: Cache dependencies
+    #   id: cache-libs
+    #   uses: actions/cache@v4
+    #   with:
+    #     path: | 
+    #       ${{github.workspace}}/libs
+    #     key: libs
+
+    # Configure Projects
+    # ==========================================================================================
+    - name: Configure CMake
+      #run: cmake -S . -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+      #run: cmake -S . -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} --debug-output -DCMAKE_VERBOSE_MAKEFILE=ON
+      run: cmake -S . -B ${{github.workspace}}/build ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+    # Compile Executables
+    # ==========================================================================================
+    - name: Build
+      #run: cmake --build ${{github.workspace}}/build --config ${{ matrix.build_type }}
+      run: cmake --build ${{github.workspace}}/build --config ${{ matrix.build_type }}
+
+    # Gather project variables from config.cmake
+    # ==========================================================================================
+    - name: Extract and Set Configuration Variables
+      run: |
+        echo "Reading configuration from config.cmake..."
+        while IFS=' ' read -r key value
+        do
+          value=$(echo $value | tr -d '"')  # Remove quotes
+          echo "$key=$value" >> $GITHUB_ENV
+        done < <(grep 'set(w' ${GITHUB_WORKSPACE}/config.cmake | sed -e 's/set(//g' -e 's/)//g' -e 's/\s\+/ /g')
+
+      # Debug; print project variables
+      # ==========================================================================================
+    - name: Use Variables
+      run: |
+        echo "Plugin Name: $wPLUGIN_NAME"
+        echo "Company Name: $wCOMPANY_NAME"
+        echo "Project Version: $wPROJECT_VERSION"
+        echo "Manufacturer Code: $wPLUGIN_MANUFACTURER_CODE"
+        echo "Formats: $wFORMATS"
+        echo "Is Synth: $wIS_SYNTH"
+        echo "Needs MIDI Input: $wNEEDS_MIDI_INPUT"
+        echo "Needs MIDI Output: $wNEEDS_MIDI_OUTPUT"
+        echo "Plugin Code: $wPLUGIN_CODE"
+
+    # Install Inno Setup (Windows Only)
+    # ==========================================================================================
+    - name: Install Inno Setup (Windows Only)
+      if: matrix.os == 'windows-latest'
+      run: choco install innosetup --yes
+
+
+
+    # Sign Payload (Win)
+    # ==========================================================================================
+
+
+
+    # Sign Payload (Mac)
+    # ==========================================================================================
+
+
+
+    # Compile Inno Setup script (Windows Only)
+    # ==========================================================================================
+    - name: Compile Inno Setup script (Windows Only)
+      if: matrix.os == 'windows-latest'
+      run: |
+        & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' "${{github.workspace}}\build\installer_win.iss"
+      shell: pwsh
+
+
+ 
+
+
+
+
+
+
+
+
+    # Package: Standalone (Mac)
+    # ==========================================================================================
+    - name: Create Standalone Package (Mac Only)
+      if: matrix.os == 'macos-latest'
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+      run: |
+        mkdir -p ${GITHUB_WORKSPACE}/build/output
+    
+        # Format COMPANY_NAME by removing spaces
+        FORMATTED_COMPANY_NAME=$(echo "$wCOMPANY_NAME" | tr -d ' ')
+
+        echo "Using formatted company name: $FORMATTED_COMPANY_NAME"
+        echo "Using version: $VERSION"
+
+        pkgbuild \
+          --root "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone" \
+          --identifier com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.vst3 \
+          --version $wPROJECT_VERSION \
+          --install-location /Applications/${REPOSITORY_NAME} \
+          ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone.pkg
+  
+      # Package: VST3 (Mac)
+      # ==========================================================================================
+    - name: Create VST3 Package (Mac Only)
+      if: matrix.os == 'macos-latest'
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+      run: |
+        mkdir -p ${GITHUB_WORKSPACE}/build/output
+
+        # Format COMPANY_NAME by removing spaces
+        FORMATTED_COMPANY_NAME=$(echo "$wCOMPANY_NAME" | tr -d ' ')
+
+        echo "Using formatted company name: $FORMATTED_COMPANY_NAME"
+        echo "Using version: $VERSION"
+
+        pkgbuild \
+          --root "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3" \
+          --identifier com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.vst3 \
+          --version $wPROJECT_VERSION \
+          --install-location /Library/Audio/Plug-Ins/VST3 \
+          ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3.pkg
+
+    # Package: Distribution (Mac)
+    # ==========================================================================================
+    - name: Create Distribution Package (Mac Only)
+      if: matrix.os == 'macos-latest'
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+      run: |
+        mkdir -p ${GITHUB_WORKSPACE}/build/output
+        cp ${{github.workspace}}/build/distribution.xml ${GITHUB_WORKSPACE}/build/output/distribution.xml
+        echo "File 'distribution.xml' copied to build/output folder."
+
+        productbuild \
+          --distribution ${GITHUB_WORKSPACE}/build/output/distribution.xml \
+          --package-path ${GITHUB_WORKSPACE}/build/output \
+          ${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller.pkg
+
+      # Temporary Debug
+      # ==========================================================================================
+    # - name: Debug - List Build Directory Contents
+    #   run: |
+    #     echo "Listing contents of ${GITHUB_WORKSPACE}/build:"
+    #     ls -R ${GITHUB_WORKSPACE}/build
+
+    # Print build folder contents
+    # ==========================================================================================
+    - name: List Build Directory Contents
+      run: |
+        Write-Host "Listing all files and directories in the build/plugin directory:"
+        Get-ChildItem -Path "${{github.workspace}}\build\" -Recurse
+      shell: pwsh
+
+
+
+
+
+
+
+    # Sign Installer (Win)
+    # ==========================================================================================
+
+
+
+    # Sign Installer (Mac)
+    # ==========================================================================================
+
+
+    # Notarize the Installer (Mac)
+    # ==========================================================================================
+
+
+
+    # Staple the Notarization Ticket (Mac)
+    # ==========================================================================================
+
+
+
+
+    # Setup SSH
+    # ==========================================================================================
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.5.3
+      with:
+        ssh-private-key: ${{ secrets.ID_GITHUB }}
+
+    # Add Host Key (Windows)
+    # ==========================================================================================
+    - name: Add Host Key (Windows)
+      if: matrix.os == 'windows-latest'
+      shell: pwsh
+      run: |
+        if (-Not (Test-Path -Path $HOME/.ssh)) {
+          New-Item -ItemType Directory -Path $HOME/.ssh
+        }
+        ssh-keyscan -p 7822 CaulfieldEngineering.com | Out-File -Append -Encoding ascii $HOME/.ssh/known_hosts
+
+    # Add Host Key (macOS)
+    # ==========================================================================================
+    - name: Add Host Key (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -p 7822 CaulfieldEngineering.com >> ~/.ssh/known_hosts
+
+    # Create SSH Configuration
+    # ==========================================================================================
+    - name: Create SSH Config
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        echo "Host CaulfieldEngineering.com
+          HostName CaulfieldEngineering.com
+          User caulfiel
+          Port 7822
+          MACs hmac-sha2-256
+          StrictHostKeyChecking no" > ~/.ssh/config
+
+    # Verify SSH Key and Connection
+    # ==========================================================================================
+    - name: Verify SSH Key and Connection
+      shell: bash
+      run: |
+        echo "Checking loaded SSH keys:"
+        ssh-add -l
+        
+        echo "Attempting SSH connection:"
+        ssh -vvv CaulfieldEngineering.com exit
+
+    # Debug SSH Connection
+    # ==========================================================================================
+    - name: Debug SSH Connection
+      shell: bash
+      run: |
+        ssh CaulfieldEngineering.com "echo 'SSH connection successful'"
+
+    # Debug File Location
+    # ==========================================================================================
+    # - name: Debug File Location
+    #   shell: bash
+    #   run: |
+    #     echo "Current working directory: $(pwd)"
+    #     echo "Contents of current directory:"
+    #     ls -R
+    #     echo "Contents of GITHUB_WORKSPACE:"
+    #     ls -R $GITHUB_WORKSPACE
+
+    # Upload Installers to Server (SCP)
+    # ==========================================================================================
+    - name: Upload to Server (SCP)
+      shell: bash
+      run: |
+        set -x  # Enable debugging output
+        
+        echo "Starting upload process"
+        DEST_DIR="${{ matrix.os == 'windows-latest' && 'win' || 'mac' }}"
+        echo "DEST_DIR set to: $DEST_DIR"
+        
+        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+        echo "REPO_NAME set to: $REPO_NAME"
+    
+        if [ "${{ matrix.os }}" == "macos-latest" ]; then
+          SOURCE_FILE="${{github.workspace}}/build/${REPO_NAME}MacInstaller.pkg"
+          echo "macOS build: SOURCE_FILE set to $SOURCE_FILE"
+        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+          SOURCE_FILE="${{github.workspace}}/build/${REPO_NAME}WindowsInstaller.exe"
+          echo "Windows build: SOURCE_FILE set to $SOURCE_FILE"
+        else
+          echo "Unsupported OS: ${{ matrix.os }}"
+          exit 1
+        fi
+    
+        DEST_PATH="CaulfieldEngineering.com:/home/caulfiel/public_html/plug-ins/${REPO_NAME}/uploads/${DEST_DIR}/"
+        
+        echo "Beginning SCP Transfer"
+        echo "Source file: $SOURCE_FILE"
+        echo "Destination path: $DEST_PATH"
+        
+        if [ -f "$SOURCE_FILE" ]; then
+          echo "Source file exists"
+        else
+          echo "Source file does not exist"
+          ls -l ${{github.workspace}}/build/
+          exit 1
+        fi
+        
+        SCP_COMMAND="scp -v \"$SOURCE_FILE\" \"$DEST_PATH\""
+        
+        echo "Executing SCP command: $SCP_COMMAND"
+        
+        if eval $SCP_COMMAND; then
+          echo "SCP command succeeded"
+        else
+          echo "SCP command failed with exit code $?"
+          exit 1
+        fi
+    
+        set +x  # Disable debugging output
+
+    # Once Uploaded, Duplicate latest files and Rename to Genericize
+    # ==========================================================================================
+    

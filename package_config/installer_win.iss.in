@@ -1,0 +1,144 @@
+; installer.iss.in
+
+// These variables are populated via CMakeLists.txt
+// Section: "# Configure the installation package files"
+// =============================================================================================
+#define MyCompanyName "@wCOMPANY_NAME@"
+#define MyAppName "@wPLUGIN_NAME@"
+#define MyAppExeName "@wPLUGIN_NAME@.exe"
+#define MyAppVst3Name "@wPLUGIN_NAME@.vst3"
+#define MyAppVersion "@wPROJECT_VERSION@"
+#define MyOutputBaseFilename "@wPLUGIN_NAME@WindowsInstaller"
+
+[Setup]
+// =============================================================================================
+AppName={#MyCompanyName} - {#MyAppName}
+AppVersion={#MyAppVersion}
+DefaultDirName={pf64}\{#MyCompanyName}\{#MyAppName}
+DefaultGroupName={#MyAppName}
+OutputDir=.
+OutputBaseFilename={#MyOutputBaseFilename}
+Compression=lzma
+SolidCompression=yes
+DisableProgramGroupPage=yes
+ArchitecturesInstallIn64BitMode=x64
+ArchitecturesAllowed=x64
+DisableDirPage=yes
+
+//WizardStyle=modern
+
+[Components]
+// =============================================================================================
+Name: "standalone"; Description: "@wPLUGIN_NAME@ - Standalone"; Types: full custom
+Name: "vst3"; Description: "@wPLUGIN_NAME@ - VST3"; Types: full custom
+
+[Dirs]
+// =============================================================================================
+Name: "{app}"
+
+[Files]
+// Absolute path is Relative to Github Workspace > Build
+// =============================================================================================
+Source: "plugin\{#MyAppName}_artefacts\Release\Standalone\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion; Components: standalone
+Source: "plugin\{#MyAppName}_artefacts\Release\VST3\{#MyAppVst3Name}\Contents\x86_64-win\{#MyAppVst3Name}"; DestDir: "{code:GetVST3Dir}"; Flags: ignoreversion; Components: vst3
+Source: "..\package_config\banner.bmp"; Flags: dontcopy
+
+[Icons]
+// =============================================================================================
+Name: "{group}\{#MyAppName} Standalone"; Filename: "{app}\{#MyAppExeName}"; Components: standalone
+
+[Code]
+// =============================================================================================
+var
+  StandaloneDirPage: TInputDirWizardPage;
+  VST3DirPage: TInputDirWizardPage;
+
+procedure InitializeWizard;
+// =============================================================================================
+var
+//  BackgroundBitmapImage: TBitmapImage;
+//  BitmapFileName: String;
+    BitmapImage: TBitmapImage;
+    
+begin
+  // Setup Standalone Directory Page
+  // =======================================================
+  StandaloneDirPage := CreateInputDirPage(wpSelectComponents,
+    'Select Standalone Installation Directory', 'Where should the standalone version be installed?',
+    'Select the folder in which Setup should install the standalone version, then click Next.',
+    False, '');
+  StandaloneDirPage.Add('');
+  StandaloneDirPage.Values[0] := ExpandConstant('{pf64}\{#MyCompanyName}\{#MyAppName}');
+
+  // Setup VST3 Directory Page
+  // ========================================================
+  VST3DirPage := CreateInputDirPage(wpSelectComponents,
+    'Select VST3 Installation Directory', 'Where should the VST3 plugin be installed?',
+    'Select the folder in which Setup should install the VST3 plugin, then click Next.',
+    False, '');
+  VST3DirPage.Add('');
+  VST3DirPage.Values[0] := ExpandConstant('{commoncf}\VST3');
+  
+  // Setup .BMP Banner
+  ExtractTemporaryFile('banner.bmp');
+  BitmapImage := TBitmapImage.Create(WizardForm);
+  BitmapImage.Parent := WizardForm.MainPanel;
+  BitmapImage.Width := WizardForm.MainPanel.Width;
+  BitmapImage.Height := WizardForm.MainPanel.Height;
+  { Needed for WizardStyle=modern in Inno Setup 6. Must be removed in Inno Setup 5. }
+  BitmapImage.Anchors := [akLeft, akTop, akRight, akBottom];
+  BitmapImage.Stretch := True;
+  BitmapImage.AutoSize := False;
+  BitmapImage.Bitmap.LoadFromFile(ExpandConstant('{tmp}\banner.bmp'));
+  
+  WizardForm.WizardSmallBitmapImage.Visible := False;
+  WizardForm.PageDescriptionLabel.Visible := False;
+  WizardForm.PageNameLabel.Visible := False;
+  
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+// =============================================================================================
+begin
+  Result := False;
+  if (PageID = StandaloneDirPage.ID) and (not WizardIsComponentSelected('standalone')) then
+    Result := True;
+  if (PageID = VST3DirPage.ID) and (not WizardIsComponentSelected('vst3')) then
+    Result := True;
+end;
+
+function GetVST3Dir(Param: string): string;
+begin
+  Result := VST3DirPage.Values[0];
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+// =============================================================================================
+begin
+  Result := True;
+  if CurPageID = wpSelectComponents then
+  begin
+    if not WizardIsComponentSelected('standalone') and
+       not WizardIsComponentSelected('vst3') then
+    begin
+      MsgBox('Please select at least one component to install.', mbError, MB_OK);
+      Result := False;
+    end;
+  end;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+// =============================================================================================
+var
+  InstallMessage: String;
+begin
+  if CurPageID = wpFinished then
+  begin
+    InstallMessage := 'Installation Complete!' + #13#10 + #13#10;
+    if WizardIsComponentSelected('standalone') then
+      InstallMessage := InstallMessage + 'Standalone (.EXE) installed to: ' + #13#10 + StandaloneDirPage.Values[0] + '\{#MyAppExeName}' + #13#10 + #13#10;
+    if WizardIsComponentSelected('vst3') then
+      InstallMessage := InstallMessage + 'VST3 (.VST3) installed to: ' + #13#10 + VST3DirPage.Values[0] + '\{#MyAppVst3Name}' + #13#10;
+    MsgBox(InstallMessage, mbInformation, MB_OK);
+  end;
+end;
