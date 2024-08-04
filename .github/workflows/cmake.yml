@@ -10,7 +10,7 @@ jobs:
   build:
     strategy:
       matrix:
-        #os: [macos-latest, windows-latest]
+        os: [macos-latest, windows-latest]
         build_type: [Release]
         include:
           - os: windows-latest
