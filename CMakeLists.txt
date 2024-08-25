@@ -84,6 +84,10 @@ enable_testing()
 # =====================================================================
 add_subdirectory(plugin)
 
+# Adds graphical assets folder
+# =====================================================================
+add_subdirectory(plugin/images)
+
 # Adds all the targets configured in the "test" folder.
 # =====================================================================
 #add_subdirectory(test)
