@@ -12,13 +12,7 @@
 
 TopBanner::TopBanner()
 {
-    /* Graphics Asset, Top-Center Plugin-Name "Tertiary" */
-    //imageTitleHeader = juce::ImageCache::getFromMemory(BinaryData::TitleHeader_png, BinaryData::TitleHeader_pngSize);
-    //imageCompanyTitle = juce::ImageCache::getFromMemory(BinaryData::CompanyLogo_png, BinaryData::CompanyLogo_pngSize);
-
     imageTopBanner = juce::ImageCache::getFromMemory(BinaryData::TopBanner_Black_png, BinaryData::TopBanner_Black_pngSize);
-
-    setBufferedToImage(true);
 }
 
 TopBanner::~TopBanner()
@@ -28,15 +22,16 @@ TopBanner::~TopBanner()
 
 void TopBanner::paint(juce::Graphics& g)
 {
-    using namespace juce;
+  auto bounds = getLocalBounds().toFloat();
 
-    auto bounds = getLocalBounds().toFloat();
-
-    juce::Rectangle<float> titleBounds{ 0, 0, (float)targetTitleWidth, (float)targetTitleHeight };
-    g.drawImage(imageTopBanner, titleBounds);
+  if (!imageTopBanner.isNull()) {
+    // Rescale the image each time it's painted, based on the current bounds
+    g.drawImage(imageTopBanner, bounds,
+                juce::RectanglePlacement::fillDestination);
+  }
 }
 
 void TopBanner::resized()
 {
-    imageTopBanner = imageTopBanner.rescaled(targetTitleWidth, targetTitleHeight, juce::Graphics::highResamplingQuality);
+
 }

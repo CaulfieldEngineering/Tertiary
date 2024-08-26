@@ -25,10 +25,19 @@ void CustomSlider::resized()
 {
 	auto bounds = getLocalBounds();
 
-    label.setSize(40, getHeight());
+	auto labelScale = 40.f / 180.f;
+    auto labelWidth = getWidth() * labelScale;
+
+    label.setSize(labelWidth, getHeight());
+    auto x = getWidth();
+    //label.setSize(getWidth() * 0.25f, getHeight());
+
     label.setTopRightPosition(bounds.getRight(), 0);
 
-	slider.setBounds(bounds.withTrimmedRight(45));
+	//slider.setBounds(bounds.withTrimmedRight(45));
+    slider.setBounds(bounds.withTrimmedRight(labelWidth * 1.05f));
+
+	buildLabel();
 }
 
 void CustomSlider::paintOverChildren(juce::Graphics& g)
@@ -106,12 +115,32 @@ void CustomSlider::sliderValueChanged(juce::Slider* slider)
 
 void CustomSlider::updateStringText()
 {
+	using namespace FontEditor::ParameterLabels;
+
 	juce::String sliderValue;
 
 	sliderValue = (juce::String)slider.getValue();
 	sliderValue.append(valueSuffix, 5);
 
 	label.setText(sliderValue, juce::NotificationType::dontSendNotification);
+
+	auto fontSize = slider.getHeight() * 0.75f;
+    auto titleFont = juce::Font(getTypeface(), fontSize, getFontStyle());
+
+    // Set the initial font size
+    label.setFont(titleFont);
+
+    // Measure the text width and adjust font size if needed
+    auto labelWidth = label.getWidth();
+    auto textWidth = label.getFont().getStringWidth(label.getText());
+
+    while (textWidth > labelWidth && fontSize > 1.0f) {
+        fontSize -= 2.5f;  // Reduce font size
+        titleFont.setHeight(fontSize);
+        label.setFont(titleFont);  // Update label's font
+        textWidth = label.getFont().getStringWidth( label.getText());  // Recalculate text width
+    }
+
 }
 
 void CustomSlider::buildLabel()
@@ -123,26 +152,38 @@ void CustomSlider::buildLabel()
     slider.addListener(this);
     addAndMakeVisible(slider);
 
-    // LABEL ======================================================
-    label.setEditable(false, true);
-    label.setColour(juce::Label::ColourIds::backgroundColourId, juce::Colours::white.withAlpha(0.f));
-    label.setColour(juce::Label::ColourIds::outlineWhenEditingColourId, juce::Colours::white.withAlpha(0.f));
-    label.setColour(juce::Label::ColourIds::outlineColourId, juce::Colours::white.withAlpha(0.f));
+	// LABEL ======================================================
+	label.setEditable(false, true);
+	label.setColour(juce::Label::ColourIds::backgroundColourId, juce::Colours::white.withAlpha(0.f));
+	label.setColour(juce::Label::ColourIds::outlineWhenEditingColourId, juce::Colours::white.withAlpha(0.f));
+	label.setColour(juce::Label::ColourIds::outlineColourId, juce::Colours::white.withAlpha(0.f));
 
-    label.setColour(juce::Label::ColourIds::textColourId, getFontColor());
-    label.setColour(juce::Label::ColourIds::textWhenEditingColourId, juce::Colours::white);
-    label.setColour(juce::Label::ColourIds::backgroundWhenEditingColourId, juce::Colours::black);
+	label.setColour(juce::Label::ColourIds::textColourId, getFontColor());
+	label.setColour(juce::Label::ColourIds::textWhenEditingColourId, juce::Colours::white);
+	label.setColour(juce::Label::ColourIds::backgroundWhenEditingColourId, juce::Colours::black);
 
-    label.setJustificationType(getJustification());
-    
-    auto titleFont = juce::Font(    getTypeface(),
-                                    getFontSize(),
-                                    getFontStyle());
+	label.setJustificationType(getJustification());
 
-    label.setFont(titleFont);
+	auto fontSize = slider.getHeight() * 0.75f;
+	auto titleFont = juce::Font(getTypeface(), fontSize, getFontStyle());
 
-    label.addListener(this);
-    addAndMakeVisible(label);
+	// Set the initial font size
+	label.setFont(titleFont);
+
+	// Measure the text width and adjust font size if needed
+	auto labelWidth = label.getWidth();
+	auto textWidth = label.getFont().getStringWidth(label.getText());
+
+	while (textWidth > labelWidth && fontSize > 1.0f)
+	{
+		fontSize -= 2.5f; // Reduce font size
+		titleFont.setHeight(fontSize);
+		label.setFont(titleFont); // Update label's font
+		textWidth = label.getFont().getStringWidth(label.getText()); // Recalculate text width
+	}
+
+	label.addListener(this);
+	addAndMakeVisible(label);
 }
 
 /* =========================================================================== */
@@ -758,7 +799,7 @@ void ButtonOptionsLookAndFeel::drawButtonText(	juce::Graphics& g,
 
 	auto myTypeface = "Helvetica";
 	auto buttonFont = juce::Font(	myTypeface, 
-									bounds.getHeight() * 0.75f, 
+									bounds.getHeight() * 0.85f, 
 									juce::Font::FontStyleFlags::bold);
 
     g.setColour(juce::Colours::black);
@@ -819,22 +860,6 @@ void InOutLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int wid
 
 	// Draw the Title
 	g.drawImage(imageFader, faderBounds.toFloat());
-
-	// Build dB Value String
-
-	//float value;
-	//juce::String valueString;
-
-	//value = juce::jmap(sliderPosScaled, 24.f, -24.f);
-
-	//if (value > 0.f)
-	//	valueString = "+";
-
-	//valueString = valueString << juce::String(value);
-	//	
-	//g.setColour(juce::Colours::white);
-	//g.setFont(15);
-	//g.drawFittedText(valueString, faderBounds.reduced(1,3).toNearestInt(), juce::Justification::centred, 1);
 }
 
 /* =========================================================================== */
@@ -889,29 +914,6 @@ void CrossoverLookAndFeel::drawRotarySlider(	juce::Graphics& g, int x, int y, in
 	g.strokePath(p2, juce::PathStrokeType(	5.f,
 											juce::PathStrokeType::JointStyle::beveled, 
 											juce::PathStrokeType::EndCapStyle::rounded ) );
-
-
-
-	//g.setColour(juce::Colours::black);
-	//g.drawEllipse(ellipseBounds, 2.f);
-
-	//auto center = ellipseBounds.getCentre();
-	//Path p;
-
-	//Rectangle<float> r;
-	//r.setLeft(center.getX() - 2);
-	//r.setRight(center.getX() + 2);
-	//r.setTop(bounds.getY());
-	//r.setBottom(center.getY());
-
-	//p.addRoundedRectangle(r, 2.f);
-
-	//auto sliderAngRad = jmap(sliderPosProportional, 0.f, 1.f, rotaryStartAngle, rotaryEndAngle);
-
-	//p.applyTransform(AffineTransform().rotated(sliderAngRad, center.getX(), center.getY()));
-
-	//g.setColour(juce::Colours::white);
-	//g.fillPath(p);
 }
 
 
@@ -938,8 +940,7 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
                                         bool shouldDrawButtonAsHighlighted,
                                         bool shouldDrawButtonAsDown)
 {
-    
-    auto bounds = juce::Rectangle<float>{x,y,w,h};
+    auto bounds = juce::Rectangle<float>{x, y, w, h};
     
     using namespace ColorScheme::BandColors;
     using namespace juce;
@@ -953,34 +954,56 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
         case 2: {baseColor = getHighBandBaseColor(); break;}
     }
     
+    // Set background color based on ticked state
     if (ticked)
     {
         g.setColour(baseColor);
-        g.fillRect(bounds);
-
-        g.setColour(juce::Colours::black);
-        g.drawFittedText(mLabel, x, y, w, h, juce::Justification::centred, 1);
     }
     else
     {
         g.setColour(juce::Colours::black);
-        g.fillRect(bounds);
-
-        g.setColour(juce::Colours::lightgrey);
-        g.drawFittedText(mLabel, x, y, w, h, juce::Justification::centred, 1);
     }
-    
+    g.fillRect(bounds);
+
+    // Set text color based on ticked state
+    g.setColour(ticked ? juce::Colours::black : juce::Colours::lightgrey);
+
+    // Start with a font size based on height (INV)
+	if (mLabel == "INV")
+	{
+		float fontSize = bounds.getHeight() * 0.75f;
+		g.setFont(fontSize);
+
+		auto textWidth = g.getCurrentFont().getStringWidth(mLabel);
+
+		// Adjust the font size if the text width exceeds the bounds width
+		while (textWidth > bounds.getWidth()*0.9f && fontSize > 1.0f) {
+			fontSize -= 1.5f; // Reduce the font size
+			g.setFont(fontSize); // Set the new font size
+			textWidth = g.getCurrentFont().getStringWidth(mLabel); // Re-measure the text width
+		}
+	}
+
+
+    // Adjust the font size if the text width exceeds the bounds width (Byp, Solo, Mute buttons)
+    if (mLabel != "INV") {
+		float fontSize = bounds.getHeight() * 0.5f;
+		g.setFont(fontSize);
+    }
+
+    // Draw the text centered within the bounds
+    g.drawFittedText(mLabel, bounds.toNearestInt(), juce::Justification::centred, 1);
+
+    // Draw the border
     g.setColour(juce::Colours::grey);
     g.drawRect(bounds, 1.f);
 
-    
-    /* Provide a "Recessed" appearance */
-    
+    // Provide a "Recessed" appearance
     for (int i = 0; i < 4; i++)
     {
         g.setColour(juce::Colours::darkgrey.withMultipliedAlpha(1.f/((i*i)+0.75f)));
         g.drawRect(bounds.toFloat(), 1.f);
-        bounds.reduce(1,1);
+        bounds.reduce(1, 1);
     }
 }
 
@@ -1032,7 +1055,13 @@ void MultComboLookAndFeel::drawComboBox ( juce::Graphics& g,
     using namespace ColorScheme::BandColors;
     
     auto bounds = comboBox.getLocalBounds();
-    auto menuBounds = bounds.withTrimmedRight(45);
+    //auto menuBounds = bounds.withTrimmedRight(5);
+
+	auto trimScale = 42 / 180.f;
+    auto trimWidth = bounds.getWidth() * trimScale;
+
+	auto menuBounds = bounds.withTrimmedRight(trimWidth);
+
     /* Provide a "Recessed" appearance */
     
     juce::Colour baseColour;
@@ -1057,35 +1086,8 @@ void MultComboLookAndFeel::drawComboBox ( juce::Graphics& g,
     g.setColour(juce::Colours::black);
     
     juce::String selection = comboBox.getItemText(comboBox.getSelectedItemIndex());
+    g.setFont(height * 0.75f);
     g.drawFittedText(selection, menuBounds, juce::Justification::centred, 1);
-    
-    // Draw the DropDown Arrow Icon
-    
-//    auto iconBounds = bounds.removeFromRight(40);
-//
-//    auto iconSize = iconBounds.reduced(10, 0);
-//
-//    auto index = comboBox.getSelectedItemIndex();
-//
-//    juce::Image* image;
-//    juce::RectangleList<int> icon;
-//
-//
-//    switch (index)
-//    {
-//        case 0: image = &imageMultIcon0; break;
-//        case 1: image = &imageMultIcon1; break;
-//        case 2: image = &imageMultIcon2; break;
-//        case 3: image = &imageMultIcon3; break;
-//        case 4: image = &imageMultIcon4; break;
-//        case 5: image = &imageMultIcon5; break;
-//    }
-//
-//    g.drawImage(*image, iconSize.toFloat());
-//
-
-    
-    
 }
 
 void MultComboLookAndFeel::setMode(int bandMode)
@@ -1132,6 +1134,7 @@ void WaveComboLookAndFeel::drawComboBox ( juce::Graphics& g,
     g.setColour(juce::Colours::black);
     
     juce::String selection = comboBox.getItemText(comboBox.getSelectedItemIndex());
+    g.setFont(height * 0.8f);
     g.drawFittedText(selection, bounds, juce::Justification::centred, 1);
     
 }

@@ -52,6 +52,7 @@ struct BandControl :    juce::Component,
     juce::Rectangle<int> getRhythmBounds() {return placeholder->getBoundsInParent(); }
     juce::Rectangle<int> getPhaseBounds() {return mSliderPhase.getBoundsInParent(); }
     juce::Rectangle<int> getGainBounds() {return mSliderBandGain.getBoundsInParent(); }
+    juce::Rectangle<int> getButtonRowBounds() {return mToggleBypass.getBoundsInParent(); }
     
     CustomSlider    mSliderRate,
                     mSliderPhase,
@@ -90,8 +91,6 @@ private:
     void buildToggleSolo();
     void buildToggleMute();
     void updateFlexBox();
-
-    //bool mBsmChanged{true};
 
     /* Holds place of either Rate or Rhythm component */
     juce::Component* placeholder;

@@ -62,17 +62,31 @@ void BandControl::updateFlexBox()
 
     auto bounds = getLocalBounds();
     
-    auto componentBounds = bounds.reduced(5, 5);
+    // Beware the Magic Numbers
+    // ======================================
+    auto spacerHeightScale = 10.f / 250.f;
+    auto spacerWidthScale = 4.f / 250.f;
+
+    auto columnItemHeightScale = 20.f / 250.f;
+    auto buttonRowHeightScale = 30.f / 250.f;
+
+    auto spacerWidth = bounds.getWidth() * spacerWidthScale;
+
+    auto componentBounds = bounds.reduced(spacerWidth, spacerWidth);
     
     /* Create the Waveshape Row */
     //============================================================
+
+    auto invScale = 40.f / 193.f;
+    auto invWidth = bounds.getWidth() * invScale;
+
     FlexBox waveShapeRow;
     waveShapeRow.flexDirection = FlexBox::Direction::row;
     waveShapeRow.flexWrap = FlexBox::Wrap::noWrap;
     
     waveShapeRow.items.add(FlexItem(mDropWaveshape).withFlex(1.f));
-    waveShapeRow.items.add(FlexItem().withWidth(5));
-    waveShapeRow.items.add(FlexItem(mToggleInvert).withWidth(40));
+    waveShapeRow.items.add(FlexItem().withWidth(spacerWidth));
+    waveShapeRow.items.add(FlexItem(mToggleInvert).withWidth(invWidth));
 
 
     /* Create the Button Row */
@@ -91,24 +105,32 @@ void BandControl::updateFlexBox()
     componentColumn.flexDirection = FlexBox::Direction::column;
     componentColumn.flexWrap = FlexBox::Wrap::noWrap;
 
-    auto spacer = FlexItem().withHeight(10);
-    
-    componentColumn.items.add(FlexItem(waveShapeRow).withHeight(20));
+    //// Beware the Magic Numbers
+    //// ======================================
+    //auto spacerHeightScale = 10.f / 250.f;
+    //auto columnItemHeightScale = 20.f / 250.f;
+    //auto buttonRowHeightScale = 30.f / 250.f;
+
+    auto x = bounds.getHeight();
+
+    auto spacer = FlexItem().withHeight(bounds.getHeight() * spacerHeightScale);
+
+    componentColumn.items.add(FlexItem(waveShapeRow).withHeight(bounds.getHeight() * columnItemHeightScale));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(mSliderSkew).withHeight(20));
+    componentColumn.items.add(FlexItem(mSliderSkew).withHeight(bounds.getHeight() * columnItemHeightScale));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(mSliderDepth).withHeight(20));
+    componentColumn.items.add(FlexItem(mSliderDepth).withHeight(bounds.getHeight() * columnItemHeightScale));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(*placeholder).withHeight(20));
+    componentColumn.items.add(FlexItem(*placeholder).withHeight(bounds.getHeight() * columnItemHeightScale));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(mSliderPhase).withHeight(20));
+    componentColumn.items.add(FlexItem(mSliderPhase).withHeight(bounds.getHeight() * columnItemHeightScale));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(mSliderBandGain).withHeight(20));
+    componentColumn.items.add(FlexItem(mSliderBandGain).withHeight(bounds.getHeight() * columnItemHeightScale));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(buttonRow).withHeight(30));
+    componentColumn.items.add(FlexItem(buttonRow).withHeight(bounds.getHeight() * buttonRowHeightScale));
     
     componentColumn.performLayout(componentBounds);
-    
+
 }
 
 void BandControl::buildToggleSync()

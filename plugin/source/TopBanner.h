@@ -37,7 +37,7 @@ private:
     float targetTitleWidth{ 750.f };
     float targetTitleHeight{ 50.f };
 
-    bool mShowTrialTitle{true};
-    int mDaysLeft{999};
+    //bool mShowTrialTitle{true};
+    //int mDaysLeft{999};
     
 };

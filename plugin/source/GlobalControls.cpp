@@ -10,21 +10,21 @@
 
 #include "GlobalControls.h"
 
-// GLOBAL CONTROLS =============================================================
-
 GlobalControls::GlobalControls(audio_plugin::AudioPluginAudioProcessor& p)
 	:  apvts(p.apvts), audioProcessor(p)
 {
-    //if (setDebug)
-    //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
+    // Beware the Magic Numbers
+    // ======================================
+    auto windowWidthScale = 250.f / 750.f;
+    auto windowHeightScale = 140.f / 515.f;
+    setSize(getWidth() * windowWidthScale, getHeight() * windowHeightScale);
 
 	addAndMakeVisible(inputGain);
 	addAndMakeVisible(outputGain);
-    
     addAndMakeVisible(lowBandControls);
     addAndMakeVisible(midBandControls);
     addAndMakeVisible(highBandControls);
-    
+
     addMouseListener(this, true);
     
     lowBandControls.addMouseListener(this, true);
@@ -52,106 +52,162 @@ GlobalControls::GlobalControls(audio_plugin::AudioPluginAudioProcessor& p)
     makeTimingControlAttachments();
     makeWaveControlAttachments();
 
-    makeLabel(mLabelRhythm, "Rhythm");
-    makeLabel(mLabelWaveShape, "Shape");
-    makeLabel(mLabelPhase, "Phase");
-    makeLabel(mLabelDepth, "Depth");
-    makeLabel(mLabelSkew, "Skew");
-    makeLabel(mLabelBandGain, "Gain");
+    //makeLabel(mLabelRhythm, "Rhythm");
+    //makeLabel(mLabelWaveShape, "Shape");
+    //makeLabel(mLabelPhase, "Phase");
+    //makeLabel(mLabelDepth, "Depth");
+    //makeLabel(mLabelSkew, "Skew");
+    //makeLabel(mLabelBandGain, "Gain");
     
-	setSize(250, 140);
+
 }
 
 void GlobalControls::paint(juce::Graphics& g)
 {
-    //if (setDebug)
-    //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
-
     paintWindowBorders(g);
     paintBandLabels(g);
-
-    //if (shouldPaintOnceOnInit)
-    //    paintOnceOnInit(g);
 }
-
-//void GlobalControls::paintOnceOnInit(juce::Graphics& g)
-//{
-//    WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
-//
-//
-//    
-//    //shouldPaintOnceOnInit = false;
-//}
 
 void GlobalControls::paintWindowBorders(juce::Graphics& g)
 {
-    //if (setDebug)
-    //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
 
+    // Disperse into multiple functions
     using namespace juce;
     using namespace AllColors::GlobalControlsColors;
-
+    using namespace FontEditor::ControlLabels;
+        
     auto bounds = getLocalBounds().toFloat();
+
+    auto controlLabelsFontJustification = FontEditor::ControlLabels::getJustification();
+    auto controlLabelsFontTypeface = FontEditor::ControlLabels::getTypeface();
+    auto controlLabelsFontSize = std::min(border2.getHeight(), border2.getWidth()) * 0.175f;
+    auto controlLabelsFontStyle = FontEditor::ControlLabels::getFontStyle();
+    auto controlLabelsFontColor = FontEditor::ControlLabels::getFontColor();
+    auto controlLabelsFontTransparency = FontEditor::ControlLabels::getFontTransparency();
+        
+    auto myFont = juce::Font(   controlLabelsFontTypeface,
+                                controlLabelsFontSize,
+                                controlLabelsFontStyle);
 
     g.setGradientFill(BACKGROUND_GRADIENT(bounds));
 
     auto windowBorderColor = ColorScheme::WindowBorders::getWindowBorderColor();
     auto dividerBorderColor = ColorScheme::WindowBorders::getWindowBorderColor().withMultipliedAlpha(0.3f);
 
+    // Beware the Magic Numbers
+    // =================================
+    auto x = bounds.getHeight();
+
+    // Spacer to Draw horizontal lines between buttons / controls
+    auto spacerHeightScale = 5.f / 250.f;
+    auto spacerHeight = bounds.getHeight() * spacerHeightScale;
+
+    // Shape
+    // ==================================================================
+    auto shapeBorder = labelBorder;
+    shapeBorder.setY(lowBandControls.getWaveBounds().getY() - spacerHeight / 2);
+    paintBorder(g, dividerBorderColor, shapeBorder);
+    shapeBorder.setWidth(border2.getWidth());
+    g.setColour(controlLabelsFontColor);
+    g.setOpacity(controlLabelsFontTransparency);
+    g.setFont(myFont);
+    g.drawFittedText("Shape", shapeBorder.toNearestInt(), juce::Justification::centred, 1);
+
+    // Skew
+    // ==================================================================
     auto skewBorder = labelBorder;
-    skewBorder.setY(mLabelSkew.getY() - 5);
+    skewBorder.setY(lowBandControls.getSkewBounds().getY() - spacerHeight / 2);
     paintBorder(g, dividerBorderColor, skewBorder);
+    skewBorder.setWidth(border2.getWidth());
+    g.setColour(controlLabelsFontColor);
+    g.setOpacity(controlLabelsFontTransparency);
+    g.setFont(myFont);
+    g.drawFittedText("Skew", skewBorder.toNearestInt(), juce::Justification::centred, 1);
     
+    // Depth
+    // ==================================================================
     auto depthBorder = labelBorder;
-    depthBorder.setY(mLabelDepth.getY() - 5);
+    depthBorder.setY(lowBandControls.getDepthBounds().getY() - spacerHeight / 2);
     paintBorder(g, dividerBorderColor, depthBorder);
-    
+    depthBorder.setWidth(border2.getWidth());
+    g.setColour(controlLabelsFontColor);
+    g.setOpacity(controlLabelsFontTransparency);
+    g.setFont(myFont);
+    g.drawFittedText("Depth", depthBorder.toNearestInt(), juce::Justification::centred, 1);
+
+    // Rhythm
+    // ==================================================================
     auto rhythmBorder = labelBorder;
-    rhythmBorder.setY(mLabelRhythm.getY() - 5);
+    rhythmBorder.setY(lowBandControls.getRhythmBounds().getY() - spacerHeight / 2);
     paintBorder(g, dividerBorderColor, rhythmBorder);
+    rhythmBorder.setWidth(border2.getWidth());
+    g.setColour(controlLabelsFontColor);
+    g.setOpacity(controlLabelsFontTransparency);
+    g.setFont(myFont);
+    g.drawFittedText("Rhythm", rhythmBorder.toNearestInt(), juce::Justification::centred, 1);
     
+    // Phase
+    // ==================================================================
     auto phaseBorder = labelBorder;
-    phaseBorder.setY(mLabelPhase.getY() - 5);
+    phaseBorder.setY(lowBandControls.getPhaseBounds().getY() - spacerHeight / 2);
     paintBorder(g, dividerBorderColor, phaseBorder);
-    
+    phaseBorder.setWidth(border2.getWidth());
+    g.setColour(controlLabelsFontColor);
+    g.setOpacity(controlLabelsFontTransparency);
+    g.setFont(myFont);
+    g.drawFittedText("Phase", phaseBorder.toNearestInt(), juce::Justification::centred, 1);
+
+    // Gain
+    // ==================================================================
     auto gainBorder = labelBorder;
-    gainBorder.setY(mLabelBandGain.getY() - 5);
+    gainBorder.setY(lowBandControls.getGainBounds().getY() - spacerHeight / 2);
     paintBorder(g, dividerBorderColor, gainBorder);
+    gainBorder.setWidth(border2.getWidth());
+    g.setColour(controlLabelsFontColor);
+    g.setOpacity(controlLabelsFontTransparency);
+    g.setFont(myFont);
+    g.drawFittedText("Gain", gainBorder.toNearestInt(), juce::Justification::centred, 1);
     
     // Input Gain Border
+    // ==================================================================
     paintBorder(g, windowBorderColor, border1);
 
     // Text Labels Border
+    // ==================================================================
     paintBorder(g, windowBorderColor, border2);
     
     // Low-Band Border
+    // ==================================================================
     paintBorder(g, windowBorderColor, border3);
     
     // Mid-Band Border
+    // ==================================================================
     paintBorder(g, windowBorderColor, border4);
     
     // High-Band Border
+    // ==================================================================
     paintBorder(g, windowBorderColor, border5);
     
     // Output Gain Border
+    // ==================================================================
     paintBorder(g, windowBorderColor, border6);
 }
 
 void GlobalControls::paintBandLabels(juce::Graphics& g)
 {
-    //if (setDebug)
-    //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
-
     using namespace FontEditor;
  
     auto bounds = getLocalBounds();
     
     auto controlLabelsFontTypeface = FontEditor::ControlLabels::getTypeface();
-    auto controlLabelsFontSize = 23.f;
+
+    // Beware of Magic Numbers
+    // ==================================
+    auto controlLabelsFontSize = 23.f * (getHeight() / 250.f);
+
     auto controlLabelsFontStyle = juce::Font::FontStyleFlags::bold;
     auto controlLabelsFontColor = juce::Colours::white.withAlpha(0.65f);
-    //auto controlLabelsFontTransparency = FontEditor::ControlLabels::getFontTransparency();
-    
+
     g.setColour(controlLabelsFontColor);
 
     auto titleFont = juce::Font(    controlLabelsFontTypeface,
@@ -159,21 +215,21 @@ void GlobalControls::paintBandLabels(juce::Graphics& g)
                                     controlLabelsFontStyle);
     
     int x = border3.getX();
-    int y = bounds.getBottom() - 33;
+    int height = getHeight() * 0.155f;
+    int y = bounds.getBottom() - height;
     int width = border3.getWidth();
-    int height = 30;
+
     
     g.setFont(titleFont);
     g.setColour(controlLabelsFontColor);
     
     auto lowLabelBounds = juce::Rectangle<int>{x, y, width, height};
-
     g.drawFittedText("LOW", lowLabelBounds, juce::Justification::centred, 1);
     
     x = border4.getX();
     
     auto midLabelBounds = juce::Rectangle<int>{x, y, width, height};
-    g.drawText("MID", midLabelBounds, juce::Justification::centred, 1);
+    g.drawFittedText("MID", midLabelBounds, juce::Justification::centred, 1);
     
     x = border5.getX();
     
@@ -183,21 +239,27 @@ void GlobalControls::paintBandLabels(juce::Graphics& g)
 
 void GlobalControls::resized()
 {
-    //if (setDebug)
-    //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
-
     using namespace juce;
 
     auto bounds = getLocalBounds();
 
-    auto meterWidth = 32;
-    auto padding = 4;
+    // Beware the Magic Numbers
+    // ======================================
+    auto meterWidthScale = 32.f / 750.f;
+    auto meterWidth = bounds.getWidth() * meterWidthScale;
+
+    // Beware the Magic Numbers
+    // ======================================
+    auto paddingWidthScale = 4.f / 750.f;
+    auto padding = getWidth() * paddingWidthScale;
     
-    auto labelWidth = 75;
+    // Beware the Magic Numbers
+    // ======================================
+    auto labelWidthScale = 75.f / 750.f;
+    auto labelWidth = bounds.getWidth() * labelWidthScale;
+
     auto bandWidth = (getWidth() - labelWidth - meterWidth*2)/3.f;
     
-    //auto controlWidth2 = 210;
-
     border1.setBounds(    bounds.getX(),        bounds.getY(), meterWidth,              bounds.getHeight());
     border2.setBounds(    border1.getRight(),   bounds.getY(), labelWidth,              bounds.getHeight());
     border3.setBounds(    border2.getRight(),   bounds.getY(), bandWidth,               bounds.getHeight());
@@ -234,18 +296,46 @@ void GlobalControls::resized()
 
     /* Create the Full Control Layout */
     //============================================================
-    auto labelBounds = border2.reduced(5 + padding, 25 + padding);
+
+    auto labelBoundsWidthReductionScale = 5.f / 750.f;
+    auto labelBoundsHeightReductionScale = 25.f / 515.f;
+
+    auto labelBoundsWidthReduction = getWidth() * labelBoundsWidthReductionScale;
+    auto labelBoundsHeightReduction = getHeight() * labelBoundsHeightReductionScale;
+
+    auto labelBounds = border2.reduced(labelBoundsWidthReduction + padding, labelBoundsHeightReduction + padding);
     
-    mLabelWaveShape.setCentrePosition(labelBounds.getCentreX(), lowBandControls.getWaveBounds().getCentreY() + padding);
-    mLabelSkew.setCentrePosition(labelBounds.getCentreX(), lowBandControls.getSkewBounds().getCentreY() + padding);
-    mLabelDepth.setCentrePosition(labelBounds.getCentreX(), lowBandControls.getDepthBounds().getCentreY() + padding);
-    mLabelRhythm.setCentrePosition(labelBounds.getCentreX(), lowBandControls.getRhythmBounds().getCentreY() + padding);
-    mLabelPhase.setCentrePosition(labelBounds.getCentreX(), lowBandControls.getPhaseBounds().getCentreY() + padding);
-    mLabelBandGain.setCentrePosition(labelBounds.getCentreX(), lowBandControls.getGainBounds().getCentreY() + padding);
+    //makeLabel(mLabelRhythm, "Rhythm");
+    //makeLabel(mLabelWaveShape, "Shape");
+    //makeLabel(mLabelPhase, "Phase");
+    //makeLabel(mLabelDepth, "Depth");
+    //makeLabel(mLabelSkew, "Skew");
+    //makeLabel(mLabelBandGain, "Gain");
+
+    //mLabelWaveShape.setCentrePosition(labelBounds.getCentreX(), lowBandControls.getWaveBounds().getCentreY() + padding);
+    //mLabelSkew.setCentrePosition(labelBounds.getCentreX(), lowBandControls.getSkewBounds().getCentreY() + padding);
+    //mLabelDepth.setCentrePosition(labelBounds.getCentreX(), lowBandControls.getDepthBounds().getCentreY() + padding);
+    //mLabelRhythm.setCentrePosition(labelBounds.getCentreX(), lowBandControls.getRhythmBounds().getCentreY() + padding);
+    //mLabelPhase.setCentrePosition(labelBounds.getCentreX(), lowBandControls.getPhaseBounds().getCentreY() + padding);
+    //mLabelBandGain.setCentrePosition(labelBounds.getCentreX(), lowBandControls.getGainBounds().getCentreY() + padding);
     
-    labelBorder.setBounds(border2.getX(), mLabelWaveShape.getY()-5, getWidth()-meterWidth*2, mLabelWaveShape.getHeight()+10);
-    
-    //shouldPaintOnceOnInit = true;
+    //labelBorder.setBounds(border2.getX(), mLabelWaveShape.getY()-20, getWidth()-meterWidth*2, mLabelWaveShape.getHeight()+10);
+
+    // Spacer to Draw horizontal lines between buttons / controls
+    auto spacerHeightScale = 5.f / 250.f;
+    auto spacerHeight = bounds.getHeight() * spacerHeightScale;
+
+    auto labelBorderX = border2.getX();
+    auto labelBorderY = border2.getY();
+    auto labelBorderWidth = getWidth() - meterWidth * 2;
+    auto labelBorderHeight = lowBandControls.getWaveBounds().getHeight() + spacerHeight * 2;
+
+    labelBorder.setBounds(labelBorderX, labelBorderY, labelBorderWidth, labelBorderHeight);
+
+
+
+
+
 }
 
 void GlobalControls::makeAttachments()
@@ -267,35 +357,37 @@ void GlobalControls::makeAttachments()
                             outputGain.sliderGain);
 }
 
-void GlobalControls::makeLabel(juce::Label& label, juce::String textToPrint)
-{
-    //if (setDebug)
-    //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
-
-    using namespace FontEditor::ControlLabels;
-    
-    auto controlLabelsFontJustification = FontEditor::ControlLabels::getJustification();
-    auto controlLabelsFontTypeface = FontEditor::ControlLabels::getTypeface();
-    auto controlLabelsFontSize = FontEditor::ControlLabels::getFontSize();
-    auto controlLabelsFontStyle = FontEditor::ControlLabels::getFontStyle();
-    auto controlLabelsFontColor = FontEditor::ControlLabels::getFontColor();
-    auto controlLabelsFontTransparency = FontEditor::ControlLabels::getFontTransparency();
-    
-    label.setJustificationType(controlLabelsFontJustification);
-    
-    auto myFont = juce::Font(   controlLabelsFontTypeface,
-                                controlLabelsFontSize,
-                                controlLabelsFontStyle);
-    
-    label.setFont(myFont);
-    label.setAlpha(controlLabelsFontTransparency);
-    label.setColour(juce::Label::textColourId, controlLabelsFontColor);
-    
-    label.setText(textToPrint, juce::NotificationType::dontSendNotification);
-    label.setSize(50, 20);
-    
-    addAndMakeVisible(label);
-}
+//void GlobalControls::makeLabel(juce::Label& label, juce::String textToPrint)
+//{
+//    using namespace FontEditor::ControlLabels;
+//    
+//    auto controlLabelsFontJustification = FontEditor::ControlLabels::getJustification();
+//    auto controlLabelsFontTypeface = FontEditor::ControlLabels::getTypeface();
+//    auto controlLabelsFontSize = FontEditor::ControlLabels::getFontSize();
+//    auto controlLabelsFontStyle = FontEditor::ControlLabels::getFontStyle();
+//    auto controlLabelsFontColor = FontEditor::ControlLabels::getFontColor();
+//    auto controlLabelsFontTransparency = FontEditor::ControlLabels::getFontTransparency();
+//    
+//    label.setJustificationType(controlLabelsFontJustification);
+//    
+//    auto myFont = juce::Font(   controlLabelsFontTypeface,
+//                                controlLabelsFontSize,
+//                                controlLabelsFontStyle);
+//    
+//    label.setFont(myFont);
+//    label.setAlpha(controlLabelsFontTransparency);
+//    label.setColour(juce::Label::textColourId, controlLabelsFontColor);
+//    
+//    label.setText(textToPrint, juce::NotificationType::dontSendNotification);
+//
+//    // Beware the Magic Numbers
+//    // ======================================
+//    auto labelWidthScale = 50.f / 750.f;
+//    auto labelHeightScale = 20.f / 515.f;
+//    label.setSize(getWidth() * labelWidthScale, getHeight() * labelHeightScale);
+//    
+//    addAndMakeVisible(label);
+//}
 
 void GlobalControls::makeGainControlAttachments()
 {
@@ -517,8 +609,6 @@ void GlobalControls::makeWaveControlAttachments()
                             highBandControls.mToggleInvert.mToggleButton);
 }
 
-
-// Guarantees a 30-Character long message
 void GlobalControls::sendBroadcast(juce::String parameterName, juce::String parameterValue)
 {
     //if (setDebug)
@@ -529,7 +619,6 @@ void GlobalControls::sendBroadcast(juce::String parameterName, juce::String para
     auto message = bandName + delimiter + parameterName.paddedLeft('x', 10) + delimiter + parameterValue.paddedLeft('x', 10);
     sendActionMessage(message);
 }
-
 
 void GlobalControls::mouseEnter(const juce::MouseEvent& event)
 {
@@ -546,7 +635,6 @@ void GlobalControls::mouseExit(const juce::MouseEvent& event)
 
     checkForBandFocus();
 }
-
 
 void GlobalControls::checkForBandFocus()
 {
