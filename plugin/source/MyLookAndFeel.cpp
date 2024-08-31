@@ -839,8 +839,8 @@ void InOutLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int wid
 	juce::Rectangle<float> bounds = { (float)x, (float)y, (float)width, (float)height };
 
 	// Draw Track & Fader
-	auto faderWidth = 30;
-	auto faderHeight = 60;
+	auto faderWidth = bounds.getWidth();
+	auto faderHeight = faderWidth*2.f;
 
 	auto sliderPosScaled = (sliderPos - bounds.getY()) / bounds.getHeight();
 
@@ -857,7 +857,7 @@ void InOutLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int wid
 	faderBounds.setBounds(	bounds.getCentreX() - faderWidth/2.f,
 							faderRange - faderHeight / 2.f,
 							faderWidth, faderHeight);
-
+	
 	// Draw the Title
 	g.drawImage(imageFader, faderBounds.toFloat());
 }

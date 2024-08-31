@@ -28,8 +28,8 @@ AboutWindow::AboutWindow()
     mButtonClose.setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colours::black.withAlpha(0.f));
     mButtonClose.setButtonText("X");
 
-    imagePluginTitle = juce::ImageCache::getFromMemory(BinaryData::About_PluginTitle1_png, BinaryData::About_PluginTitle1_pngSize);
-    imageCompanyTitle = juce::ImageCache::getFromMemory(BinaryData::About_CompanyLogo_png, BinaryData::About_CompanyLogo_pngSize);
+    imagePluginTitle = juce::ImageCache::getFromMemory(BinaryData::PluginTitle_png, BinaryData::PluginTitle_pngSize);
+    imageCompanyTitle = juce::ImageCache::getFromMemory(BinaryData::CompanyTitle_png, BinaryData::CompanyTitle_pngSize);
 
     mButtonWebsiteLink.setButtonText("WonderlandAudio.com");
     mButtonWebsiteLink.setURL(juce::URL("http://www.wonderlandaudio.com"));
