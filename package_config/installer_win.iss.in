@@ -8,7 +8,7 @@
 #define MyAppExeName "@wPLUGIN_NAME@.exe"
 #define MyAppVst3Name "@wPLUGIN_NAME@.vst3"
 #define MyAppVersion "@wPROJECT_VERSION@"
-#define MyOutputBaseFilename "@wPLUGIN_NAME@WindowsInstaller"
+#define MyOutputBaseFilename "@wPLUGIN_NAME@WinInstaller_@wPROJECT_VERSION@"
 
 [Setup]
 // =============================================================================================

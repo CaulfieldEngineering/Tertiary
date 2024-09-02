@@ -11,7 +11,7 @@ namespace audio_plugin {
       topBanner.addMouseListener(this, true);
 
       /* UI is Resizable */
-      setResizable(true, true);
+      setResizable(true, false);
       setResizeLimits(750, 515, 10000, 10000);
       
       /* Sets window size */
