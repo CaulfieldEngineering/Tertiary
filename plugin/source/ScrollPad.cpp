@@ -59,13 +59,19 @@ ScrollPad::~ScrollPad()
 
 void ScrollPad::resized()
 {
-	point1Slider.setBounds(0, 0, 100, getHeight());
-	point2Slider.setBounds(getRight()-100, 0, 100, getHeight());
+	//point1Slider.setBounds(0, 0, 100, getHeight());
+	//point2Slider.setBounds(getRight()-100, 0, 100, getHeight());
+
+	point1Slider.setBounds(0, 0, getWidth()*0.75f, getHeight());
+    point2Slider.setBounds(getRight() - getWidth()*0.75f, 0, getWidth()*0.75f, getHeight());
 
 	// Update points values from sliders (Stored Parameters)
 	point1 = convertSliderToPixelValue(point1Slider.getValue());
 	point2 = convertSliderToPixelValue(point2Slider.getValue());
 	forceNewPointValues(point1, point2);
+
+	maxWidth = getWidth() * 0.95f;
+    defaultWidth = getWidth() * 0.4f;
 
 }
 

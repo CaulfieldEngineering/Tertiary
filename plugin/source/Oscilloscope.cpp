@@ -60,18 +60,6 @@ void Oscilloscope::resized()
     sliderScroll.setSize(getWidth(), 25);
     sliderScroll.setTopLeftPosition(getWidth()/2-sliderScroll.getWidth()/2, getBottom()-25);
 
-    /* Initialize the pan/zoom points for the scroll bar... a little rusty on this! */
-	//int x = sliderScroll.getLocalBounds().getCentreX() - (float)sliderScroll.getMaxWidth() / 2.f;
-
-    //auto p1a = audioProcessor.getScopePoint1Param()->get();
-    //auto p2a = audioProcessor.getScopePoint2Param()->get();
-
-	//float p1 = p1a / 100.f * (float)sliderScroll.getMaxWidth();
-	//float p2 = p2a / 100.f * (float)sliderScroll.getMaxWidth();
-
-	/* Update ScrollPad with Loaded Points */
-	//sliderScroll.initializePoints(x + p1, x + p2);
-
 }
 
 /* Receive updated options parameters from wrapper & options menu */

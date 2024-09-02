@@ -10,6 +10,10 @@ namespace audio_plugin {
       addAndMakeVisible(topBanner);
       topBanner.addMouseListener(this, true);
 
+      /* UI is Resizable */
+      setResizable(true, false);
+      setResizeLimits(750, 515, 10000, 10000);
+      
       /* Sets window size */
       float scale = 1.f;
       setSize(750 * scale, 515 * scale);
@@ -85,6 +89,23 @@ namespace audio_plugin {
     void AudioPluginAudioProcessorEditor::resized() {
       using namespace juce;
 
+      const float aspectRatio = 750.f / 515.f;  // Width / Height
+
+      /* Enforce Aspect Ratio */
+      auto availableArea = getLocalBounds();
+      int newWidth = availableArea.getWidth();
+      int newHeight = roundToInt(newWidth / aspectRatio);
+
+      if (newHeight > availableArea.getHeight()) {
+        // Height is constrained by availableArea
+        newHeight = availableArea.getHeight();
+        newWidth = roundToInt(newHeight * aspectRatio);
+      }
+
+      // Set the new size and center the component
+      setSize(newWidth, newHeight);
+      centreWithSize(newWidth, newHeight);
+
       buildFlexboxLayout();
 
       auto bounds = getLocalBounds();
@@ -112,7 +133,9 @@ namespace audio_plugin {
       flexBoxRow.flexDirection = FlexBox::Direction::row;
       flexBoxRow.flexWrap = FlexBox::Wrap::noWrap;
 
-      auto spacerH = FlexItem().withWidth(5);  // Gap between O-Scope and Freq Resp
+      //auto spacerH = FlexItem().withWidth(5);  // Gap between O-Scope and Freq Resp
+      auto spacerH = FlexItem().withWidth(getWidth()*0.01f);  // Gap between O-Scope and Freq Resp
+      //auto spacerH = FlexItem().withWidth(0);
 
       flexBoxRow.items.add(
           FlexItem(wrapperOscilloscope).withFlex(1.f));  // Insert Scope Wrapper
@@ -127,7 +150,8 @@ namespace audio_plugin {
       flexBox.flexDirection = FlexBox::Direction::column;
       flexBox.flexWrap = FlexBox::Wrap::noWrap;
 
-      flexBox.items.add(FlexItem(topBanner).withHeight(50));
+      //flexBox.items.add(FlexItem(topBanner).withHeight(50)); <<<<<<<<<<
+      flexBox.items.add(FlexItem(topBanner).withHeight(getHeight() * 0.1f));
       flexBox.items.add(FlexItem(flexBoxRow).withHeight(getHeight() * 0.4f));
       flexBox.items.add(FlexItem(globalControls).withFlex(1.f));
 

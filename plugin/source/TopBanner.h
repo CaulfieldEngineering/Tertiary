@@ -12,6 +12,8 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "AllColors.h"
 #include <BinaryData.h>
+#include "avir.h"
+#include "avir_float4_sse.h"
 
 struct TopBanner :  juce::Component //, juce::MouseListener
 {
@@ -21,23 +23,17 @@ public:
     
     void paint(juce::Graphics& g) override;
     void resized() override;
-    
-    //void setShowTrialTitle(bool shouldShow) {mShowTrialTitle = shouldShow;}
-    //void setDaysLeft(int trialDaysLeft) {mDaysLeft = trialDaysLeft;}
-    
-    //void buttonClicked(juce::Button* button) override {};
-    //void mouseDoubleClick(const juce::MouseEvent& event) override {};
-    
+
+	juce::Image applyResize (const juce::Image& src, int width, int height);
+	void paintRescaledImage(juce::Graphics& g, juce::Rectangle<int> src, juce::Rectangle<int> dest, juce::Image originalImgToDraw);
+
 private:
     
-    //void buildTopBanner(juce::Graphics& g);
-
     juce::Image imageTopBanner;
+	juce::Image imageCompanyTitle;
+	juce::Image imagePluginTitle;
 
     float targetTitleWidth{ 750.f };
     float targetTitleHeight{ 50.f };
 
-    bool mShowTrialTitle{true};
-    int mDaysLeft{999};
-    
 };

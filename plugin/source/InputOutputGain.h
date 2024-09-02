@@ -55,10 +55,10 @@ private:
 	float rightLevelPixel;
 
 	// Grill Drawing Parameters
-	int margin = 0;			// Amount of Pixels removed from Top/Bottom before grill
-	int spacing = 3.5;			// Vertical Distance between LEDs
-	float ledWidth = 10;
-	float ledHeight = 1.5;
+	int margin = 0;				// Amount of Pixels removed from Top/Bottom before grill
+	float spacing = 3.5f;			// Vertical Distance between LEDs
+	float ledWidth = 10.f;
+	float ledHeight = 1.5f;
 	juce::Array<float> ledThresholds;
 
 	juce::Rectangle<float> leftBounds, rightBounds;

@@ -13,10 +13,8 @@
 InputOutputGain::InputOutputGain(audio_plugin::AudioPluginAudioProcessor& p) :
 	audioProcessor(p)
 {
-	//if (setDebug)
-	//	WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
 
-	setSize(40, 150);
+	//setSize(40, 150);
 
 	sliderGain.setSliderStyle(juce::Slider::SliderStyle::LinearVertical);
 	sliderGain.setLookAndFeel(&inOutLookAndFeel);
@@ -37,9 +35,6 @@ InputOutputGain::~InputOutputGain()
 
 void InputOutputGain::paint(juce::Graphics& g)
 {
-	//if (setDebug)
-	//	WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
-
 	auto bounds = getLocalBounds().toFloat();
 	bounds.reduce(4, 0);
 
@@ -63,45 +58,71 @@ void InputOutputGain::paint(juce::Graphics& g)
 
 	valueString = valueString << juce::String(sliderValue);
 
+	//if (sliderValue == 0)
+	//	valueString = valueString << " dB";
+
+	//g.drawImage(grill, grillBounds);
+
+	//g.setColour(juce::Colours::white.withAlpha(0.65f));
+	//g.setFont(13);
+	//g.drawFittedText(valueString, labelBounds.toNearestInt(), juce::Justification::centred, 1);
+
 	if (sliderValue == 0)
 		valueString = valueString << " dB";
 
 	g.drawImage(grill, grillBounds);
 
+	// Initial font size based on height of labelBounds or a fixed size
+	auto initialFontSize = 13.0f;
+	g.setFont(initialFontSize);
+
+	// Measure the text width
+	auto textWidth = g.getCurrentFont().getStringWidth(valueString);
+	auto labelWidth = labelBounds.getWidth();
+
+	// Reduce font size if the text doesn't fit within the label bounds
+	while (textWidth > labelWidth && initialFontSize > 1.0f) {
+		initialFontSize -= 1.0f; // Reduce the font size
+		g.setFont(initialFontSize); // Set the new font size
+		textWidth = g.getCurrentFont().getStringWidth(valueString); // Re-measure the text width
+	}
+
+	// Set color and draw the text
 	g.setColour(juce::Colours::white.withAlpha(0.65f));
-	g.setFont(13);
 	g.drawFittedText(valueString, labelBounds.toNearestInt(), juce::Justification::centred, 1);
 
+	g.setColour(juce::Colours::hotpink);
 }
 
 void InputOutputGain::resized()
 {
-	//if (setDebug)
-	//	WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
 
 	auto bounds = getLocalBounds().toFloat();
 
 	grillBounds = {	bounds.getX(), bounds.getY(),
 					bounds.getWidth(), bounds.getHeight() - 15};
-
+	
 	labelBounds = { bounds.getX(), grillBounds.getBottom(), bounds.getWidth(), 15 };
 
-	// Place The Slider ===========================================================
-	sliderGain.setSize(getWidth()-2, getHeight()-2);
-	sliderGain.setCentreRelative(0.5f, 0.465f);
+	ledWidth = bounds.getWidth() * 0.45f;
+	//spacing = bo unds.getHeight()*0.014f;			// Vertical Distance between LEDs
+	//ledHeight = bounds.getHeight()*0.006f;
 
 	ledOffGradient = makeMeterGradient(grillBounds, 0.75f);
 	ledOnGradient = makeMeterGradient(grillBounds, 2.5f);
 
 	// Draw The Grill Image =======================================================
 	buildGrill(bounds);
+
+	// Place The Slider
+	// ===========================================================
+	sliderGain.setSize(getWidth(), getHeight() * 0.95f);
+	//sliderGain.setCentreRelative(0.5f, 0.465f);
+    sliderGain.setTopLeftPosition(0, bounds.getHeight() * 0.01f);
 }
 
 juce::ColourGradient InputOutputGain::makeMeterGradient(juce::Rectangle<float> bounds, float brightness)
 {
-	//if (setDebug)
-	//	WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
-
 	juce::ColourGradient gradient = juce::ColourGradient {	
 									juce::Colour(0xff084008).withMultipliedBrightness(brightness),	
 									bounds.getBottomLeft(),
@@ -117,9 +138,6 @@ juce::ColourGradient InputOutputGain::makeMeterGradient(juce::Rectangle<float> b
 
 void InputOutputGain::timerCallback()
 {
-	//if (setDebug)
-	//	WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
-
 	getLevels();
 
 	//repaint(1,1,getWidth()-2,getHeight()-2);
@@ -128,8 +146,6 @@ void InputOutputGain::timerCallback()
 
 void InputOutputGain::getLevels()
 {
-	//if (setDebug)
-	//	WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
 
 	// Pull current audio-level values from processor
 
@@ -180,17 +196,11 @@ void InputOutputGain::getLevels()
 
 void InputOutputGain::setPickOffPoint(juce::String pickoff)
 {
-	//if (setDebug)
-	//	WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
-
 	pickOffPoint = pickoff;
 }
 
 void InputOutputGain::buildGrill(juce::Rectangle<float> bounds)
 {
-	//if (setDebug)
-	//	WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
-
 	using namespace juce;
 
 	ledThresholds.clear();

@@ -71,14 +71,14 @@ private:
     juce::Rectangle<float> controlBorder;
 	juce::Rectangle<float> border1, border2, border3, border4, border5, border6, labelBorder;
     
-    juce::Label mLabelWaveShape,
-                mLabelSkew,
-                mLabelDepth,
-                mLabelRhythm,
-                mLabelPhase,
-                mLabelBandGain;
+    //juce::Label mLabelWaveShape,
+    //            mLabelSkew,
+    //            mLabelDepth,
+    //            mLabelRhythm,
+    //            mLabelPhase,
+    //            mLabelBandGain;
     
-    void makeLabel(juce::Label& label, juce::String textToPrint);
+    //void makeLabel(juce::Label& label, juce::String textToPrint);
     
     void makeGainControlAttachments();
     void makeTimingControlAttachments();

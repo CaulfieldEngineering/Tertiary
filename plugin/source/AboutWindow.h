@@ -37,48 +37,9 @@ private:
     float targetTitleWidth{ 350.f };
     float targetTitleHeight{ 60.f };
 
-    //float currentTitleWidth{ 100.f };
-    //float currentTitleHeight{ 100.f };
-
     float targetCompanyWidth{ 400.f };
     float targetCompanyHeight{ 50.f };
 
-
-    //float currentCompanyWidth{ 100.f };
-    //float currentCompanyHeight{ 100.f };
-
     juce::HyperlinkButton mButtonWebsiteLink;
 
-    //juce::TextEditor mTextCode;
-    //juce::HyperlinkButton mButtonPurchase;
-
-    //juce::Label mLabelStatus;
-    //juce::Label mLabelThankYou;
-    //juce::Label mLabelLicenseStatus;
-
-    ////juce::String mLicenseKey;
-
-
-    //int mDaysLeft{ 0 };
-
-    //bool mOkToClose{ false };
-
-    //juce::Component* placeholder;
-
-    //juce::Image imageTitleHeader;
-    //juce::Image imageCompanyTitle;
-
-    //float targetTitleWidth{ 800.f };
-    //float targetTitleHeight{ 50.f };
-
-    //float currentTitleWidth{ 100.f };
-    //float currentTitleHeight{ 100.f };
-
-    //float targetCompanyWidth{ 250.f };
-    //float targetCompanyHeight{ 30.f };
-
-    //float currentCompanyWidth{ 100.f };
-    //float currentCompanyHeight{ 100.f };
-
-    //void updateFlexBox();
 };
