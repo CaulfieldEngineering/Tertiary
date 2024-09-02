@@ -12,6 +12,8 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <BinaryData.h>
 #include "UtilityFunctions.h"
+#include "avir.h"
+#include "avir_float4_sse.h"
 
 struct AboutWindow : juce::Component, juce::Button::Listener
 {
@@ -23,6 +25,8 @@ public:
     void resized() override;
     void buttonClicked(juce::Button* button) override;
     void mouseExit(const juce::MouseEvent& event) override;
+
+	juce::Image applyResize(const juce::Image& src, int width, int height);
 
 private:
 

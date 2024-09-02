@@ -36,6 +36,7 @@ struct BandControl :    juce::Component,
     //void mouseExit(const juce::MouseEvent& event) override {};
     //void mouseMove(const juce::MouseEvent& event) override {};
     
+
     void setMode(juce::String bandMode);
 
     //bool hasBSMchanged() {return mBsmChanged; }

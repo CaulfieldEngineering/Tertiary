@@ -22,6 +22,17 @@ juce_add_plugin( ${PROJECT_NAME}
     PRODUCT_NAME ${wPLUGIN_NAME}
 )
 
+# Pre-Processor Directive for Demo vs. Full Version
+# =====================================================================
+if (BUILD_DEMO)
+    add_definitions(-DDEMO_VERSION)
+    # Include demo-specific files, exclude features, etc.
+    message(STATUS "Configuring Demo Version")
+else()
+    # Full version configurations
+    message(STATUS "Configuring Full Version")
+endif()
+
 
 # Run the Python script to generate the file list
 # =====================================================================
@@ -64,9 +75,9 @@ target_include_directories(${PROJECT_NAME}
 message(STATUS "Plugin: CMakeLists.txt - target_link_libraries")
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
-	${PROJECT_NAME}BinaryData
+	    ${PROJECT_NAME}BinaryData
         juce::juce_audio_utils
-	juce::juce_dsp
+	    juce::juce_dsp
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags

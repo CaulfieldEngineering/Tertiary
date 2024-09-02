@@ -79,40 +79,55 @@ void TopBanner::paint(juce::Graphics& g)
             DBG("Resized image is invalid.");
         }
     }
+
+	// Label Demo Version as needed
+	#ifdef DEMO_VERSION
+		auto demoBounds = getLocalBounds().withTrimmedRight(getWidth() * 0.60f);
+
+		// Use a system font by name
+		juce::Font systemFont ("Helvetica", 36.0f, juce::Font::bold); // Replace "Arial" with your desired font name
+
+		g.setFont(systemFont);
+
+		// Set the color to a dimmed grey
+		g.setColour(juce::Colours::lightgrey.withAlpha(0.5f)); // Adjust the alpha for dimming
+
+		g.drawFittedText("DEMO VERSION", demoBounds, juce::Justification::centredLeft, 1);
+	#endif
 }
 
-void TopBanner::paintRescaledImage(juce::Graphics& g, juce::Rectangle<int> src, juce::Rectangle<int> dest, juce::Image originalImgToDraw)
-{
-    // Simplified approach to ensure basic image rendering works first
-    auto cutImage = originalImgToDraw.getClippedImage(src);
-
-    // Check if the clipped image is valid
-    if (!cutImage.isNull())
-    {
-        // Directly draw the clipped image to check if it’s correct
-        g.drawImage(cutImage, dest.toFloat());
-    }
-    else
-    {
-        DBG("Clipped image is invalid.");
-    }
-
-    // Now apply resizing and render the resized image
-    const auto pxFactor = g.getInternalContext().getPhysicalPixelScaleFactor();
-    const int width = juce::roundToInt(pxFactor * dest.getWidth());
-    const int height = juce::roundToInt(pxFactor * dest.getHeight());
-
-    auto finalImgToDraw = applyResize(cutImage, width, height);
-
-    if (!finalImgToDraw.isNull())
-    {
-        g.drawImage(finalImgToDraw, dest.toFloat());
-    }
-    else
-    {
-        DBG("Resized image is invalid.");
-    }
-}
+//void TopBanner::paintRescaledImage(juce::Graphics& g, juce::Rectangle<int> src, juce::Rectangle<int> dest, juce::Image originalImgToDraw)
+//{
+//    // Simplified approach to ensure basic image rendering works first
+//    auto cutImage = originalImgToDraw.getClippedImage(src);
+//
+//    // Check if the clipped image is valid
+//    if (!cutImage.isNull())
+//    {
+//        // Directly draw the clipped image to check if it’s correct
+//        g.drawImage(cutImage, dest.toFloat());
+//    }
+//    else
+//    {
+//        DBG("Clipped image is invalid.");
+//    }
+//
+//    // Now apply resizing and render the resized image
+//    const auto pxFactor = g.getInternalContext().getPhysicalPixelScaleFactor();
+//    const int width = juce::roundToInt(pxFactor * dest.getWidth());
+//    const int height = juce::roundToInt(pxFactor * dest.getHeight());
+//
+//    auto finalImgToDraw = applyResize(cutImage, width, height);
+//
+//    if (!finalImgToDraw.isNull())
+//    {
+//        g.drawImage(finalImgToDraw, dest.toFloat());
+//    }
+//    else
+//    {
+//        DBG("Resized image is invalid.");
+//    }
+//}
 
 juce::Image TopBanner::applyResize(const juce::Image& src, int width, int height)
 {

@@ -19,7 +19,8 @@
 
 
 struct GlobalControls : juce::Component,
-                        juce::ActionBroadcaster
+                        juce::ActionBroadcaster,
+	                    juce::Timer
 {
 	GlobalControls(audio_plugin::AudioPluginAudioProcessor& p);
 
@@ -28,6 +29,8 @@ struct GlobalControls : juce::Component,
 	void resized() override;
 
 	void makeAttachments();
+
+	void timerCallback() override;
 
 	juce::AudioProcessorValueTreeState& apvts;
     audio_plugin::AudioPluginAudioProcessor& audioProcessor;
