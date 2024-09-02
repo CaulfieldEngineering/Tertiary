@@ -39,6 +39,12 @@ namespace audio_plugin {
         AP2.setType(juce::dsp::LinkwitzRileyFilterType::allpass);
         LP2.setType(juce::dsp::LinkwitzRileyFilterType::lowpass);
         HP2.setType(juce::dsp::LinkwitzRileyFilterType::highpass);
+
+		// Demo Version
+		#ifdef DEMO_VERSION
+          samplesUntilDisable = demoActiveTimeLimit * getSampleRate();
+          samplesUntilEnable = demoBypassTimeLimit * getSampleRate();
+        #endif
     }
 
     //==============================================================================
@@ -208,14 +214,15 @@ namespace audio_plugin {
     void AudioPluginAudioProcessor::setStateInformation(const void* data,int sizeInBytes) {
         // USED TO LOAD PARAMETERS FROM MEMORY
 
-        auto tree = juce::ValueTree::readFromData(
-            data, sizeInBytes);  // Pull the Value Tree from memory
+		auto tree = juce::ValueTree::readFromData(
+			data, sizeInBytes);  // Pull the Value Tree from memory
 
-        if (tree.isValid())  // Check if Value Tree is valid
-        {
-        apvts.replaceState(
-            tree);  // If valid, load from memory and replace current state
-        }
+		if (tree.isValid())  // Check if Value Tree is valid
+		{
+		apvts.replaceState(
+			tree);  // If valid, load from memory and replace current state
+		}
+
     }
 
     /* Creates the parameter layout */
@@ -616,6 +623,12 @@ namespace audio_plugin {
         buffer.setSize(spec.numChannels, samplesPerBlock);
       }
 
+		// Demo Version
+		#ifdef DEMO_VERSION
+			samplesUntilDisable = demoActiveTimeLimit * getSampleRate();
+			samplesUntilEnable = demoBypassTimeLimit * getSampleRate();
+		#endif
+
       /* Used to reduce audio artifacts by smoothing the gain changes */
       inputGain.setRampDurationSeconds(0.05);
       outputGain.setRampDurationSeconds(0.05);
@@ -719,6 +732,52 @@ namespace audio_plugin {
       juce::ScopedNoDenormals noDenormals;
       auto totalNumInputChannels = getTotalNumInputChannels();
       auto totalNumOutputChannels = getTotalNumOutputChannels();
+
+
+
+
+
+
+
+
+
+
+	  /* Demo Version Counter */
+	  #ifdef DEMO_VERSION
+         int numSamples = buffer.getNumSamples();
+         sampleCounter += numSamples;
+
+		if (effectEnabled) // If effect is enabled, how long until disable?
+		{
+			if (sampleCounter >= samplesUntilDisable)
+			{
+				effectEnabled = false;
+				sampleCounter = 0;
+			}
+		}
+		else // If effect is disabled, how long until enable?
+		{
+			if (sampleCounter >= samplesUntilEnable)
+			{
+				effectEnabled = true;
+				sampleCounter = 0;
+			}
+		}
+
+	   #endif
+
+
+
+
+
+
+
+
+
+
+
+
+
 
       /* Set Up Host Playhead Data */
       playHead = this->getPlayHead();
@@ -988,21 +1047,21 @@ namespace audio_plugin {
             fmod((highLFO.getPosition() + highLFO.getIncrement()), waveTableSize));
 
         /* Amplitude Modulation on Lows */
-        if (!lowBandTrem.bypassParam->get()) {
+        if (!lowBandTrem.bypassParam->get() && effectEnabled) {
           for (int i = 0; i < totalNumInputChannels; i++) {
             filterBuffers[0].getWritePointer(i)[sample] *= mGainLowLFO;
           }
         }
 
         /* Amplitude Modulation on Mids */
-        if (!midBandTrem.bypassParam->get()) {
+        if (!midBandTrem.bypassParam->get() && effectEnabled) {
           for (int i = 0; i < totalNumInputChannels; i++) {
             filterBuffers[1].getWritePointer(i)[sample] *= mGainMidLFO;
           }
         }
 
         /* Amplitude Modulation on Highs */
-        if (!highBandTrem.bypassParam->get()) {
+        if (!highBandTrem.bypassParam->get() && effectEnabled) {
           for (int i = 0; i < totalNumInputChannels; i++) {
             filterBuffers[2].getWritePointer(i)[sample] *= mGainHighLFO;
           }

@@ -84,7 +84,12 @@ void AboutWindow::paint(juce::Graphics& g)
     g.setFont(fontSize);
 
     // Draw Version and Release info
-    g.setColour(juce::Colours::red);
+    g.setColour(juce::Colours::white);
+
+    #ifdef DEBUG
+        g.setColour(juce::Colours::red);
+    #endif // DEBUG
+
     juce::Rectangle<int> versionBounds = bounds.removeFromTop(static_cast<int>(titleBounds.getBottom()) + 60)
                                                .removeFromBottom(60);
     juce::String versionNumber = JucePlugin_VersionString;
@@ -99,8 +104,9 @@ void AboutWindow::paint(juce::Graphics& g)
 	#ifdef DEMO_VERSION
 		g.setFont(fontSize * 0.8f);
 		g.setColour(juce::Colours::lightgrey);
-		juce::Rectangle<int> disclaimerBounds = bounds.removeFromTop(60); // Increase this value by 10
-		g.drawFittedText("Demo Version: Parameters are not saved and effect fades out once every 40 seconds.",
+		juce::Rectangle<int> disclaimerBounds = bounds.removeFromTop(60);
+        disclaimerBounds = disclaimerBounds.reduced(5, 0);
+		g.drawFittedText("Demo Version: Effect is disabled once every\n50 seconds, for 10 seconds.",
 						 disclaimerBounds, juce::Justification::centred, 2);
 	#endif
 

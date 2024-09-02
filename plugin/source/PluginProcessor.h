@@ -95,6 +95,8 @@ namespace audio_plugin {
         juce::AudioParameterBool* getShowFftParam() { return showFftParam; }
         juce::AudioParameterChoice* getFftPickofIdParam() { return fftPickoffParam; }
 
+		bool getIsDemoModeEnabled() { return effectEnabled; }
+
         /* Input & Output Meters */
         // =========================================================================
         float getRmsValue(const int pickOffPoint, const int channel) const;
@@ -133,6 +135,17 @@ namespace audio_plugin {
 
         void forceSynchronization(LFO& lfo);
         double playPosition;
+        
+		/* Demo Version */
+        // =========================================================================
+		#ifdef DEMO_VERSION
+        int demoActiveTimeLimit{50};
+        int demoBypassTimeLimit{10};
+		int64_t sampleCounter = 0;
+		int64_t samplesUntilDisable;
+		int64_t samplesUntilEnable;
+		bool effectEnabled = true;
+		#endif
 
         /* Parameter Change Detection Flags */
         // =========================================================================

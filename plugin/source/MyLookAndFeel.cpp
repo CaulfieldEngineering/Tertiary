@@ -924,6 +924,7 @@ void ToggleLookAndFeel::drawToggleButton (  juce::Graphics& g, juce::ToggleButto
                                             bool shouldDrawButtonAsDown)
 {
     using namespace ColorScheme::BandColors;
+    using namespace AllColors::SliderColors;
 
     auto bounds = button.getLocalBounds();
     
@@ -943,17 +944,23 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
     auto bounds = juce::Rectangle<float>{x, y, w, h};
     
     using namespace ColorScheme::BandColors;
+	using namespace AllColors::SliderColors;
     using namespace juce;
     
     juce::Colour baseColor;
     
-    switch (mode)
-    {
-        case 0: {baseColor = getLowBandBaseColor();  break;}
-        case 1: {baseColor = getMidBandBaseColor();  break;}
-        case 2: {baseColor = getHighBandBaseColor(); break;}
-    }
-    
+	if (isEnabled)
+	{
+		switch (mode)
+		{
+			case 0: {baseColor = getLowBandBaseColor();  break;}
+			case 1: {baseColor = getMidBandBaseColor();  break;}
+			case 2: {baseColor = getHighBandBaseColor(); break;}
+		}
+	} 
+	else
+          baseColor = ColorScheme::BandColors::getBypassBaseColor();
+
     // Set background color based on ticked state
     if (ticked)
     {
@@ -965,8 +972,12 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
     }
     g.fillRect(bounds);
 
-    // Set text color based on ticked state
-    g.setColour(ticked ? juce::Colours::black : juce::Colours::lightgrey);
+    // Set text color based on ticked state and enabled state
+
+    if (isEnabled)
+      g.setColour(ticked ? juce::Colours::black : juce::Colours::lightgrey);
+    else
+	  g.setColour(juce::Colours::lightgrey);
 
     // Start with a font size based on height (INV)
 	if (mLabel == "INV")
@@ -1053,7 +1064,9 @@ void MultComboLookAndFeel::drawComboBox ( juce::Graphics& g,
 {
     using namespace juce;
     using namespace ColorScheme::BandColors;
-    
+	using namespace AllColors::SliderColors;
+    using namespace Gradients::Icons;
+
     auto bounds = comboBox.getLocalBounds();
     //auto menuBounds = bounds.withTrimmedRight(5);
 
@@ -1066,13 +1079,18 @@ void MultComboLookAndFeel::drawComboBox ( juce::Graphics& g,
     
     juce::Colour baseColour;
     
-    switch (mode)
-    {
-        case 0: baseColour = getLowBandBaseColor(); break;
-        case 1: baseColour = getMidBandBaseColor(); break;
-        case 2: baseColour = getHighBandBaseColor(); break;
-    }
-    
+	if (comboBox.isEnabled())
+	{
+		switch (mode)
+		{
+			case 0: baseColour = getLowBandBaseColor(); break;
+			case 1: baseColour = getMidBandBaseColor(); break;
+			case 2: baseColour = getHighBandBaseColor(); break;
+		}
+	}
+    else
+	    g.setGradientFill(OPTION_SLIDER_GRADIENT_BYPASS(bounds.toFloat()));
+
     g.setColour(baseColour);
     g.fillRect(menuBounds);
     
@@ -1083,7 +1101,10 @@ void MultComboLookAndFeel::drawComboBox ( juce::Graphics& g,
         menuBounds.reduce(1,1);
     }
     
-    g.setColour(juce::Colours::black);
+	if (comboBox.isEnabled())
+      g.setColour(juce::Colours::black);
+    else
+	  g.setColour(juce::Colours::lightgrey);
     
     juce::String selection = comboBox.getItemText(comboBox.getSelectedItemIndex());
     g.setFont(height * 0.75f);
@@ -1108,18 +1129,25 @@ void WaveComboLookAndFeel::drawComboBox ( juce::Graphics& g,
 {
     using namespace juce;
     using namespace ColorScheme::BandColors;
+	using namespace AllColors::SliderColors;
+    using namespace Gradients::Icons;
     
     auto bounds = comboBox.getLocalBounds();
     /* Provide a "Recessed" appearance */
     
     juce::Colour baseColour;
     
-    switch (mode)
-    {
-        case 0: baseColour = getLowBandBaseColor(); break;
-        case 1: baseColour = getMidBandBaseColor(); break;
-        case 2: baseColour = getHighBandBaseColor(); break;
-    }
+	if (comboBox.isEnabled())
+	{
+		switch (mode)
+		{
+			case 0: baseColour = getLowBandBaseColor(); break;
+			case 1: baseColour = getMidBandBaseColor(); break;
+			case 2: baseColour = getHighBandBaseColor(); break;
+		}
+	}
+    else
+	    g.setGradientFill(OPTION_SLIDER_GRADIENT_BYPASS(bounds.toFloat()));
     
     g.setColour(baseColour);
     g.fillRect(bounds);
@@ -1131,7 +1159,10 @@ void WaveComboLookAndFeel::drawComboBox ( juce::Graphics& g,
         bounds.reduce(1,1);
     }
     
-    g.setColour(juce::Colours::black);
+	if (comboBox.isEnabled())
+      g.setColour(juce::Colours::black);
+    else
+	  g.setColour(juce::Colours::lightgrey);
     
     juce::String selection = comboBox.getItemText(comboBox.getSelectedItemIndex());
     g.setFont(height * 0.8f);
