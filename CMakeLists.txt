@@ -24,6 +24,26 @@ if (APPLE)
     set(CMAKE_CXX_STANDARD 20)
 endif()
 
+
+# Determine the value of DEMO_BUILD
+# =====================================================================
+if (BUILD_DEMO)
+    set(DEMO_BUILD True)
+else()
+    set(DEMO_BUILD False)
+endif()
+
+
+# Configure the Windows Installation package files
+# =====================================================================
+message(STATUS "CMakeLists.txt: Configuring Windows Installation Files.")
+configure_file(
+  ${CMAKE_SOURCE_DIR}/package_config/installer_win.iss.in
+  ${CMAKE_BINARY_DIR}/installer_win.iss
+  @ONLY
+)
+
+
 # Configure the Windows Installation package files
 # =====================================================================
 message(STATUS "CMakeLists.txt: Configuring Windows Installation Files.")

@@ -64,6 +64,22 @@ set VERSION=%wPROJECT_VERSION%
 
 echo Applying project variables complete.
 
+REM Prompt user to select Demo or Full version
+REM ================================================================================================
+:askVersion
+set /p BUILD_VERSION="Do you want to build the Demo version? (y/n): "
+
+if /i "%BUILD_VERSION%"=="y" (
+    set DEMO_OPTION=-DBUILD_DEMO=ON
+    echo Building Demo version...
+) else if /i "%BUILD_VERSION%"=="n" (
+    set DEMO_OPTION=-DBUILD_DEMO=OFF
+    echo Building Full version...
+) else (
+    echo Invalid choice. Please enter 'y' or 'n'.
+    goto askVersion
+)
+
 REM Define the build type
 REM ================================================================================================
 set BUILD_TYPE=Release
@@ -81,7 +97,7 @@ REM Configure the project
 REM ================================================================================================
 echo Configuring project.
 
-cmake -S .. -B . -DCMAKE_BUILD_TYPE=%BUILD_TYPE%
+cmake -S .. -B . -DCMAKE_BUILD_TYPE=%BUILD_TYPE% %DEMO_OPTION%
 
 if %errorlevel% neq 0 (
     echo Configuration failed.

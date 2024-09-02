@@ -12,6 +12,7 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
         build_type: [Release]
+        version: [Full, Demo]
         include:
           - os: windows-latest
             cmake_arch: -A x64
@@ -37,16 +38,21 @@ jobs:
     # Configure Projects
     # ==========================================================================================
     - name: Configure CMake
-      #run: cmake -S . -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-      #run: cmake -S . -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} --debug-output -DCMAKE_VERBOSE_MAKEFILE=ON
-      run: cmake -S . -B ${{github.workspace}}/build ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+      run: |
+        if [ "${{ matrix.version }}" == "Demo" ]; then
+          cmake -S "${{github.workspace}}" -B "${{github.workspace}}/build" -DBUILD_DEMO=ON ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        elif [ "${{ matrix.version }}" == "Full" ]; then
+          cmake -S "${{github.workspace}}" -B "${{github.workspace}}/build" -DBUILD_DEMO=OFF ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        else
+          echo "Unexpected version: ${{ matrix.version }}"
+          exit 1
+        fi
+      shell: bash
 
     # Compile Executables
     # ==========================================================================================
     - name: Build
-      #run: cmake --build ${{github.workspace}}/build --config ${{ matrix.build_type }}
       run: cmake --build ${{github.workspace}}/build --config ${{ matrix.build_type }}
-
     # Gather project variables from config.cmake
     # ==========================================================================================
     - name: Extract and Set Configuration Variables
@@ -58,7 +64,7 @@ jobs:
           echo "$key=$value" >> $GITHUB_ENV
         done < <(grep 'set(w' ${GITHUB_WORKSPACE}/config.cmake | sed -e 's/set(//g' -e 's/)//g' -e 's/\s\+/ /g')
       shell: bash
-
+      
       # Debug; print project variables
       # ==========================================================================================
     - name: Use Variables
@@ -164,10 +170,17 @@ jobs:
         cp ${{github.workspace}}/build/distribution.xml ${GITHUB_WORKSPACE}/build/output/distribution.xml
         echo "File 'distribution.xml' copied to build/output folder."
 
+        # Determine the suffix based on the version
+        SUFFIX=""
+        if [[ "${{ matrix.version }}" == "Demo" ]]; then
+          SUFFIX=".D"
+        fi
+
         productbuild \
           --distribution ${GITHUB_WORKSPACE}/build/output/distribution.xml \
           --package-path ${GITHUB_WORKSPACE}/build/output \
-          ${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller.pkg
+          ${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg
+      shell: bash
 
       # Temporary Debug
       # ==========================================================================================
@@ -267,16 +280,6 @@ jobs:
       run: |
         ssh CaulfieldEngineering.com "echo 'SSH connection successful'"
 
-    # Debug File Location
-    # ==========================================================================================
-    # - name: Debug File Location
-    #   shell: bash
-    #   run: |
-    #     echo "Current working directory: $(pwd)"
-    #     echo "Contents of current directory:"
-    #     ls -R
-    #     echo "Contents of GITHUB_WORKSPACE:"
-    #     ls -R $GITHUB_WORKSPACE
 
     # Upload Installers to Server (SCP)
     # ==========================================================================================
@@ -284,31 +287,46 @@ jobs:
       shell: bash
       run: |
         set -x  # Enable debugging output
-        
+
         echo "Starting upload process"
         DEST_DIR="${{ matrix.os == 'windows-latest' && 'win' || 'mac' }}"
         echo "DEST_DIR set to: $DEST_DIR"
-        
+
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
         echo "REPO_NAME set to: $REPO_NAME"
-    
+
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
-          SOURCE_FILE="${{github.workspace}}/build/${REPO_NAME}MacInstaller.pkg"
+          SOURCE_FILE="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}${{ matrix.version == 'Demo' && '.D' || '' }}.pkg"
           echo "macOS build: SOURCE_FILE set to $SOURCE_FILE"
         elif [ "${{ matrix.os }}" == "windows-latest" ]; then
-          SOURCE_FILE="${{github.workspace}}/build/${REPO_NAME}WindowsInstaller.exe"
+          SOURCE_FILE="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}${{ matrix.version == 'Demo' && '.D' || '' }}.exe"
           echo "Windows build: SOURCE_FILE set to $SOURCE_FILE"
         else
           echo "Unsupported OS: ${{ matrix.os }}"
           exit 1
         fi
-    
-        DEST_PATH="CaulfieldEngineering.com:/home/caulfiel/public_html/plug-ins/${REPO_NAME}/uploads/${DEST_DIR}/"
-        
+
+        DEST_PATH="/home/caulfiel/public_html/plug-ins/${REPO_NAME}/uploads/${DEST_DIR}/"
+        SERVER="CaulfieldEngineering.com"
+        SSH_COMMAND="ssh $SERVER"
+
+        echo "Checking if destination directory exists on the server"
+        if eval "$SSH_COMMAND 'test -d $DEST_PATH'"; then
+          echo "Directory exists: $DEST_PATH"
+        else
+          echo "Directory does not exist, creating directory: $DEST_PATH"
+          if eval "$SSH_COMMAND 'mkdir -p $DEST_PATH'"; then
+            echo "Directory created successfully"
+          else
+            echo "Failed to create directory: $DEST_PATH"
+            exit 1
+          fi
+        fi
+
         echo "Beginning SCP Transfer"
         echo "Source file: $SOURCE_FILE"
-        echo "Destination path: $DEST_PATH"
-        
+        echo "Destination path: $SERVER:$DEST_PATH"
+
         if [ -f "$SOURCE_FILE" ]; then
           echo "Source file exists"
         else
@@ -316,20 +334,16 @@ jobs:
           ls -l ${{github.workspace}}/build/
           exit 1
         fi
-        
-        SCP_COMMAND="scp -v \"$SOURCE_FILE\" \"$DEST_PATH\""
-        
+
+        SCP_COMMAND="scp -v \"$SOURCE_FILE\" \"$SERVER:$DEST_PATH\""
+
         echo "Executing SCP command: $SCP_COMMAND"
-        
+
         if eval $SCP_COMMAND; then
           echo "SCP command succeeded"
         else
           echo "SCP command failed with exit code $?"
           exit 1
         fi
-    
-        set +x  # Disable debugging output
 
-    # Once Uploaded, Duplicate latest files and Rename to Genericize
-    # ==========================================================================================
-    
+        set +x  # Disable debugging output

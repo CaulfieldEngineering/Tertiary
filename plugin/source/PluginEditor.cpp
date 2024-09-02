@@ -10,9 +10,9 @@ namespace audio_plugin {
       addAndMakeVisible(topBanner);
       topBanner.addMouseListener(this, true);
 
-      /* UI is Resizable */
-      setResizable(true, false);
-      setResizeLimits(750, 515, 10000, 10000);
+      /* Set UI is Resizable for Hi-Res Screen Capturing, etc */
+      //setResizable(true, false);
+      //setResizeLimits(750, 515, 10000, 10000);
       
       /* Sets window size */
       float scale = 1.f;

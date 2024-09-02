@@ -8,14 +8,24 @@
 #define MyAppExeName "@wPLUGIN_NAME@.exe"
 #define MyAppVst3Name "@wPLUGIN_NAME@.vst3"
 #define MyAppVersion "@wPROJECT_VERSION@"
-#define MyOutputBaseFilename "@wPLUGIN_NAME@WinInstaller_@wPROJECT_VERSION@"
+#define DemoBuild "@DEMO_BUILD@"
+
+// Add .D suffix to version if it's a demo build
+#if DemoBuild == "true"
+  #define MyAppVersion MyAppVersion + ".D"
+  #define DemoSuffix " - Demo"
+#else
+  #define DemoSuffix ""
+#endif
+
+#define MyOutputBaseFilename "@wPLUGIN_NAME@WinInstaller_" + MyAppVersion
 
 [Setup]
 // =============================================================================================
-AppName={#MyCompanyName} - {#MyAppName}
+AppName={#MyCompanyName} - {#MyAppName}{#DemoSuffix}
 AppVersion={#MyAppVersion}
-DefaultDirName={pf64}\{#MyCompanyName}\{#MyAppName}
-DefaultGroupName={#MyAppName}
+DefaultDirName={pf64}\{#MyCompanyName}\{#MyAppName}{#DemoSuffix}
+DefaultGroupName={#MyAppName}{#DemoSuffix}
 OutputDir=.
 OutputBaseFilename={#MyOutputBaseFilename}
 Compression=lzma
@@ -29,8 +39,8 @@ DisableDirPage=yes
 
 [Components]
 // =============================================================================================
-Name: "standalone"; Description: "@wPLUGIN_NAME@ - Standalone"; Types: full custom
-Name: "vst3"; Description: "@wPLUGIN_NAME@ - VST3"; Types: full custom
+Name: "standalone"; Description: "{#MyAppName}{#DemoSuffix} - Standalone"; Types: full custom
+Name: "vst3"; Description: "{#MyAppName}{#DemoSuffix} - VST3"; Types: full custom
 
 [Dirs]
 // =============================================================================================
@@ -45,7 +55,7 @@ Source: "..\package_config\banner.bmp"; Flags: dontcopy
 
 [Icons]
 // =============================================================================================
-Name: "{group}\{#MyAppName} Standalone"; Filename: "{app}\{#MyAppExeName}"; Components: standalone
+Name: "{group}\{#MyAppName}{#DemoSuffix} Standalone"; Filename: "{app}\{#MyAppExeName}"; Components: standalone
 
 [Code]
 // =============================================================================================
@@ -56,8 +66,6 @@ var
 procedure InitializeWizard;
 // =============================================================================================
 var
-//  BackgroundBitmapImage: TBitmapImage;
-//  BitmapFileName: String;
     BitmapImage: TBitmapImage;
     
 begin
