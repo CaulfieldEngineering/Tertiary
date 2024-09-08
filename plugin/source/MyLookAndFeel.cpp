@@ -1097,7 +1097,7 @@ void MultComboLookAndFeel::drawComboBox ( juce::Graphics& g,
     for (int i = 0; i < 4; i++)
     {
         g.setColour(juce::Colours::darkgrey.withMultipliedAlpha(1.f/((i*i)+0.75f)));
-        g.drawRect(menuBounds.toFloat(), 1.f);
+        g.drawRect(menuBounds.expanded(1));
         menuBounds.reduce(1,1);
     }
     
@@ -1152,10 +1152,10 @@ void WaveComboLookAndFeel::drawComboBox ( juce::Graphics& g,
     g.setColour(baseColour);
     g.fillRect(bounds);
     
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 5; i++)
     {
         g.setColour(juce::Colours::darkgrey.withMultipliedAlpha(1.f/((i*i)+0.75f)));
-        g.drawRect(bounds.toFloat(), 1.f);
+        g.drawRect(bounds.expanded(1), 1.f);
         bounds.reduce(1,1);
     }
     

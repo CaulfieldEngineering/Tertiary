@@ -232,7 +232,7 @@ namespace audio_plugin {
         TremoloBand& highBandTrem = tremolos[2];  // High Band
         std::array<juce::AudioBuffer<float>, 3> filterBuffers;  // An array of 3 buffers which contain the filtered audio
 
-      JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessor)\
+      JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessor)
 
     };
 
