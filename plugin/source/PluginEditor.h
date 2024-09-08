@@ -12,8 +12,8 @@
 namespace audio_plugin {
 
 class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
-                                     juce::Timer,
-                                     juce::Button::Listener {
+                                     public juce::Timer,
+                                     public juce::Button::Listener {
     public:
         AudioPluginAudioProcessorEditor(AudioPluginAudioProcessor&);
         ~AudioPluginAudioProcessorEditor() override;
@@ -53,7 +53,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
         void buildFlexboxLayout();
 
-        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(audio_plugin::AudioPluginAudioProcessorEditor)
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor);
     };
     
 } // namespace audio_plugin

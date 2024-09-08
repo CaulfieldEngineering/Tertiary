@@ -11,6 +11,13 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "avir.h"
+
+#if JUCE_WINDOWS
+    #include "avir_float4_sse.h"
+#endif
+
+
 void paintBorder(juce::Graphics& g, juce::Colour baseColor, juce::Rectangle<float> bounds);
 
 void buildLabelFont(    juce::Label& label,
@@ -20,3 +27,6 @@ void buildLabelFont(    juce::Label& label,
                         juce::Font::FontStyleFlags fontStyle,
                         juce::Colour color,
                         float alpha);
+
+
+juce::Image applyResize(const juce::Image& src, int width, int height);
