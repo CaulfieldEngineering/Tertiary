@@ -12,8 +12,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "AllColors.h"
 #include <BinaryData.h>
-#include "avir.h"
-#include "avir_float4_sse.h"
+#include "UtilityFunctions.h"
 
 struct TopBanner :  juce::Component //, juce::MouseListener
 {
@@ -23,9 +22,6 @@ public:
     
     void paint(juce::Graphics& g) override;
     void resized() override;
-
-	juce::Image applyResize (const juce::Image& src, int width, int height);
-	void paintRescaledImage(juce::Graphics& g, juce::Rectangle<int> src, juce::Rectangle<int> dest, juce::Image originalImgToDraw);
 
 private:
     

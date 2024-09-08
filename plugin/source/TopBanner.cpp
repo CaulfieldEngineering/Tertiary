@@ -30,6 +30,7 @@ void TopBanner::resized()
 {
     // Any layout code can go here, if needed
 }
+
 void TopBanner::paint(juce::Graphics& g)
 {
     g.setImageResamplingQuality(juce::Graphics::highResamplingQuality); // Ensure high-quality resampling
@@ -95,85 +96,3 @@ void TopBanner::paint(juce::Graphics& g)
 		g.drawFittedText("DEMO VERSION", demoBounds, juce::Justification::centredLeft, 1);
 	#endif
 }
-
-//void TopBanner::paintRescaledImage(juce::Graphics& g, juce::Rectangle<int> src, juce::Rectangle<int> dest, juce::Image originalImgToDraw)
-//{
-//    // Simplified approach to ensure basic image rendering works first
-//    auto cutImage = originalImgToDraw.getClippedImage(src);
-//
-//    // Check if the clipped image is valid
-//    if (!cutImage.isNull())
-//    {
-//        // Directly draw the clipped image to check if it’s correct
-//        g.drawImage(cutImage, dest.toFloat());
-//    }
-//    else
-//    {
-//        DBG("Clipped image is invalid.");
-//    }
-//
-//    // Now apply resizing and render the resized image
-//    const auto pxFactor = g.getInternalContext().getPhysicalPixelScaleFactor();
-//    const int width = juce::roundToInt(pxFactor * dest.getWidth());
-//    const int height = juce::roundToInt(pxFactor * dest.getHeight());
-//
-//    auto finalImgToDraw = applyResize(cutImage, width, height);
-//
-//    if (!finalImgToDraw.isNull())
-//    {
-//        g.drawImage(finalImgToDraw, dest.toFloat());
-//    }
-//    else
-//    {
-//        DBG("Resized image is invalid.");
-//    }
-//}
-
-juce::Image TopBanner::applyResize(const juce::Image& src, int width, int height)
-{
-    if (width <= 0 || height <= 0 || src.isNull())
-    {
-        DBG("Invalid source image or target dimensions for resizing.");
-        return juce::Image(); // Return an empty image if the dimensions or source are invalid
-    }
-
-    juce::Image dst(src.getFormat(), width, height, true);
-
-    juce::Image::BitmapData srcData(src, juce::Image::BitmapData::readOnly);
-    juce::Image::BitmapData dstData(dst, juce::Image::BitmapData::readWrite);
-
-    int channels = 0;
-    if (src.getFormat() == juce::Image::ARGB)               channels = 4;
-    else if (src.getFormat() == juce::Image::RGB)           channels = 3;
-    else if (src.getFormat() == juce::Image::SingleChannel) channels = 1;
-    else                                                    return juce::Image();
-
-    juce::HeapBlock<uint8_t> srcPacked(src.getWidth() * src.getHeight() * channels);
-    juce::HeapBlock<uint8_t> dstPacked(dst.getWidth() * dst.getHeight() * channels);
-
-    uint8_t* rawSrc = srcPacked.getData();
-    uint8_t* rawDst = dstPacked.getData();
-
-    for (int y = 0; y < src.getHeight(); y++)
-        memcpy(rawSrc + y * src.getWidth() * channels,
-               srcData.getLinePointer(y),
-               (size_t)(src.getWidth() * channels));
-
-   #if USE_SSE
-    avir::CImageResizer<avir::fpclass_float4> imageResizer(8);
-    imageResizer.resizeImage(rawSrc, src.getWidth(), src.getHeight(), 0,
-                             rawDst, dst.getWidth(), dst.getHeight(), channels, 0);
-   #else
-    avir::CImageResizer<> imageResizer(8);
-    imageResizer.resizeImage(rawSrc, src.getWidth(), src.getHeight(), 0,
-                             rawDst, dst.getWidth(), dst.getHeight(), channels, 0);
-   #endif
-
-    for (int y = 0; y < dst.getHeight(); y++)
-        memcpy(dstData.getLinePointer(y),
-               rawDst + y * dst.getWidth() * channels,
-               (size_t)(dst.getWidth() * channels));
-
-    return dst;
-}
-
