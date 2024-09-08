@@ -69,20 +69,22 @@ GlobalControls::GlobalControls(audio_plugin::AudioPluginAudioProcessor& p)
 
 void GlobalControls::timerCallback()
 {
-	auto isEnabled = audioProcessor.getIsDemoModeEnabled();
+    #ifdef DEMO_VERSION
+        auto isEnabled = audioProcessor.getIsDemoModeEnabled();
 
-	if (!isEnabled)
-	{
-          lowBandControls.setEnabled(false);
-          midBandControls.setEnabled(false);
-          highBandControls.setEnabled(false);
-	}
-	else
-	{
-          lowBandControls.setEnabled(true);
-          midBandControls.setEnabled(true);
-          highBandControls.setEnabled(true);
-	}
+        if (!isEnabled)
+        {
+              lowBandControls.setEnabled(false);
+              midBandControls.setEnabled(false);
+              highBandControls.setEnabled(false);
+        }
+        else
+        {
+              lowBandControls.setEnabled(true);
+              midBandControls.setEnabled(true);
+              highBandControls.setEnabled(true);
+        }
+    #endif
 }
 
 void GlobalControls::paint(juce::Graphics& g)

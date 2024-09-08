@@ -1,0 +1,13 @@
+Right-click on the .sh file.
+
+Hover over Open With.
+
+Choose Other....
+
+You should be in the Applications folder. Open Utilities folder and select Terminal.app.
+
+If you can't select Terminal.app, change the enabled applications from Recommended Applications to All Applications. It is at the bottom of the window.
+
+If you want to open every .sh file with Terminal.app, tick Always Open With.
+
+Press the Open button in the bottom right corner of the window.

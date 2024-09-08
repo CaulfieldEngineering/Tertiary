@@ -38,6 +38,25 @@ VERSION=${config_vars[wPROJECT_VERSION]}
 
 echo "Applying project variables complete."
 
+# Prompt user to select Demo or Full Version
+# ================================================================================================
+while true; do
+    read -p "Do you want to build the Demo version? (y/n): " BUILD_VERSION
+    case $BUILD_VERSION in
+        [Yy]* ) DEMO_OPTION="-DBUILD_DEMO=ON"; IS_DEMO=true; echo "Building Demo version..."; break;;
+        [Nn]* ) DEMO_OPTION="-DBUILD_DEMO=OFF"; IS_DEMO=false; echo "Building Full version..."; break;;
+        * ) echo "Please answer yes or no.";;
+    esac
+done
+
+# Determine the version suffix
+# ================================================================================================
+if [ "$IS_DEMO" = true ] ; then
+    VERSION_SUFFIX="${VERSION}.D"
+else
+    VERSION_SUFFIX="${VERSION}"
+fi
+
 # Define the build type
 # ================================================================================================
 BUILD_TYPE=Release
@@ -55,7 +74,10 @@ echo "Created build folder."
 # ================================================================================================
 echo "Configuring project."
 
-cmake -S .. -B . -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+export CC=/usr/bin/gcc
+export CXX=/usr/bin/g++
+
+cmake -G Xcode -S .. -B . -DCMAKE_BUILD_TYPE=$BUILD_TYPE $DEMO_OPTION
 
 echo "Configuration completed successfully."
 
@@ -81,7 +103,7 @@ pkgbuild \
     --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.vst3" \
     --version $VERSION \
     --install-location "/Applications/${REPOSITORY_NAME}" \
-    "./output/${REPOSITORY_NAME}_Standalone.pkg"
+    "./output/${REPOSITORY_NAME}_Standalone_${VERSION_SUFFIX}.pkg"
 
 echo "Standalone Package Build complete..."
 
@@ -94,7 +116,7 @@ pkgbuild \
     --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.vst3" \
     --version $VERSION \
     --install-location "/Library/Audio/Plug-Ins/VST3" \
-    "./output/${REPOSITORY_NAME}_VST3.pkg"
+    "./output/${REPOSITORY_NAME}_VST3_${VERSION_SUFFIX}.pkg"
 
 echo "VST3 Package Build complete..."
 
@@ -108,9 +130,11 @@ echo "File 'distribution.xml' copied to build/output folder."
 # ================================================================================================
 echo "Running Product Build..."
 
+
+
 productbuild \
     --distribution "./output/distribution.xml" \
     --package-path "./output" \
-    "./output/${REPOSITORY_NAME}MacInstaller.pkg"
+    "./output/${REPOSITORY_NAME}MacInstaller_${VERSION_SUFFIX}.pkg"
 
 echo "productbuild complete..."
