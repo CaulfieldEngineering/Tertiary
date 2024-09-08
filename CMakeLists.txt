@@ -13,11 +13,13 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/config.cmake)
 
 # Use the variables defined in config.cmake
 # =====================================================================
+message(STATUS "CMakeLists.txt: Setting configuration variables.")
 project(${wPLUGIN_NAME} VERSION ${wPROJECT_VERSION})
 
 
 # Always use the newest C++ standard on green-field projects if possible.
 # =====================================================================
+message(STATUS "CMakeLists.txt: Assigning C++ standard.")
 set(CMAKE_CXX_STANDARD 23)
 if (APPLE)
     # On Mac, we need to wait for a new JUCE version that fixes the compilation issue
