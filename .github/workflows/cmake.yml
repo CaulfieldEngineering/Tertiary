@@ -638,8 +638,8 @@ jobs:
     
         echo "Updating redirect for path: $REDIRECT_PATH with target: $file_url"
     
-        # Update the redirect to point to the new file URL
-        curl -X POST "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/redirects.json" \
+        # Update the redirect if it already exists using PUT
+        curl -X PUT "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/redirects.json" \
           -H "Content-Type: application/json" \
           -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
           -d '{
@@ -651,8 +651,6 @@ jobs:
     
         echo "Redirect updated successfully for path: $REDIRECT_PATH"
       shell: bash
-  
-  
 
 
     # Update Product Digital File in Shopify
