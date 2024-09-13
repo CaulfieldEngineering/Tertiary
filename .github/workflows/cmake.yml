@@ -404,12 +404,11 @@ jobs:
     
         # Check for existing file on Shopify and delete if it exists
         # ==========================================================================================
-        echo "Searching for existing file in Shopify..."
         search_payload=$(jq -n \
           --arg filename "$FILE_NAME" \
           '{
-            query: "query { files(first: 10, query: $filename) { edges { node { id } } } }",
-            variables: {}
+            query: "query ($filename: String!) { files(first: 10, query: $filename) { edges { node { id } } } }",
+            variables: { "filename": $filename }
           }')
     
         search_response=$(curl -s -X POST \
@@ -419,22 +418,23 @@ jobs:
           -d "$search_payload")
     
         file_id=$(echo "$search_response" | jq -r '.data.files.edges[0].node.id')
-    
+
         if [ "$file_id" != "null" ]; then
           echo "Existing file found with ID: $file_id, deleting it..."
+          
           delete_payload=$(jq -n \
             --arg id "$file_id" \
             '{
               query: "mutation fileDelete($id: ID!) { fileDelete(id: $id) { deletedId userErrors { field message } } }",
               variables: { "id": $id }
             }')
-    
+
           delete_response=$(curl -s -X POST \
             "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
             -H "Content-Type: application/json" \
             -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
             -d "$delete_payload")
-    
+
           echo "Delete response: $delete_response"
         else
           echo "No existing file found. Proceeding with upload."
