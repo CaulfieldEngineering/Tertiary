@@ -376,7 +376,7 @@ jobs:
         # Acquire Repository Name
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
         echo "REPO_NAME: $REPO_NAME"
-
+    
         # Set file path and name based on OS
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
           FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
@@ -397,16 +397,47 @@ jobs:
           exit 1
         fi
     
-        # Get the file size
+        # Check for existing file on Shopify and delete if it exists
+        echo "Searching for existing file in Shopify..."
+        search_payload=$(jq -n \
+          --arg filename "$FILE_NAME" \
+          '{
+            query: "query { files(first: 10, query: $filename) { edges { node { id } } } }",
+            variables: {}
+          }')
+    
+        search_response=$(curl -s -X POST \
+          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
+          -H "Content-Type: application/json" \
+          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+          -d "$search_payload")
+    
+        file_id=$(echo "$search_response" | jq -r '.data.files.edges[0].node.id')
+    
+        if [ "$file_id" != "null" ]; then
+          echo "Existing file found with ID: $file_id, deleting it..."
+          delete_payload=$(jq -n \
+            --arg id "$file_id" \
+            '{
+              query: "mutation fileDelete($id: ID!) { fileDelete(id: $id) { deletedId userErrors { field message } } }",
+              variables: { "id": $id }
+            }')
+    
+          delete_response=$(curl -s -X POST \
+            "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
+            -H "Content-Type: application/json" \
+            -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+            -d "$delete_payload")
+    
+          echo "Delete response: $delete_response"
+        else
+          echo "No existing file found. Proceeding with upload."
+        fi
+    
+        # Proceed with upload
         FILE_SIZE=$(wc -c < "$FILE_PATH" | xargs)
         echo "File size: $FILE_SIZE bytes"
     
-
-
-
-
-
-
         # Step 1: Get staged upload URL and parameters
         echo "Requesting staged upload URL from Shopify..."
     
@@ -488,7 +519,6 @@ jobs:
         echo "Uploading file to staged URL..."
         "${upload_cmd[@]}"
     
-        
         # Step 3: Finalize the upload with fileCreate mutation
         echo "Finalizing upload with fileCreate mutation..."
     
@@ -500,6 +530,7 @@ jobs:
               fileCreate(files: $files) {
                 files {
                   id
+                  url
                   fileStatus
                   alt
                   createdAt
@@ -535,11 +566,15 @@ jobs:
         fi
     
         echo "File uploaded successfully to Shopify Files"
-        file_id=$(echo "$final_response" | jq -r '.data.fileCreate.files[0].id')
+    
+        # Store Shopify URL in a variable
         file_url=$(echo "$final_response" | jq -r '.data.fileCreate.files[0].url')
-        echo "Uploaded file ID: $file_id"
         echo "Uploaded file URL: $file_url"
+    
+        # Now you can use this variable $file_url wherever needed
       shell: bash
+  
+  
   
   
   
@@ -547,50 +582,56 @@ jobs:
 
     # Redirect Demo Download Buttons to latest version.
     # ==========================================================================================
-    - name: Update Shopify Redirect for OS
+    - name: Update Shopify Redirect for Demo Versions
       if: matrix.version == 'Demo'
       env:
         SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
         SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
       run: |
-          # Check if required environment variables are set
-          if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ]; then
-            echo "Shopify credentials not set. Skipping Shopify redirect step."
-            exit 0  # Exit gracefully without error
-          fi
-      
-          echo "SHOPIFY_SHOP_DOMAIN: $SHOPIFY_SHOP_DOMAIN"
-          echo "SHOPIFY_ACCESS_TOKEN length: ${#SHOPIFY_ACCESS_TOKEN}"
-      
-          # Acquire Repository Name
-          REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
-          echo "REPO_NAME: $REPO_NAME"
-
-          # Determine OS and set appropriate redirect path and target URL
-          if [ "${{ matrix.os }}" == "macos-latest" ]; then
-            TARGET="https://wonderlandaudio.com/files/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
-            REDIRECT_PATH="/${REPO_NAME}-demo-mac-latest"
-          elif [ "${{ matrix.os }}" == "windows-latest" ]; then
-            TARGET="https://wonderlandaudio.com/files/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
-            REDIRECT_PATH="/${REPO_NAME}-demo-windows-latest"
-          else
-            echo "Unsupported OS: ${{ matrix.os }}"
-            exit 1
-          fi
-      
-          # Update the Shopify Redirect
-          curl -X POST "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-01/redirects.json" \
-          -H "Content-Type: application/json" \
-          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-          -d '{
-            "redirect": {
-              "path": "'"$REDIRECT_PATH"'",
-              "target": "'"$TARGET"'"
-            }
-          }'
+        # Check if required environment variables are set
+        if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ]; then
+          echo "Shopify credentials not set. Skipping Shopify redirect step."
+          exit 0  # Exit gracefully without error
+        fi
+    
+        echo "SHOPIFY_SHOP_DOMAIN: $SHOPIFY_SHOP_DOMAIN"
+        echo "SHOPIFY_ACCESS_TOKEN length: ${#SHOPIFY_ACCESS_TOKEN}"
+    
+        # Acquire Repository Name
+        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+        echo "REPO_NAME: $REPO_NAME"
+    
+        # Get the file URL from the uploaded file (from the previous job step)
+        echo "Using file URL: $file_url"
+    
+        # Determine OS and set appropriate redirect path based on the file URL
+        if [ "${{ matrix.os }}" == "macos-latest" ]; then
+          REDIRECT_PATH="/${REPO_NAME}-demo-mac-latest"
+        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+          REDIRECT_PATH="/${REPO_NAME}-demo-windows-latest"
+        else
+          echo "Unsupported OS: ${{ matrix.os }}"
+          exit 1
+        fi
+    
+        echo "Redirect Path: $REDIRECT_PATH"
+        echo "Target URL: $file_url"
+    
+        # Update the Shopify Redirect to point to the file URL
+        curl -X POST "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-01/redirects.json" \
+        -H "Content-Type: application/json" \
+        -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+        -d '{
+          "redirect": {
+            "path": "'"$REDIRECT_PATH"'",
+            "target": "'"$file_url"'"
+          }
+        }'
+    
+        echo "Redirect updated: $REDIRECT_PATH -> $file_url"
+      shell: bash
   
 
-    
 
     # Update Product Digital File in Shopify
     # ==========================================================================================
