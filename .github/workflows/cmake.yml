@@ -346,6 +346,7 @@ jobs:
     # Upload Demo Installers to Shopify Files
     # ==========================================================================================
     - name: Upload File to Shopify Files
+      if: matrix.version == 'Demo'
       env:
         SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
         SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
@@ -374,7 +375,7 @@ jobs:
     
         # Define the file to upload
         # Adjust the FILE_PATH to the path of the file you want to upload
-        FILE_PATH="${{ github.workspace }}/path/to/your/file.ext"
+        FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
         FILE_NAME="$(basename "$FILE_PATH")"
     
         echo "FILE_PATH: $FILE_PATH"
