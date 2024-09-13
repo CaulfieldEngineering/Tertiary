@@ -351,7 +351,9 @@ jobs:
         SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
         SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
       run: |
+
         # Ensure required tools are installed
+        # ==========================================================================================
         if ! command -v jq &> /dev/null; then
           echo "jq could not be found, installing..."
           if [ "$(uname)" == "Darwin" ]; then
@@ -365,6 +367,7 @@ jobs:
         set -x  # Enable bash debugging
     
         # Check if required environment variables are set
+        # ==========================================================================================
         if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ]; then
           echo "Shopify credentials not set. Skipping Shopify upload step."
           exit 1
@@ -374,10 +377,12 @@ jobs:
         echo "SHOPIFY_ACCESS_TOKEN length: ${#SHOPIFY_ACCESS_TOKEN}"
     
         # Acquire Repository Name
+        # ==========================================================================================
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
         echo "REPO_NAME: $REPO_NAME"
     
         # Set file path and name based on OS
+        # ==========================================================================================
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
           FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
           FILE_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
@@ -398,6 +403,7 @@ jobs:
         fi
     
         # Check for existing file on Shopify and delete if it exists
+        # ==========================================================================================
         echo "Searching for existing file in Shopify..."
         search_payload=$(jq -n \
           --arg filename "$FILE_NAME" \
@@ -435,10 +441,12 @@ jobs:
         fi
     
         # Proceed with upload
+        # ==========================================================================================
         FILE_SIZE=$(wc -c < "$FILE_PATH" | xargs)
         echo "File size: $FILE_SIZE bytes"
     
-        # Step 1: Get staged upload URL and parameters
+        # Get staged upload URL and parameters
+        # ==========================================================================================
         echo "Requesting staged upload URL from Shopify..."
     
         payload=$(jq -n \
@@ -479,6 +487,7 @@ jobs:
           -d "$payload")
     
         # Check for errors in the staged upload response
+        # ==========================================================================================
         errors_present=$(echo "$staged_response" | jq '(.errors, .data.stagedUploadsCreate.userErrors) | select(. != null and . != []) | length > 0')
     
         if [ "$errors_present" == "true" ]; then
@@ -488,6 +497,7 @@ jobs:
         fi
     
         # Extract upload URL and resource URL
+        # ==========================================================================================
         upload_url=$(echo "$staged_response" | jq -r '.data.stagedUploadsCreate.stagedTargets[0].url')
         resource_url=$(echo "$staged_response" | jq -r '.data.stagedUploadsCreate.stagedTargets[0].resourceUrl')
     
@@ -500,12 +510,15 @@ jobs:
         echo "Upload URL: $upload_url"
     
         # Extract parameters
+        # ==========================================================================================
         parameters=$(echo "$staged_response" | jq -c '.data.stagedUploadsCreate.stagedTargets[0].parameters')
     
         # Build the form data for the upload
+        # ==========================================================================================
         upload_cmd=(curl -s -X POST "$upload_url")
     
         # Add parameters to the form data
+        # ==========================================================================================
         for param in $(echo "$parameters" | jq -c '.[]'); do
           name=$(echo "$param" | jq -r '.name')
           value=$(echo "$param" | jq -r '.value')
@@ -513,13 +526,16 @@ jobs:
         done
     
         # Add the file to the form data
+        # ==========================================================================================
         upload_cmd+=(-F "file=@$FILE_PATH")
     
         # Execute the upload
+        # ==========================================================================================
         echo "Uploading file to staged URL..."
         "${upload_cmd[@]}"
     
         # Step 3: Finalize the upload with fileCreate mutation
+        # ==========================================================================================
         echo "Finalizing upload with fileCreate mutation..."
     
         final_payload=$(jq -n \
@@ -530,7 +546,6 @@ jobs:
               fileCreate(files: $files) {
                 files {
                   id
-                  url
                   fileStatus
                   alt
                   createdAt
@@ -557,6 +572,7 @@ jobs:
           -d "$final_payload")
     
         # Check for errors in the final upload response
+        # ==========================================================================================
         errors_present=$(echo "$final_response" | jq '(.errors, .data.fileCreate.userErrors) | select(. != null and . != []) | length > 0')
     
         if [ "$errors_present" == "true" ]; then
@@ -568,10 +584,12 @@ jobs:
         echo "File uploaded successfully to Shopify Files"
     
         # Store Shopify URL in a variable
+        # Now you can use this variable $file_url wherever needed
+        # ==========================================================================================
         file_url=$(echo "$final_response" | jq -r '.data.fileCreate.files[0].url')
         echo "Uploaded file URL: $file_url"
     
-        # Now you can use this variable $file_url wherever needed
+
       shell: bash
   
   
