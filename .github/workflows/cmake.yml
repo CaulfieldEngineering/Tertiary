@@ -623,9 +623,6 @@ jobs:
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
         echo "REPO_NAME: $REPO_NAME"
     
-        # Get the file URL from the uploaded file
-        echo "Using file URL: $file_url"
-    
         # Set the redirect slug based on OS and repo name
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
           REDIRECT_PATH="/${REPO_NAME}-demo-mac-latest"
@@ -636,22 +633,35 @@ jobs:
           exit 1
         fi
     
-        echo "Updating redirect for path: $REDIRECT_PATH with target: $file_url"
+        echo "Fetching redirect ID for path: $REDIRECT_PATH"
     
-        # Update the redirect if it already exists using PUT
-        curl -X PUT "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/redirects.json" \
+        # Search for existing redirect
+        search_response=$(curl -s -X GET "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/redirects.json?path=$REDIRECT_PATH" \
+          -H "Content-Type: application/json" \
+          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}")
+    
+        # Extract the ID of the existing redirect
+        redirect_id=$(echo "$search_response" | jq -r '.redirects[0].id')
+    
+        if [ -z "$redirect_id" ] || [ "$redirect_id" == "null" ]; then
+          echo "Error: Redirect not found for path $REDIRECT_PATH"
+          exit 1
+        fi
+    
+        echo "Found redirect ID: $redirect_id. Updating with new target URL: $file_url"
+    
+        # Update the redirect using PUT
+        update_response=$(curl -s -X PUT "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/redirects/$redirect_id.json" \
           -H "Content-Type: application/json" \
           -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
           -d '{
             "redirect": {
-              "path": "'"$REDIRECT_PATH"'",
               "target": "'"$file_url"'"
             }
-          }'
+          }')
     
         echo "Redirect updated successfully for path: $REDIRECT_PATH"
       shell: bash
-
 
     # Update Product Digital File in Shopify
     # ==========================================================================================
