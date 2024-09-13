@@ -562,6 +562,10 @@ jobs:
           echo "SHOPIFY_SHOP_DOMAIN: $SHOPIFY_SHOP_DOMAIN"
           echo "SHOPIFY_ACCESS_TOKEN length: ${#SHOPIFY_ACCESS_TOKEN}"
       
+          # Acquire Repository Name
+          REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+          echo "REPO_NAME: $REPO_NAME"
+
           # Determine OS and set appropriate redirect path and target URL
           if [ "${{ matrix.os }}" == "macos-latest" ]; then
             TARGET="https://wonderlandaudio.com/files/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
