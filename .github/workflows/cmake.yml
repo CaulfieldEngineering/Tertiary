@@ -373,10 +373,17 @@ jobs:
         echo "SHOPIFY_SHOP_DOMAIN: $SHOPIFY_SHOP_DOMAIN"
         echo "SHOPIFY_ACCESS_TOKEN length: ${#SHOPIFY_ACCESS_TOKEN}"
     
-        # Define the file to upload
-        # Adjust the FILE_PATH to the path of the file you want to upload
-        FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
-        FILE_NAME="$(basename "$FILE_PATH")"
+        # Set file path and name based on OS
+        if [ "${{ matrix.os }}" == "macos-latest" ]; then
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
+          FILE_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
+        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
+          FILE_NAME="${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
+        else
+          echo "Unsupported OS: ${{ matrix.os }}"
+          exit 1
+        fi
     
         echo "FILE_PATH: $FILE_PATH"
         echo "FILE_NAME: $FILE_NAME"
