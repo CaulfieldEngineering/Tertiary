@@ -347,3 +347,137 @@ jobs:
         fi
 
         set +x  # Disable debugging output
+
+
+    # Upload Demo Installers to Shopify Files
+    # ==========================================================================================
+    - name: Upload Demo Installers to Shopify Files
+      if: matrix.version == 'Demo'
+      env:
+        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+        SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
+      run: |
+        # Check if required environment variables are set
+        if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ]; then
+          echo "Shopify credentials not set. Skipping Shopify upload step."
+          exit 0
+        fi
+
+        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+        
+        if [ "${{ matrix.os }}" == "macos-latest" ]; then
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
+          FILE_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
+        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
+          FILE_NAME="${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
+        else
+          echo "Unsupported OS: ${{ matrix.os }}"
+          exit 1
+        fi
+        
+        # Upload file to Shopify
+        response=$(curl -X POST \
+          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2021-07/files.json" \
+          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"file\": {
+              \"name\": \"${FILE_NAME}\",
+              \"source\": \"$(base64 -w 0 ${FILE_PATH})\"
+            }
+          }")
+        
+        echo "Shopify API Response: $response"
+        
+        # Check if upload was successful
+        if echo "$response" | grep -q "\"id\":"; then
+          echo "File uploaded successfully to Shopify Files"
+        else
+          echo "Failed to upload file to Shopify Files"
+          exit 1
+        fi
+      shell: bash
+
+
+    # Update URL Path for Demo Download Buttons (New Version)
+    # ==========================================================================================
+
+    
+
+    # Update Product Digital File in Shopify
+    # ==========================================================================================
+    - name: Update Product Digital File in Shopify
+      if: matrix.version == 'Full'
+      env:
+        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+        SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
+        SHOPIFY_PRODUCT_ID: ${{ secrets.SHOPIFY_PRODUCT_ID }}
+      run: |
+        # Check if required environment variables are set
+        if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ] || [ -z "$SHOPIFY_PRODUCT_ID" ]; then
+          echo "Shopify credentials or Product ID not set. Skipping Shopify product update step."
+          exit 0
+        fi
+
+        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+        
+        if [ "${{ matrix.os }}" == "macos-latest" ]; then
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+          FILE_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+          FILE_NAME="${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+        else
+          echo "Unsupported OS: ${{ matrix.os }}"
+          exit 1
+        fi
+        
+        # First, upload the new file
+        upload_response=$(curl -X POST \
+          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2021-07/files.json" \
+          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"file\": {
+              \"name\": \"${FILE_NAME}\",
+              \"source\": \"$(base64 -w 0 ${FILE_PATH})\"
+            }
+          }")
+        
+        # Extract the new file's ID from the response
+        NEW_FILE_ID=$(echo $upload_response | jq -r '.file.id')
+        
+        if [ -z "$NEW_FILE_ID" ]; then
+          echo "Failed to upload new file or extract file ID"
+          exit 1
+        fi
+        
+        # Now, update the product variant with the new file
+        update_response=$(curl -X PUT \
+          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2021-07/products/${SHOPIFY_PRODUCT_ID}.json" \
+          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"product\": {
+              \"variants\": [
+                {
+                  \"id\": \"${SHOPIFY_PRODUCT_ID}\",
+                  \"digital_file\": {
+                    \"attachment\": \"${NEW_FILE_ID}\"
+                  }
+                }
+              ]
+            }
+          }")
+        
+        echo "Shopify API Update Response: $update_response"
+        
+        # Check if update was successful
+        if echo "$update_response" | grep -q "\"id\":"; then
+          echo "Product digital file updated successfully in Shopify"
+        else
+          echo "Failed to update product digital file in Shopify"
+          exit 1
+        fi
+      shell: bash
