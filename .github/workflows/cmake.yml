@@ -603,7 +603,7 @@ jobs:
         echo "Querying for permanent file URL..."
 
         get_url_payload=$(jq -n --arg id "$file_id" '{
-          query: "query ($id: ID!) { files(first: 1, query: $id) { edges { node { fileStatus ... on GenericFile { id url } } } } }",
+          query: "query ($id: ID!) { node(id: $id) { ... on GenericFile { fileStatus url } } }",
           variables: { "id": $id }
         }')
 
@@ -617,8 +617,8 @@ jobs:
             -d "$get_url_payload")
 
           # Extract file status and URL
-          file_status=$(echo "$get_url_response" | jq -r '.data.files.edges[0].node.fileStatus')
-          permanent_url=$(echo "$get_url_response" | jq -r '.data.files.edges[0].node.url')
+          file_status=$(echo "$get_url_response" | jq -r '.data.node.fileStatus')
+          permanent_url=$(echo "$get_url_response" | jq -r '.data.node.url')
 
           if [ "$file_status" == "READY" ]; then
             echo "File is ready. Permanent URL: $permanent_url"
