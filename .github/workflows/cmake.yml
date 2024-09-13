@@ -583,48 +583,67 @@ jobs:
     
         echo "File uploaded successfully to Shopify Files"
     
+
+        # ==========================================================================================
+        # ==========================================================================================
+        # ==========================================================================================
+        # ==========================================================================================
+        # ==========================================================================================
+
+
+
+
+        # Extract the file ID from the final upload step
+        file_id=$(echo "$final_response" | jq -r '.data.fileCreate.files[0].id')
+        echo "File uploaded with ID: $file_id"
+
+
+        # Step 2: Query Shopify API for the Permanent URL
+        # ==========================================================================================
+        echo "Querying for permanent file URL..."
+
+        get_url_payload=$(jq -n --arg id "$file_id" '{
+          query: "query ($id: ID!) { files(first: 1, query: $id) { edges { node { fileStatus ... on GenericFile { id url } } } } }",
+          variables: { "id": $id }
+        }')
+
+        # Keep querying Shopify until the file is ready
+        process=false
+        while [ "$process" == "false" ]; do
+          get_url_response=$(curl -s -X POST \
+            "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
+            -H "Content-Type: application/json" \
+            -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+            -d "$get_url_payload")
+
+          # Extract file status and URL
+          file_status=$(echo "$get_url_response" | jq -r '.data.files.edges[0].node.fileStatus')
+          permanent_url=$(echo "$get_url_response" | jq -r '.data.files.edges[0].node.url')
+
+          if [ "$file_status" == "READY" ]; then
+            echo "File is ready. Permanent URL: $permanent_url"
+            echo "PERMANENT_FILE_URL=$permanent_url" >> $GITHUB_ENV
+            process=true
+          else
+            echo "File still processing. Status: $file_status. Waiting..."
+            sleep 5
+          fi
+        done
+
+        echo "Permanent file URL: $permanent_url"
+
         # Store Shopify URL in a variable
         # Now you can use this variable $file_url wherever needed
         # ==========================================================================================
         #file_url=$resource_url
-        echo "Uploaded file URL: $file_url"
+        #echo "Uploaded file URL: $file_url"
 
         # Save the file_url as an environment variable for later steps
         #echo "FILE_URL=$file_url" >> $GITHUB_ENV
 
         # Step 1: Query Shopify API for the Permanent URL
         # ==========================================================================================
-        echo "Querying for permanent file URL..."
-
-        # Query to fetch the file's permanent URL using the filename (since file ID is also available, you can use that as well)
-        permanent_url_payload=$(jq -n \
-          --arg filename "$FILE_NAME" \
-          '{
-            query: "query ($filename: String!) { files(first: 1, query: $filename) { edges { node { url } } } }",
-            variables: { "filename": $filename }
-          }')
-
-        # Send the query request
-        permanent_url_response=$(curl -s -X POST \
-          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
-          -H "Content-Type: application/json" \
-          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-          -d "$permanent_url_payload")
-
-        # Extract the permanent URL from the response
-        permanent_url=$(echo "$permanent_url_response" | jq -r '.data.files.edges[0].node.url')
-
-        if [ "$permanent_url" == "null" ]; then
-          echo "Error retrieving permanent URL."
-          echo "Response: $permanent_url_response"
-          exit 1
-        fi
-
-        # Store Shopify URL in a variable
-        echo "Permanent URL retrieved: $permanent_url"
-
-        # Save the permanent file_url as an environment variable for later steps
-        echo "FILE_URL=$permanent_url" >> $GITHUB_ENV
+        #echo "Querying for permanent file URL..."
 
       shell: bash
   
