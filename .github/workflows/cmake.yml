@@ -398,13 +398,9 @@ jobs:
         response=$(curl -v -X POST \
           "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2021-07/files.json" \
           -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-          -H "Content-Type: application/json" \
-          -d "{
-            \"file\": {
-              \"name\": \"${FILE_NAME}\",
-              \"source\": \"$(base64 < ${FILE_PATH} | tr -d '\n')\"
-            }
-          }" 2>&1)
+          -H "Content-Type: multipart/form-data" \
+          -F "filename=${FILE_NAME}" \
+          -F "file=@${FILE_PATH}" 2>&1)
         
         echo "Curl command completed"
         echo "Shopify API Response: $response"
