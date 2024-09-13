@@ -586,11 +586,45 @@ jobs:
         # Store Shopify URL in a variable
         # Now you can use this variable $file_url wherever needed
         # ==========================================================================================
-        file_url=$resource_url
+        #file_url=$resource_url
         echo "Uploaded file URL: $file_url"
 
         # Save the file_url as an environment variable for later steps
-        echo "FILE_URL=$file_url" >> $GITHUB_ENV
+        #echo "FILE_URL=$file_url" >> $GITHUB_ENV
+
+        # Step 1: Query Shopify API for the Permanent URL
+        # ==========================================================================================
+        echo "Querying for permanent file URL..."
+
+        # Query to fetch the file's permanent URL using the filename (since file ID is also available, you can use that as well)
+        permanent_url_payload=$(jq -n \
+          --arg filename "$FILE_NAME" \
+          '{
+            query: "query ($filename: String!) { files(first: 1, query: $filename) { edges { node { url } } } }",
+            variables: { "filename": $filename }
+          }')
+
+        # Send the query request
+        permanent_url_response=$(curl -s -X POST \
+          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
+          -H "Content-Type: application/json" \
+          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+          -d "$permanent_url_payload")
+
+        # Extract the permanent URL from the response
+        permanent_url=$(echo "$permanent_url_response" | jq -r '.data.files.edges[0].node.url')
+
+        if [ "$permanent_url" == "null" ]; then
+          echo "Error retrieving permanent URL."
+          echo "Response: $permanent_url_response"
+          exit 1
+        fi
+
+        # Store Shopify URL in a variable
+        echo "Permanent URL retrieved: $permanent_url"
+
+        # Save the permanent file_url as an environment variable for later steps
+        echo "FILE_URL=$permanent_url" >> $GITHUB_ENV
 
       shell: bash
   
