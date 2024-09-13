@@ -401,6 +401,12 @@ jobs:
         FILE_SIZE=$(wc -c < "$FILE_PATH" | xargs)
         echo "File size: $FILE_SIZE bytes"
     
+
+
+
+
+
+
         # Step 1: Get staged upload URL and parameters
         echo "Requesting staged upload URL from Shopify..."
     
@@ -482,6 +488,7 @@ jobs:
         echo "Uploading file to staged URL..."
         "${upload_cmd[@]}"
     
+        
         # Step 3: Finalize the upload with fileCreate mutation
         echo "Finalizing upload with fileCreate mutation..."
     
@@ -493,7 +500,9 @@ jobs:
               fileCreate(files: $files) {
                 files {
                   id
-                  url
+                  fileStatus
+                  alt
+                  createdAt
                 }
                 userErrors {
                   field
