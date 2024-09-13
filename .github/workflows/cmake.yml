@@ -588,7 +588,9 @@ jobs:
         # ==========================================================================================
         file_url=$(echo "$final_response" | jq -r '.data.fileCreate.files[0].url')
         echo "Uploaded file URL: $file_url"
-    
+
+        # Save the file_url as an environment variable for later steps
+        echo "FILE_URL=$file_url" >> $GITHUB_ENV
 
       shell: bash
   
@@ -612,6 +614,8 @@ jobs:
           exit 0  # Exit gracefully without error
         fi
     
+        file_url=$FILE_URL
+
         echo "SHOPIFY_SHOP_DOMAIN: $SHOPIFY_SHOP_DOMAIN"
         echo "SHOPIFY_ACCESS_TOKEN length: ${#SHOPIFY_ACCESS_TOKEN}"
     
