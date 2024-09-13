@@ -364,7 +364,7 @@ jobs:
     
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
         echo "REPO_NAME: $REPO_NAME"
-        
+    
         # Set file path and name based on OS
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
           FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
@@ -376,23 +376,26 @@ jobs:
           echo "Unsupported OS: ${{ matrix.os }}"
           exit 1
         fi
-        
+    
         echo "FILE_PATH: $FILE_PATH"
         echo "FILE_NAME: $FILE_NAME"
-        
+    
         if [ ! -f "$FILE_PATH" ]; then
           echo "Error: File does not exist at $FILE_PATH"
           exit 1
         fi
-        
+    
         # Correctly trimmed file size
         FILE_SIZE=$(wc -c < "$FILE_PATH" | xargs)
         echo "File size: $FILE_SIZE bytes"
-
-        # Log the request for debugging purposes
-        echo "Requesting staged upload URL from Shopify with payload:"
-        payload='{
-            "query": "mutation stagedUploadsCreate($input: [StagedUploadInput!]!) {
+    
+        # Request staged upload URL from Shopify
+        echo "Requesting staged upload URL from Shopify..."
+        payload=$(jq -n \
+          --arg filename "$FILE_NAME" \
+          --arg filesize "$FILE_SIZE" \
+          '{
+            query: "mutation stagedUploadsCreate($input: [StagedUploadInput!]!) {
               stagedUploadsCreate(input: $input) {
                 stagedTargets {
                   resourceUrl
@@ -401,63 +404,79 @@ jobs:
                     value
                   }
                 }
+                userErrors {
+                  field
+                  message
+                }
               }
             }",
-            "variables": {
-              "input": [{
-                "resource": "FILE",
-                "filename": "'"${FILE_NAME}"'",
-                "mimeType": "application/octet-stream",
-                "fileSize": '"${FILE_SIZE}"',
-                "httpMethod": "POST"
+            variables: {
+              input: [{
+                resource: "FILE",
+                filename: $filename,
+                mimeType: "application/octet-stream",
+                fileSize: ($filesize | tonumber),
+                httpMethod: "POST"
               }]
             }
-        }'
-
-        echo "$payload"
-
-        # Send the request
+          }')
+    
         staged_response=$(curl -s -X POST \
           "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2024-07/graphql.json" \
           -H "Content-Type: application/json" \
           -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
           -d "$payload")
-
+    
         # Check for errors in the staged upload response
-        if echo "$staged_response" | grep -q 'Bad Request'; then
-          echo "Error: Bad request when calling stagedUploadsCreate"
-          echo "Response: $staged_response"
+        if echo "$staged_response" | grep -q 'userErrors'; then
+          echo "Error in stagedUploadsCreate response:"
+          echo "$staged_response"
           exit 1
         fi
     
-        # Extract resource URL and upload parameters from response
-        resource_url=$(echo $staged_response | jq -r '.data.stagedUploadsCreate.stagedTargets[0].resourceUrl')
+        # Extract resource URL and parameters from response
+        resource_url=$(echo "$staged_response" | jq -r '.data.stagedUploadsCreate.stagedTargets[0].resourceUrl')
+    
         if [ -z "$resource_url" ]; then
           echo "Failed to get resource URL for staged upload."
           echo "Response: $staged_response"
           exit 1
         fi
+    
         echo "Staged upload URL: $resource_url"
-        
-        # Step 2: Perform the file upload to the staged URL
+    
+        # Extract parameters and build form data
+        declare -a form_data
+        parameters=$(echo "$staged_response" | jq -c '.data.stagedUploadsCreate.stagedTargets[0].parameters[]')
+    
+        for param in $parameters; do
+          name=$(echo "$param" | jq -r '.name')
+          value=$(echo "$param" | jq -r '.value')
+          form_data+=(-F "$name=$value")
+        done
+    
+        # Append the file to form data
+        form_data+=(-F "file=@${FILE_PATH}")
+    
+        # Upload the file to S3 with the parameters
         echo "Uploading file to staged URL..."
-        upload_response=$(curl -s -X POST "$resource_url" \
-          -F "file=@${FILE_PATH}")
-        
-        # Check if the file was uploaded successfully (based on response or lack of error)
-        if echo "$upload_response" | grep -q 'error'; then
+        upload_response=$(curl -s -X POST "$resource_url" "${form_data[@]}")
+    
+        # Check if the upload was successful
+        if echo "$upload_response" | grep -q 'Error'; then
           echo "Error uploading file: $upload_response"
           exit 1
+        else
+          echo "File uploaded successfully to S3."
         fi
     
-        # Step 3: Use fileCreate mutation to finalize upload
+        # Finalize the upload with fileCreate mutation
         echo "Finalizing upload with fileCreate mutation..."
-        final_response=$(curl -s -X POST \
-          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2024-07/graphql.json" \
-          -H "Content-Type: application/json" \
-          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-          -d '{
-            "query": "mutation fileCreate($files: [FileCreateInput!]!) {
+        final_payload=$(jq -n \
+          --arg filename "$FILE_NAME" \
+          --arg originalSource "$resource_url" \
+          '{
+            query: "mutation fileCreate($files: [FileCreateInput!]!) {
               fileCreate(files: $files) {
                 files {
                   id
@@ -465,19 +484,29 @@ jobs:
                   alt
                   createdAt
                 }
+                userErrors {
+                  field
+                  message
+                }
               }
             }",
-            "variables": {
-              "files": [{
-                "alt": "'"${FILE_NAME}"'",
-                "contentType": "FILE",
-                "originalSource": "'"${resource_url}"'"
+            variables: {
+              files: [{
+                alt: $filename,
+                contentType: "FILE",
+                originalSource: $originalSource
               }]
             }
           }')
     
+        final_response=$(curl -s -X POST \
+          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2024-07/graphql.json" \
+          -H "Content-Type: application/json" \
+          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+          -d "$final_payload")
+    
         # Check if upload was successful
-        if echo "$final_response" | grep -q '"id":'; then
+        if echo "$final_response" | grep -q '"fileStatus"'; then
           echo "File uploaded successfully to Shopify Files"
           file_id=$(echo "$final_response" | jq -r '.data.fileCreate.files[0].id')
           echo "Uploaded file ID: $file_id"
@@ -487,8 +516,7 @@ jobs:
           exit 1
         fi
       shell: bash
-  
-
+    
 
 
     # Update URL Path for Demo Download Buttons (New Version)
