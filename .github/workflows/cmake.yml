@@ -422,12 +422,12 @@ jobs:
         if [ "$file_id" != "null" ]; then
           echo "Existing file found with ID: $file_id, deleting it..."
           
-          delete_payload=$(jq -n \
-            --arg id "$file_id" \
-            '{
-              query: "mutation fileDelete($id: ID!) { fileDelete(id: $id) { deletedId userErrors { field message } } }",
-              variables: { "id": $id }
-            }')
+        delete_payload=$(jq -n \
+          --arg id "$file_id" \
+          '{
+            query: "mutation fileDelete($fileIds: [ID!]!) { fileDelete(fileIds: $fileIds) { deletedFileIds userErrors { field message } } }",
+            variables: { "fileIds": [$id] }
+          }')
 
           delete_response=$(curl -s -X POST \
             "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
