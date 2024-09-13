@@ -586,7 +586,7 @@ jobs:
         # Store Shopify URL in a variable
         # Now you can use this variable $file_url wherever needed
         # ==========================================================================================
-        file_url=$(echo "$final_response" | jq -r '.data.fileCreate.files[0].url')
+        file_url=$resource_url
         echo "Uploaded file URL: $file_url"
 
         # Save the file_url as an environment variable for later steps
