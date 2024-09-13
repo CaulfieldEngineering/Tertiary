@@ -357,13 +357,19 @@ jobs:
         SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
         SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
       run: |
+        set -x  # Enable bash debugging
+
         # Check if required environment variables are set
         if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ]; then
           echo "Shopify credentials not set. Skipping Shopify upload step."
           exit 0
         fi
 
+        echo "SHOPIFY_SHOP_DOMAIN: $SHOPIFY_SHOP_DOMAIN"
+        echo "SHOPIFY_ACCESS_TOKEN length: ${#SHOPIFY_ACCESS_TOKEN}"
+
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+        echo "REPO_NAME: $REPO_NAME"
         
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
           FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
@@ -376,25 +382,41 @@ jobs:
           exit 1
         fi
         
+        echo "FILE_PATH: $FILE_PATH"
+        echo "FILE_NAME: $FILE_NAME"
+        
+        if [ ! -f "$FILE_PATH" ]; then
+          echo "Error: File does not exist at $FILE_PATH"
+          exit 1
+        fi
+        
+        FILE_SIZE=$(wc -c < "$FILE_PATH")
+        echo "File size: $FILE_SIZE bytes"
+        
         # Upload file to Shopify
-        response=$(curl -X POST \
+        echo "Uploading file to Shopify..."
+        response=$(curl -v -X POST \
           "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2021-07/files.json" \
           -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
           -H "Content-Type: application/json" \
           -d "{
             \"file\": {
               \"name\": \"${FILE_NAME}\",
-              \"source\": \"$(base64 -w 0 ${FILE_PATH})\"
+              \"source\": \"$(base64 < ${FILE_PATH} | tr -d '\n')\"
             }
-          }")
+          }" 2>&1)
         
+        echo "Curl command completed"
         echo "Shopify API Response: $response"
         
         # Check if upload was successful
         if echo "$response" | grep -q "\"id\":"; then
           echo "File uploaded successfully to Shopify Files"
+          file_id=$(echo "$response" | grep -o '"id":[0-9]*' | cut -d':' -f2)
+          echo "Uploaded file ID: $file_id"
         else
           echo "Failed to upload file to Shopify Files"
+          echo "Error response: $response"
           exit 1
         fi
       shell: bash
