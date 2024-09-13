@@ -545,8 +545,32 @@ jobs:
   
 
 
-    # Update URL Path for Demo Download Buttons (New Version)
+    # Redirect Demo Download Buttons to latest version.
     # ==========================================================================================
+    - name: Update Shopify Redirect for OS
+      run: |
+        # Determine OS and set appropriate redirect path and target URL
+        if [ "${{ matrix.os }}" == "macos-latest" ]; then
+          TARGET="https://wonderlandaudio.com/files/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
+          REDIRECT_PATH="/${REPO_NAME}-demo-mac-latest"
+        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+          TARGET="https://wonderlandaudio.com/files/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
+          REDIRECT_PATH="/${REPO_NAME}-demo-windows-latest"
+        else
+          echo "Unsupported OS: ${{ matrix.os }}"
+          exit 1
+        fi
+
+        # Update the Shopify Redirect
+        curl -X POST "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-01/redirects.json" \
+        -H "Content-Type: application/json" \
+        -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+        -d '{
+          "redirect": {
+            "path": "'"$REDIRECT_PATH"'",
+            "target": "'"$TARGET"'"
+          }
+        }'
 
     
 
