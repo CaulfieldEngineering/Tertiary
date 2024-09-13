@@ -182,13 +182,7 @@ jobs:
           ${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg
       shell: bash
 
-      # Temporary Debug
-      # ==========================================================================================
-    # - name: Debug - List Build Directory Contents
-    #   run: |
-    #     echo "Listing contents of ${GITHUB_WORKSPACE}/build:"
-    #     ls -R ${GITHUB_WORKSPACE}/build
-
+      
     # Print build folder contents
     # ==========================================================================================
     - name: List Build Directory Contents
@@ -358,16 +352,16 @@ jobs:
         SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
       run: |
         set -x  # Enable bash debugging
-
+    
         # Check if required environment variables are set
         if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ]; then
           echo "Shopify credentials not set. Skipping Shopify upload step."
           exit 0
         fi
-
+    
         echo "SHOPIFY_SHOP_DOMAIN: $SHOPIFY_SHOP_DOMAIN"
         echo "SHOPIFY_ACCESS_TOKEN length: ${#SHOPIFY_ACCESS_TOKEN}"
-
+    
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
         echo "REPO_NAME: $REPO_NAME"
         
@@ -391,7 +385,8 @@ jobs:
           exit 1
         fi
         
-        FILE_SIZE=$(wc -c < "$FILE_PATH")
+        # Correctly trim the file size to remove any leading/trailing spaces
+        FILE_SIZE=$(wc -c < "$FILE_PATH" | xargs)
         echo "File size: $FILE_SIZE bytes"
         
         # Step 1: Get staged upload URL from Shopify
@@ -422,7 +417,14 @@ jobs:
               }]
             }
           }')
-
+    
+        # Check for errors in the staged upload response
+        if echo "$staged_response" | grep -q 'Bad Request'; then
+          echo "Error: Bad request when calling stagedUploadsCreate"
+          echo "Response: $staged_response"
+          exit 1
+        fi
+    
         # Extract resource URL and upload parameters from response
         resource_url=$(echo $staged_response | jq -r '.data.stagedUploadsCreate.stagedTargets[0].resourceUrl')
         if [ -z "$resource_url" ]; then
@@ -437,6 +439,12 @@ jobs:
         upload_response=$(curl -s -X POST "$resource_url" \
           -F "file=@${FILE_PATH}")
         
+        # Check if the file was uploaded successfully (based on response or lack of error)
+        if echo "$upload_response" | grep -q 'error'; then
+          echo "Error uploading file: $upload_response"
+          exit 1
+        fi
+    
         # Step 3: Use fileCreate mutation to finalize upload
         echo "Finalizing upload with fileCreate mutation..."
         final_response=$(curl -s -X POST \
@@ -462,7 +470,7 @@ jobs:
               }]
             }
           }')
-
+    
         # Check if upload was successful
         if echo "$final_response" | grep -q '"id":'; then
           echo "File uploaded successfully to Shopify Files"
@@ -474,6 +482,7 @@ jobs:
           exit 1
         fi
       shell: bash
+  
 
 
 
