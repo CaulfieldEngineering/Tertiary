@@ -345,7 +345,7 @@ jobs:
 
     # Upload Demo Installers to Shopify Files
     # ==========================================================================================
-    - name: Upload File to Shopify Files
+    - name: Upload Demo Files to Shopify Files
       if: matrix.version == 'Demo'
       env:
         SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
@@ -548,7 +548,20 @@ jobs:
     # Redirect Demo Download Buttons to latest version.
     # ==========================================================================================
     - name: Update Shopify Redirect for OS
+    if: matrix.version == 'Demo'
+    env:
+      SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+      SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
       run: |
+        # Check if required environment variables are set
+        if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ]; then
+          echo "Shopify credentials not set. Skipping Shopify redirect step."
+          exit 0  # Exit gracefully without error
+        fi
+    
+        echo "SHOPIFY_SHOP_DOMAIN: $SHOPIFY_SHOP_DOMAIN"
+        echo "SHOPIFY_ACCESS_TOKEN length: ${#SHOPIFY_ACCESS_TOKEN}"
+    
         # Determine OS and set appropriate redirect path and target URL
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
           TARGET="https://wonderlandaudio.com/files/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
@@ -560,7 +573,7 @@ jobs:
           echo "Unsupported OS: ${{ matrix.os }}"
           exit 1
         fi
-
+    
         # Update the Shopify Redirect
         curl -X POST "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-01/redirects.json" \
         -H "Content-Type: application/json" \
@@ -571,6 +584,7 @@ jobs:
             "target": "'"$TARGET"'"
           }
         }'
+  
 
     
 
