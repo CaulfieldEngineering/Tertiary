@@ -415,7 +415,7 @@ jobs:
                 resource: "FILE",
                 filename: $filename,
                 mimeType: "application/octet-stream",
-                fileSize: ($filesize | tonumber),
+                fileSize: $filesize,
                 httpMethod: "POST"
               }]
             }
@@ -428,7 +428,7 @@ jobs:
           -d "$payload")
     
         # Check for errors in the staged upload response
-        if echo "$staged_response" | grep -q 'userErrors'; then
+        if echo "$staged_response" | grep -q 'errors\|userErrors'; then
           echo "Error in stagedUploadsCreate response:"
           echo "$staged_response"
           exit 1
@@ -437,7 +437,7 @@ jobs:
         # Extract resource URL and parameters from response
         resource_url=$(echo "$staged_response" | jq -r '.data.stagedUploadsCreate.stagedTargets[0].resourceUrl')
     
-        if [ -z "$resource_url" ]; then
+        if [ -z "$resource_url" ] || [ "$resource_url" == "null" ]; then
           echo "Failed to get resource URL for staged upload."
           echo "Response: $staged_response"
           exit 1
@@ -516,7 +516,7 @@ jobs:
           exit 1
         fi
       shell: bash
-    
+  
 
 
     # Update URL Path for Demo Download Buttons (New Version)
