@@ -608,25 +608,30 @@ jobs:
         SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
         SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
       run: |
+
         # Check if required environment variables are set
+        # ==========================================================================================
         if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ]; then
           echo "Shopify credentials not set. Skipping Shopify redirect step."
           exit 0  # Exit gracefully without error
         fi
     
         file_url=$FILE_URL
-
+    
         echo "SHOPIFY_SHOP_DOMAIN: $SHOPIFY_SHOP_DOMAIN"
         echo "SHOPIFY_ACCESS_TOKEN length: ${#SHOPIFY_ACCESS_TOKEN}"
     
         # Acquire Repository Name
+        # ==========================================================================================
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
         echo "REPO_NAME: $REPO_NAME"
     
         # Get the file URL from the uploaded file (from the previous job step)
+        # ==========================================================================================
         echo "Using file URL: $file_url"
     
         # Determine OS and set appropriate redirect path based on the file URL
+        # ==========================================================================================
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
           REDIRECT_PATH="/${REPO_NAME}-demo-mac-latest"
         elif [ "${{ matrix.os }}" == "windows-latest" ]; then
@@ -639,19 +644,48 @@ jobs:
         echo "Redirect Path: $REDIRECT_PATH"
         echo "Target URL: $file_url"
     
-        # Update the Shopify Redirect to point to the file URL
-        curl -X POST "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-01/redirects.json" \
-        -H "Content-Type: application/json" \
-        -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-        -d '{
-          "redirect": {
-            "path": "'"$REDIRECT_PATH"'",
-            "target": "'"$file_url"'"
-          }
-        }'
+        # Check if the redirect already exists
+        # ==========================================================================================
+        redirect_check=$(curl -s -X GET "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-01/redirects.json" \
+          -H "Content-Type: application/json" \
+          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+          --data-urlencode "path=$REDIRECT_PATH")
+    
+        # Extract the redirect ID if it exists
+        # ==========================================================================================
+        redirect_id=$(echo "$redirect_check" | jq -r '.redirects[0].id // empty')
+    
+        if [ -n "$redirect_id" ]; then
+          # Update existing redirect
+          # ==========================================================================================
+          echo "Redirect already exists with ID: $redirect_id. Updating redirect..."
+          curl -s -X PUT "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-01/redirects/$redirect_id.json" \
+            -H "Content-Type: application/json" \
+            -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+            -d '{
+              "redirect": {
+                "path": "'"$REDIRECT_PATH"'",
+                "target": "'"$file_url"'"
+              }
+            }'
+        else
+          # Create new redirect
+          # ==========================================================================================
+          echo "No existing redirect found. Creating a new redirect..."
+          curl -s -X POST "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-01/redirects.json" \
+            -H "Content-Type: application/json" \
+            -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+            -d '{
+              "redirect": {
+                "path": "'"$REDIRECT_PATH"'",
+                "target": "'"$file_url"'"
+              }
+            }'
+        fi
     
         echo "Redirect updated: $REDIRECT_PATH -> $file_url"
       shell: bash
+  
   
 
 
