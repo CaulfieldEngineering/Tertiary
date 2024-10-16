@@ -697,6 +697,9 @@ jobs:
       shell: bash
 
 
+
+
+      
     # Update Product Digital File in Shopify
     # ==========================================================================================
     - name: Update Product Digital File in Shopify
@@ -706,20 +709,21 @@ jobs:
         SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
         SHOPIFY_PRODUCT_ID: ${{ secrets.SHOPIFY_PRODUCT_ID }}
       run: |
-        set -x  # Enable debug mode
-
-        echo "Starting Shopify update process"
+        set -e  # Exit immediately if a command exits with a non-zero status
+        set -x  # Enable bash debugging
 
         # Check if required environment variables are set
         if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ] || [ -z "$SHOPIFY_PRODUCT_ID" ]; then
           echo "Shopify credentials or Product ID not set. Skipping Shopify product update step."
-          exit 0
+          exit 1
         fi
 
-        echo "All required environment variables are set"
+        echo "SHOPIFY_SHOP_DOMAIN: $SHOPIFY_SHOP_DOMAIN"
+        echo "SHOPIFY_ACCESS_TOKEN length: ${#SHOPIFY_ACCESS_TOKEN}"
 
+        # Acquire Repository Name
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
-        echo "Repository name: $REPO_NAME"
+        echo "REPO_NAME: $REPO_NAME"
 
         # Set file path and name based on OS
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
@@ -735,100 +739,196 @@ jobs:
           exit 1
         fi
 
-        echo "File path: $FILE_PATH"
-        echo "File name: $FILE_NAME"
-        echo "Variant title: $VARIANT_TITLE"
+        echo "FILE_PATH: $FILE_PATH"
+        echo "FILE_NAME: $FILE_NAME"
 
-        # Check if file exists
         if [ ! -f "$FILE_PATH" ]; then
           echo "Error: File does not exist at $FILE_PATH"
-          ls -R ${{github.workspace}}/build/
           exit 1
         fi
 
-        echo "File exists. File size: $(wc -c < "$FILE_PATH") bytes"
+        FILE_SIZE=$(wc -c < "$FILE_PATH" | xargs)
+        echo "File size: $FILE_SIZE bytes"
 
-        # Attempt to upload file to Shopify
-        echo "Uploading file to Shopify"
-        upload_response=$(curl -v -X POST \
-          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/files.json" \
-          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-          -H "Content-Type: application/octet-stream" \
-          -H "X-Shopify-Content-Type: ${FILE_NAME##*.}" \
-          --data-binary @"$FILE_PATH" 2>&1)
+        # Get staged upload URL and parameters
+        echo "Requesting staged upload URL from Shopify..."
 
-        # Check curl exit status
-        curl_exit_status=$?
-        echo "cURL exit status: $curl_exit_status"
+        payload=$(jq -n \
+          --arg filename "$FILE_NAME" \
+          --arg filesize "$FILE_SIZE" \
+          '{
+            query: "mutation stagedUploadsCreate($input: [StagedUploadInput!]!) {
+              stagedUploadsCreate(input: $input) {
+                stagedTargets {
+                  url
+                  resourceUrl
+                  parameters {
+                    name
+                    value
+                  }
+                }
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }",
+            variables: {
+              input: [{
+                resource: "FILE",
+                filename: $filename,
+                mimeType: "application/octet-stream",
+                fileSize: $filesize,
+                httpMethod: "POST"
+              }]
+            }
+          }')
 
-        echo "Full cURL response:"
-        echo "$upload_response"
-
-        # Extract the response body (assuming it's the last line of the output)
-        response_body=$(echo "$upload_response" | tail -n 1)
-        echo "Response body: $response_body"
-
-        # Check if the response is valid JSON
-        if ! echo "$response_body" | jq . >/dev/null 2>&1; then
-          echo "Error: Invalid JSON response"
-          exit 1
-        fi
-
-        # Extract the new file's ID from the response
-        NEW_FILE_ID=$(echo "$response_body" | jq -r '.file.id')
-
-        if [ -z "$NEW_FILE_ID" ] || [ "$NEW_FILE_ID" == "null" ]; then
-          echo "Failed to upload new file or extract file ID"
-          echo "Error message: $(echo "$response_body" | jq -r '.errors // "No specific error message"')"
-          exit 1
-        fi
-
-        echo "New file ID: $NEW_FILE_ID"
-
-        # Fetch the product details
-        echo "Fetching product details"
-        product_response=$(curl -s -X GET \
-          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/products/${SHOPIFY_PRODUCT_ID}.json" \
-          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}")
-
-        echo "Product response: $product_response"
-
-        # Find the correct variant ID based on the title
-        VARIANT_ID=$(echo $product_response | jq -r ".product.variants[] | select(.title == \"$VARIANT_TITLE\") | .id")
-
-        if [ -z "$VARIANT_ID" ] || [ "$VARIANT_ID" == "null" ]; then
-          echo "Failed to find variant with title: $VARIANT_TITLE"
-          echo "Available variants:"
-          echo $product_response | jq '.product.variants[]'
-          exit 1
-        fi
-
-        echo "Variant ID: $VARIANT_ID"
-
-        # Update the specific variant with the new file
-        echo "Updating variant with new file"
-        update_response=$(curl -s -X PUT \
-          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/variants/${VARIANT_ID}.json" \
-          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+        staged_response=$(curl -s -X POST \
+          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
           -H "Content-Type: application/json" \
-          -d "{
-            \"variant\": {
-              \"id\": ${VARIANT_ID},
-              \"digital_file\": {
-                \"attachment\": \"${NEW_FILE_ID}\"
+          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+          -d "$payload")
+
+        # Check for errors in the staged upload response
+        errors_present=$(echo "$staged_response" | jq '(.errors, .data.stagedUploadsCreate.userErrors) | select(. != null and . != []) | length > 0')
+
+        if [ "$errors_present" == "true" ]; then
+          echo "Error in stagedUploadsCreate response:"
+          echo "$staged_response"
+          exit 1
+        fi
+
+        # Extract upload URL and resource URL
+        upload_url=$(echo "$staged_response" | jq -r '.data.stagedUploadsCreate.stagedTargets[0].url')
+        resource_url=$(echo "$staged_response" | jq -r '.data.stagedUploadsCreate.stagedTargets[0].resourceUrl')
+
+        if [ -z "$upload_url" ] || [ "$upload_url" == "null" ]; then
+          echo "Failed to get upload URL for staged upload."
+          echo "Response: $staged_response"
+          exit 1
+        fi
+
+        echo "Upload URL: $upload_url"
+
+        # Extract parameters
+        parameters=$(echo "$staged_response" | jq -c '.data.stagedUploadsCreate.stagedTargets[0].parameters')
+
+        # Build the form data for the upload
+        upload_cmd=(curl -s -X POST "$upload_url")
+
+        # Add parameters to the form data
+        for param in $(echo "$parameters" | jq -c '.[]'); do
+          name=$(echo "$param" | jq -r '.name')
+          value=$(echo "$param" | jq -r '.value')
+          upload_cmd+=(-F "$name=$value")
+        done
+
+        # Add the file to the form data
+        upload_cmd+=(-F "file=@$FILE_PATH")
+
+        # Execute the upload
+        echo "Uploading file to staged URL..."
+        upload_response=$("${upload_cmd[@]}")
+        echo "Upload response: $upload_response"
+
+        # Finalize the upload with fileCreate mutation
+        echo "Finalizing upload with fileCreate mutation..."
+
+        final_payload=$(jq -n \
+          --arg filename "$FILE_NAME" \
+          --arg originalSource "$resource_url" \
+          '{
+            query: "mutation fileCreate($files: [FileCreateInput!]!) {
+              fileCreate(files: $files) {
+                files {
+                  id
+                  fileStatus
+                  alt
+                  createdAt
+                }
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }",
+            variables: {
+              files: [{
+                originalSource: $originalSource,
+                contentType: "FILE",
+                filename: $filename
+              }]
+            }
+          }')
+
+        final_response=$(curl -s -X POST \
+          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
+          -H "Content-Type: application/json" \
+          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+          -d "$final_payload")
+
+        # Check for errors in the final upload response
+        errors_present=$(echo "$final_response" | jq '(.errors, .data.fileCreate.userErrors) | select(. != null and . != []) | length > 0')
+
+        if [ "$errors_present" == "true" ]; then
+          echo "Error in fileCreate response:"
+          echo "$final_response"
+          exit 1
+        fi
+
+        echo "File uploaded successfully to Shopify Files"
+
+        # Extract the file ID from the final upload step
+        file_id=$(echo "$final_response" | jq -r '.data.fileCreate.files[0].id')
+        echo "File uploaded with ID: $file_id"
+
+        # Update the product variant with the new file
+        echo "Updating product variant with new file..."
+        update_payload=$(jq -n \
+          --arg productId "$SHOPIFY_PRODUCT_ID" \
+          --arg variantTitle "$VARIANT_TITLE" \
+          --arg fileId "$file_id" \
+          '{
+            query: "mutation productVariantUpdate($input: ProductVariantInput!) {
+              productVariantUpdate(input: $input) {
+                productVariant {
+                  id
+                  title
+                }
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }",
+            variables: {
+              input: {
+                id: $productId,
+                title: $variantTitle,
+                digitalFile: {
+                  fileId: $fileId
+                }
               }
             }
-          }")
+          }')
 
-        echo "Update response: $update_response"
+        update_response=$(curl -s -X POST \
+          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
+          -H "Content-Type: application/json" \
+          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+          -d "$update_payload")
 
-        # Check if update was successful
-        if echo "$update_response" | grep -q "\"id\":"; then
-          echo "Product digital file updated successfully for $VARIANT_TITLE in Shopify"
-        else
-          echo "Failed to update product digital file for $VARIANT_TITLE in Shopify"
+        # Check for errors in the update response
+        errors_present=$(echo "$update_response" | jq '.data.productVariantUpdate.userErrors | length > 0')
+
+        if [ "$errors_present" == "true" ]; then
+          echo "Error in productVariantUpdate response:"
+          echo "$update_response"
           exit 1
         fi
+
+        echo "Product variant updated successfully with new file"
 
         set +x  # Disable debug mode
       shell: bash
