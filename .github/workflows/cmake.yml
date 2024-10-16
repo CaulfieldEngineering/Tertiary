@@ -664,7 +664,7 @@ jobs:
 
 
 
-    # 
+    # Upload Digital Files to Shopify Product
     # ==========================================================================================
     - name: Upload Full Version Files to Shopify
       if: matrix.version == 'Full'
@@ -676,13 +676,18 @@ jobs:
         set -e  # Exit immediately if a command exits with a non-zero status
         set -x  # Enable bash debugging
     
-        # Check if required environment variables are set
+        # Ensure required environment variables are set
         # ==========================================================================================
-        if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ] || [ -z "$SHOPIFY_PRODUCT_ID" ]; then
-          echo "Shopify credentials not set. Skipping Shopify upload step."
-          exit 0
+        if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ] || [ -z "$SHOPIFY_PRODUCCT_ID" ]; then
+          echo "Shopify credentials not set. Skipping Shopify redirect step."
+          exit 1
         fi
     
+        # Set Repository Name
+        # ==========================================================================================
+        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+        echo "REPO_NAME set to: $REPO_NAME"
+
         # Retrieve Product Variant ID
         # ==========================================================================================
         product_id=$SHOPIFY_PRODUCT_ID
