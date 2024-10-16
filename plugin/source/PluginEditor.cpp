@@ -6,13 +6,20 @@ namespace audio_plugin {
     AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(
         AudioPluginAudioProcessor& p)
         : AudioProcessorEditor(&p), audioProcessor(p) {
+
+		/* Used for Hi-Res Screen Capture... for grpahics*/
+		fullScreenScope = false;
+
       /* Container class for top banner */
+    if (!fullScreenScope)
       addAndMakeVisible(topBanner);
+
       topBanner.addMouseListener(this, true);
 
       /* Set UI is Resizable for Hi-Res Screen Capturing, etc */
       //setResizable(true, false);
       //setResizeLimits(750, 515, 10000, 10000);
+      
       
       /* Sets window size */
       float scale = 1.f;
@@ -62,16 +69,20 @@ namespace audio_plugin {
       globalControls.addActionListener(&wrapperOscilloscope.getOscilloscopeHigh());
 
       /* Container class for all parameter controls */
+	      if (!fullScreenScope)
       addAndMakeVisible(globalControls);
 
       /* Time-Domain Display */
       addAndMakeVisible(wrapperOscilloscope);
 
       /* Frequency-Domain & Crossover Display */
+	  if (!fullScreenScope)
       addAndMakeVisible(wrapperFrequency);
 
-      addAndMakeVisible(aboutWindow);
-      aboutWindow.setVisible(false);
+	  if (!fullScreenScope) {
+            addAndMakeVisible(aboutWindow);
+            aboutWindow.setVisible(false);
+          }
     }
 
     //==============================================================================
@@ -89,22 +100,24 @@ namespace audio_plugin {
     void AudioPluginAudioProcessorEditor::resized() {
       using namespace juce;
 
-      const float aspectRatio = 750.f / 515.f;  // Width / Height
+      //const float aspectRatio = 750.f / 515.f;  // Width / Height
+        
+		  
 
       /* Enforce Aspect Ratio */
-      auto availableArea = getLocalBounds();
-      int newWidth = availableArea.getWidth();
-      int newHeight = roundToInt(newWidth / aspectRatio);
+      //auto availableArea = getLocalBounds();
+      //int newWidth = availableArea.getWidth();
+      //int newHeight = roundToInt(newWidth / aspectRatio);
 
-      if (newHeight > availableArea.getHeight()) {
-        // Height is constrained by availableArea
-        newHeight = availableArea.getHeight();
-        newWidth = roundToInt(newHeight * aspectRatio);
-      }
+      //if (newHeight > availableArea.getHeight()) {
+      //  // Height is constrained by availableArea
+      //  newHeight = availableArea.getHeight();
+      //  newWidth = roundToInt(newHeight * aspectRatio);
+      //}
 
       // Set the new size and center the component
-      setSize(newWidth, newHeight);
-      centreWithSize(newWidth, newHeight);
+      //setSize(newWidth, newHeight);
+      //centreWithSize(newWidth, newHeight);
 
       buildFlexboxLayout();
 
@@ -156,6 +169,10 @@ namespace audio_plugin {
       flexBox.items.add(FlexItem(globalControls).withFlex(1.f));
 
       flexBox.performLayout(bounds);
+
+	  	if (fullScreenScope)
+		  wrapperOscilloscope.setBounds(getLocalBounds());
+
     }
 
     /* Temporary Double-Click Callback*/

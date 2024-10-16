@@ -30,6 +30,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         bool setDebug{true};
         bool openDebug{false};
 
+		bool fullScreenScope{true};
+
         /* Reference to the Audio Processor & DSP Parameters */
         AudioPluginAudioProcessor& audioProcessor;
 

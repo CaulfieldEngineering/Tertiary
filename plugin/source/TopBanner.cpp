@@ -59,7 +59,7 @@ void TopBanner::paint(juce::Graphics& g)
     if (!imageCompanyTitle.isNull())
     {
         float aspectRatio = imageCompanyTitle.getWidth() / (float)imageCompanyTitle.getHeight();
-        float companyHeight = boundsHeight * 0.65f; // 75% of the bounds height
+        float companyHeight = boundsHeight * 0.55f; // 75% of the bounds height
         int newWidth = juce::roundToInt(companyHeight * aspectRatio);
         int newHeight = juce::roundToInt(companyHeight);
 
