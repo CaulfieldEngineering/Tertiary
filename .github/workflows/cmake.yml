@@ -381,7 +381,7 @@ jobs:
         # ==========================================================================================
         if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ]; then
           echo "Shopify credentials not set. Skipping Shopify upload step."
-          exit 1
+          exit 0
         fi
     
         echo "SHOPIFY_SHOP_DOMAIN: $SHOPIFY_SHOP_DOMAIN"
@@ -649,7 +649,7 @@ jobs:
         # ==========================================================================================
         if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ]; then
           echo "Shopify credentials not set. Skipping Shopify redirect step."
-          exit 1
+          exit 0
         fi
 
 
@@ -678,9 +678,9 @@ jobs:
     
         # Ensure required environment variables are set
         # ==========================================================================================
-        if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ] || [ -z "$SHOPIFY_PRODUCCT_ID" ]; then
+        if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ] || [ -z "$SHOPIFY_PRODUCT_ID" ]; then
           echo "Shopify credentials not set. Skipping Shopify redirect step."
-          exit 1
+          exit 0
         fi
     
         # Set Repository Name
