@@ -646,6 +646,7 @@ jobs:
         SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
       run: |
         # Ensure required environment variables are set
+        # ==========================================================================================
         if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ]; then
           echo "Shopify credentials not set. Skipping Shopify redirect step."
           exit 1
@@ -665,3 +666,222 @@ jobs:
 
     # 
     # ==========================================================================================
+    - name: Upload Full Version Files to Shopify
+      if: matrix.version == 'Full'
+      env:
+        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+        SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
+        SHOPIFY_PRODUCT_ID: ${{ secrets.SHOPIFY_PRODUCT_ID }}
+      run: |
+        set -e  # Exit immediately if a command exits with a non-zero status
+        set -x  # Enable bash debugging
+    
+        # Check if required environment variables are set
+        # ==========================================================================================
+        if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ] || [ -z "$SHOPIFY_PRODUCT_ID" ]; then
+          echo "Shopify credentials not set. Skipping Shopify upload step."
+          exit 0
+        fi
+    
+        # Retrieve Product Variant ID
+        # ==========================================================================================
+        product_id=$SHOPIFY_PRODUCT_ID
+    
+        variant_query=$(jq -n \
+          --arg product_id "$product_id" \
+          '{
+            query: "query ($product_id: ID!) { product(id: $product_id) { variants(first: 10) { edges { node { id title } } } } }",
+            variables: { "product_id": $product_id }
+          }')
+    
+        variant_response=$(curl -s -X POST \
+          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
+          -H "Content-Type: application/json" \
+          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+          -d "$variant_query")
+    
+        variant_id=$(echo "$variant_response" | jq -r '.data.product.variants.edges[0].node.id')
+        echo "Variant ID: $variant_id"
+    
+        # Set file path and name based on OS
+        # ==========================================================================================
+        if [ "${{ matrix.os }}" == "macos-latest" ]; then
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+          FILE_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+          FILE_NAME="${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+        else
+          echo "Unsupported OS: ${{ matrix.os }}"
+          exit 1
+        fi
+    
+        # Check if file exists
+        # ==========================================================================================
+        if [ ! -f "$FILE_PATH" ]; then
+          echo "Error: File does not exist at $FILE_PATH"
+          exit 1
+        fi
+    
+        # Prepare upload request to Shopify
+        # ==========================================================================================
+        echo "Requesting staged upload URL from Shopify..."
+    
+        FILE_SIZE=$(wc -c < "$FILE_PATH" | xargs)
+        payload=$(jq -n \
+          --arg filename "$FILE_NAME" \
+          --arg filesize "$FILE_SIZE" \
+          '{
+            query: "mutation stagedUploadsCreate($input: [StagedUploadInput!]!) {
+              stagedUploadsCreate(input: $input) {
+                stagedTargets {
+                  url
+                  resourceUrl
+                  parameters {
+                    name
+                    value
+                  }
+                }
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }",
+            variables: {
+              input: [ {
+                resource: "FILE",
+                filename: $filename,
+                mimeType: "application/octet-stream",
+                fileSize: $filesize,
+                httpMethod: "POST"
+              } ]
+            }
+          }')
+    
+        staged_response=$(curl -s -X POST \
+          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
+          -H "Content-Type: application/json" \
+          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+          -d "$payload")
+    
+        upload_url=$(echo "$staged_response" | jq -r '.data.stagedUploadsCreate.stagedTargets[0].url')
+        resource_url=$(echo "$staged_response" | jq -r '.data.stagedUploadsCreate.stagedTargets[0].resourceUrl')
+    
+        if [ -z "$upload_url" ] || [ "$upload_url" == "null" ]; then
+          echo "Failed to get upload URL for staged upload."
+          echo "Response: $staged_response"
+          exit 1
+        fi
+    
+        # Upload the file using the staged URL
+        # ==========================================================================================
+        echo "Uploading file to staged URL..."
+        parameters=$(echo "$staged_response" | jq -c '.data.stagedUploadsCreate.stagedTargets[0].parameters')
+        upload_cmd=(curl -s -X POST "$upload_url")
+    
+        # Add parameters to the upload command
+        for param in $(echo "$parameters" | jq -c '.[]'); do
+          name=$(echo "$param" | jq -r '.name')
+          value=$(echo "$param" | jq -r '.value')
+          upload_cmd+=(-F "$name=$value")
+        done
+    
+        # Add the file to the upload command
+        upload_cmd+=(-F "file=@$FILE_PATH")
+    
+        # Execute the upload
+        "${upload_cmd[@]}"
+    
+        # Finalize the upload with fileCreate mutation
+        # ==========================================================================================
+        echo "Finalizing upload with fileCreate mutation..."
+    
+        final_payload=$(jq -n \
+          --arg filename "$FILE_NAME" \
+          --arg originalSource "$resource_url" \
+          '{
+            query: "mutation fileCreate($files: [FileCreateInput!]!) {
+              fileCreate(files: $files) {
+                files {
+                  id
+                  fileStatus
+                }
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }",
+            variables: {
+              files: [ {
+                originalSource: $originalSource,
+                contentType: "FILE",
+                filename: $filename
+              } ]
+            }
+          }')
+    
+        final_response=$(curl -s -X POST \
+          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
+          -H "Content-Type: application/json" \
+          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+          -d "$final_payload")
+    
+        file_id=$(echo "$final_response" | jq -r '.data.fileCreate.files[0].id')
+        if [ "$file_id" == "null" ]; then
+          echo "Failed to finalize the upload."
+          exit 1
+        fi
+    
+        echo "File uploaded successfully with ID: $file_id"
+    
+        # Attach File to Product Variant
+        # ==========================================================================================
+        echo "Attaching file to product variant..."
+    
+        attach_payload=$(jq -n \
+          --arg variant_id "$variant_id" \
+          --arg file_id "$file_id" \
+          '{
+            query: "mutation productVariantUpdate($input: ProductVariantInput!) {
+              productVariantUpdate(input: $input) {
+                productVariant {
+                  id
+                }
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }",
+            variables: {
+              input: {
+                id: $variant_id,
+                metafields: [{
+                  namespace: "digital_attachment",
+                  key: "file_id",
+                  value: $file_id,
+                  valueType: "STRING"
+                }]
+              }
+            }
+          }')
+    
+        attach_response=$(curl -s -X POST \
+          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
+          -H "Content-Type: application/json" \
+          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
+          -d "$attach_payload")
+    
+        errors_present=$(echo "$attach_response" | jq '(.errors, .data.productVariantUpdate.userErrors) | select(. != null and . != []) | length > 0')
+        if [ "$errors_present" == "true" ]; then
+          echo "Error in attaching file to product variant:"
+          echo "$attach_response"
+          exit 1
+        fi
+    
+        echo "File successfully attached to product variant."
+        
+      shell: bash
+    
