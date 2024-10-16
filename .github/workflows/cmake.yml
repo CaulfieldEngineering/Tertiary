@@ -648,9 +648,11 @@ jobs:
         # Ensure required environment variables are set
         if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ]; then
           echo "Shopify credentials not set. Skipping Shopify redirect step."
-          exit 0  # Exit gracefully without error
+          exit 1
         fi
-    
+
+
+
         file_url=$FILE_URL
         file_url=$PERMANENT_FILE_URL
     
