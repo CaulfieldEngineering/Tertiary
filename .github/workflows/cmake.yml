@@ -664,7 +664,7 @@ jobs:
 
 
 
-    # Upload Digital Files to Shopify Product
+    # Upload Digital Files to Shopify Product.
     # ==========================================================================================
     - name: Upload Full Version Files to Shopify
       if: matrix.version == 'Full'
