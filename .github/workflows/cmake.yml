@@ -633,7 +633,7 @@ jobs:
   
 
 
-    # Redirect Demo Download Buttons to latest version.
+    # Redirect Demo Download Buttons to latest version. Test
     # ==========================================================================================
     - name: Update Shopify Redirect for Demo Versions
       if: matrix.version == 'Demo'
