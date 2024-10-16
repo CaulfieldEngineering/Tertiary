@@ -49,10 +49,15 @@ jobs:
         fi
       shell: bash
 
+
+
     # Compile Executables
     # ==========================================================================================
     - name: Build
       run: cmake --build ${{github.workspace}}/build --config ${{ matrix.build_type }}
+
+
+
     # Gather project variables from config.cmake
     # ==========================================================================================
     - name: Extract and Set Configuration Variables
@@ -78,6 +83,8 @@ jobs:
         echo "Needs MIDI Input: $wNEEDS_MIDI_INPUT"
         echo "Needs MIDI Output: $wNEEDS_MIDI_OUTPUT"
         echo "Plugin Code: $wPLUGIN_CODE"
+
+
 
     # Install Inno Setup (Windows Only)
     # ==========================================================================================
@@ -106,14 +113,6 @@ jobs:
       shell: pwsh
 
 
- 
-
-
-
-
-
-
-
 
     # Package: Standalone (Mac)
     # ==========================================================================================
@@ -136,9 +135,11 @@ jobs:
           --version $wPROJECT_VERSION \
           --install-location /Applications/${REPOSITORY_NAME} \
           ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone.pkg
-  
-      # Package: VST3 (Mac)
-      # ==========================================================================================
+
+        
+
+    # Package: VST3 (Mac)
+    # ==========================================================================================
     - name: Create VST3 Package (Mac Only)
       if: matrix.os == 'macos-latest'
       env:
@@ -158,6 +159,8 @@ jobs:
           --version $wPROJECT_VERSION \
           --install-location /Library/Audio/Plug-Ins/VST3 \
           ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3.pkg
+
+
 
     # Package: Distribution (Mac)
     # ==========================================================================================
@@ -183,6 +186,7 @@ jobs:
       shell: bash
 
 
+
     # Print build folder contents
     # ==========================================================================================
     - name: List Build Directory Contents
@@ -190,10 +194,6 @@ jobs:
         Write-Host "Listing all files and directories in the build/plugin directory:"
         Get-ChildItem -Path "${{github.workspace}}\build\" -Recurse
       shell: pwsh
-
-
-
-
 
 
 
@@ -214,8 +214,7 @@ jobs:
     # Staple the Notarization Ticket (Mac)
     # ==========================================================================================
 
-
-
+    
 
     # Setup SSH
     # ==========================================================================================
@@ -223,6 +222,8 @@ jobs:
       uses: webfactory/ssh-agent@v0.5.3
       with:
         ssh-private-key: ${{ secrets.ID_GITHUB }}
+
+
 
     # Add Host Key (Windows)
     # ==========================================================================================
@@ -235,6 +236,8 @@ jobs:
         }
         ssh-keyscan -p 7822 CaulfieldEngineering.com | Out-File -Append -Encoding ascii $HOME/.ssh/known_hosts
 
+
+
     # Add Host Key (macOS)
     # ==========================================================================================
     - name: Add Host Key (macOS)
@@ -242,6 +245,8 @@ jobs:
       run: |
         mkdir -p ~/.ssh
         ssh-keyscan -p 7822 CaulfieldEngineering.com >> ~/.ssh/known_hosts
+
+
 
     # Create SSH Configuration
     # ==========================================================================================
@@ -256,6 +261,8 @@ jobs:
           MACs hmac-sha2-256
           StrictHostKeyChecking no" > ~/.ssh/config
 
+
+
     # Verify SSH Key and Connection
     # ==========================================================================================
     - name: Verify SSH Key and Connection
@@ -267,12 +274,15 @@ jobs:
         echo "Attempting SSH connection:"
         ssh -vvv CaulfieldEngineering.com exit
 
+
+
     # Debug SSH Connection
     # ==========================================================================================
     - name: Debug SSH Connection
       shell: bash
       run: |
         ssh CaulfieldEngineering.com "echo 'SSH connection successful'"
+
 
 
     # Upload Installers to Server (SCP)
@@ -341,6 +351,7 @@ jobs:
         fi
 
         set +x  # Disable debugging output
+
 
 
     # Upload Demo Installers to Shopify Files
@@ -534,7 +545,7 @@ jobs:
         echo "Uploading file to staged URL..."
         "${upload_cmd[@]}"
     
-        # Finalize the upload with fileCreate mutation
+        # Step 3: Finalize the upload with fileCreate mutation
         # ==========================================================================================
         echo "Finalizing upload with fileCreate mutation..."
     
@@ -582,24 +593,24 @@ jobs:
         fi
     
         echo "File uploaded successfully to Shopify Files"
-
+    
         # Extract the file ID from the final upload step
-        # ==========================================================================================
         file_id=$(echo "$final_response" | jq -r '.data.fileCreate.files[0].id')
         echo "File uploaded with ID: $file_id"
 
-        # Query Shopify API for the Permanent URL
+
+        # Step 2: Query Shopify API for the Permanent URL
         # ==========================================================================================
         echo "Querying for permanent file URL..."
 
-        get_url_payload=$(jq -n --arg id "$file_id" '{
-          query: "query ($id: ID!) { node(id: $id) { ... on GenericFile { fileStatus url } } }",
-          variables: { "id": $id }
-        }')
-
+        get_url_payload=$(jq -n --arg id "$file_id" 
+          '{
+            query: "query ($id: ID!) { node(id: $id) { ... on GenericFile { fileStatus url } } }",
+            variables: { "id": $id }
+          }'
+        )
 
         # Keep querying Shopify until the file is ready
-        # ==========================================================================================
         process=false
         while [ "$process" == "false" ]; do
           get_url_response=$(curl -s -X POST \
@@ -609,7 +620,6 @@ jobs:
             -d "$get_url_payload")
 
           # Extract file status and URL
-          # ==========================================================================================
           file_status=$(echo "$get_url_response" | jq -r '.data.node.fileStatus')
           permanent_url=$(echo "$get_url_response" | jq -r '.data.node.url')
 
@@ -626,12 +636,8 @@ jobs:
         echo "Permanent file URL: $permanent_url"
 
       shell: bash
-  
-  
-  
-  
-  
 
+      
 
     # Redirect Demo Download Buttons to latest version.
     # ==========================================================================================
@@ -647,288 +653,13 @@ jobs:
           exit 0  # Exit gracefully without error
         fi
     
+        file_url=$FILE_URL
         file_url=$PERMANENT_FILE_URL
     
         echo "SHOPIFY_SHOP_DOMAIN: $SHOPIFY_SHOP_DOMAIN"
         echo "SHOPIFY_ACCESS_TOKEN length: ${#SHOPIFY_ACCESS_TOKEN}"
-    
-        # Acquire Repository Name
-        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
-        echo "REPO_NAME: $REPO_NAME"
-    
-        # Set the redirect slug based on OS and repo name
-        if [ "${{ matrix.os }}" == "macos-latest" ]; then
-          REDIRECT_PATH="/${REPO_NAME}-demo-mac-latest"
-        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
-          REDIRECT_PATH="/${REPO_NAME}-demo-windows-latest"
-        else
-          echo "Unsupported OS: ${{ matrix.os }}"
-          exit 1
-        fi
-    
-        echo "Fetching redirect ID for path: $REDIRECT_PATH"
-    
-        # Search for existing redirect
-        search_response=$(curl -s -X GET "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/redirects.json?path=$REDIRECT_PATH" \
-          -H "Content-Type: application/json" \
-          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}")
-    
-        # Extract the ID of the existing redirect
-        redirect_id=$(echo "$search_response" | jq -r '.redirects[0].id')
-    
-        if [ -z "$redirect_id" ] || [ "$redirect_id" == "null" ]; then
-          echo "Error: Redirect not found for path $REDIRECT_PATH"
-          exit 1
-        fi
-    
-        echo "Found redirect ID: $redirect_id. Updating with new target URL: $file_url"
-    
-        # Update the redirect using PUT
-        update_response=$(curl -s -X PUT "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/redirects/$redirect_id.json" \
-          -H "Content-Type: application/json" \
-          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-          -d '{
-            "redirect": {
-              "target": "'"$file_url"'"
-            }
-          }')
-    
-        echo "Redirect updated successfully for path: $REDIRECT_PATH"
-      shell: bash
 
 
 
-
-      
-    # Update Product Digital File in Shopify
+    # 
     # ==========================================================================================
-    - name: Update Product Digital File in Shopify
-      if: matrix.version == 'Full'
-      env:
-        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
-        SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
-        SHOPIFY_PRODUCT_ID: ${{ secrets.SHOPIFY_PRODUCT_ID }}
-      run: |
-        set -e  # Exit immediately if a command exits with a non-zero status
-        set -x  # Enable bash debugging
-
-        # Check if required environment variables are set
-        if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ] || [ -z "$SHOPIFY_PRODUCT_ID" ]; then
-          echo "Shopify credentials or Product ID not set. Skipping Shopify product update step."
-          exit 1
-        fi
-
-        echo "SHOPIFY_SHOP_DOMAIN: $SHOPIFY_SHOP_DOMAIN"
-        echo "SHOPIFY_ACCESS_TOKEN length: ${#SHOPIFY_ACCESS_TOKEN}"
-
-        # Acquire Repository Name
-        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
-        echo "REPO_NAME: $REPO_NAME"
-
-        # Set file path and name based on OS
-        if [ "${{ matrix.os }}" == "macos-latest" ]; then
-          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
-          FILE_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
-          VARIANT_TITLE="Mac Version"
-        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
-          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
-          FILE_NAME="${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
-          VARIANT_TITLE="Windows Version"
-        else
-          echo "Unsupported OS: ${{ matrix.os }}"
-          exit 1
-        fi
-
-        echo "FILE_PATH: $FILE_PATH"
-        echo "FILE_NAME: $FILE_NAME"
-
-        if [ ! -f "$FILE_PATH" ]; then
-          echo "Error: File does not exist at $FILE_PATH"
-          exit 1
-        fi
-
-        FILE_SIZE=$(wc -c < "$FILE_PATH" | xargs)
-        echo "File size: $FILE_SIZE bytes"
-
-        # Get staged upload URL and parameters
-        echo "Requesting staged upload URL from Shopify..."
-
-        payload=$(jq -n \
-          --arg filename "$FILE_NAME" \
-          --arg filesize "$FILE_SIZE" \
-          '{
-            query: "mutation stagedUploadsCreate($input: [StagedUploadInput!]!) {
-              stagedUploadsCreate(input: $input) {
-                stagedTargets {
-                  url
-                  resourceUrl
-                  parameters {
-                    name
-                    value
-                  }
-                }
-                userErrors {
-                  field
-                  message
-                }
-              }
-            }",
-            variables: {
-              input: [{
-                resource: "FILE",
-                filename: $filename,
-                mimeType: "application/octet-stream",
-                fileSize: $filesize,
-                httpMethod: "POST"
-              }]
-            }
-          }')
-
-        staged_response=$(curl -s -X POST \
-          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
-          -H "Content-Type: application/json" \
-          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-          -d "$payload")
-
-        # Check for errors in the staged upload response
-        errors_present=$(echo "$staged_response" | jq '(.errors, .data.stagedUploadsCreate.userErrors) | select(. != null and . != []) | length > 0')
-
-        if [ "$errors_present" == "true" ]; then
-          echo "Error in stagedUploadsCreate response:"
-          echo "$staged_response"
-          exit 1
-        fi
-
-        # Extract upload URL and resource URL
-        upload_url=$(echo "$staged_response" | jq -r '.data.stagedUploadsCreate.stagedTargets[0].url')
-        resource_url=$(echo "$staged_response" | jq -r '.data.stagedUploadsCreate.stagedTargets[0].resourceUrl')
-
-        if [ -z "$upload_url" ] || [ "$upload_url" == "null" ]; then
-          echo "Failed to get upload URL for staged upload."
-          echo "Response: $staged_response"
-          exit 1
-        fi
-
-        echo "Upload URL: $upload_url"
-
-        # Extract parameters
-        parameters=$(echo "$staged_response" | jq -c '.data.stagedUploadsCreate.stagedTargets[0].parameters')
-
-        # Build the form data for the upload
-        upload_cmd=(curl -s -X POST "$upload_url")
-
-        # Add parameters to the form data
-        for param in $(echo "$parameters" | jq -c '.[]'); do
-          name=$(echo "$param" | jq -r '.name')
-          value=$(echo "$param" | jq -r '.value')
-          upload_cmd+=(-F "$name=$value")
-        done
-
-        # Add the file to the form data
-        upload_cmd+=(-F "file=@$FILE_PATH")
-
-        # Execute the upload
-        echo "Uploading file to staged URL..."
-        upload_response=$("${upload_cmd[@]}")
-        echo "Upload response: $upload_response"
-
-        # Finalize the upload with fileCreate mutation
-        echo "Finalizing upload with fileCreate mutation..."
-
-        final_payload=$(jq -n \
-          --arg filename "$FILE_NAME" \
-          --arg originalSource "$resource_url" \
-          '{
-            query: "mutation fileCreate($files: [FileCreateInput!]!) {
-              fileCreate(files: $files) {
-                files {
-                  id
-                  fileStatus
-                  alt
-                  createdAt
-                }
-                userErrors {
-                  field
-                  message
-                }
-              }
-            }",
-            variables: {
-              files: [{
-                originalSource: $originalSource,
-                contentType: "FILE",
-                filename: $filename
-              }]
-            }
-          }')
-
-        final_response=$(curl -s -X POST \
-          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
-          -H "Content-Type: application/json" \
-          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-          -d "$final_payload")
-
-        # Check for errors in the final upload response
-        errors_present=$(echo "$final_response" | jq '(.errors, .data.fileCreate.userErrors) | select(. != null and . != []) | length > 0')
-
-        if [ "$errors_present" == "true" ]; then
-          echo "Error in fileCreate response:"
-          echo "$final_response"
-          exit 1
-        fi
-
-        echo "File uploaded successfully to Shopify Files"
-
-        # Extract the file ID from the final upload step
-        file_id=$(echo "$final_response" | jq -r '.data.fileCreate.files[0].id')
-        echo "File uploaded with ID: $file_id"
-
-        # Update the product variant with the new file
-        echo "Updating product variant with new file..."
-        update_payload=$(jq -n \
-          --arg productId "$SHOPIFY_PRODUCT_ID" \
-          --arg variantTitle "$VARIANT_TITLE" \
-          --arg fileId "$file_id" \
-          '{
-            query: "mutation productVariantUpdate($input: ProductVariantInput!) {
-              productVariantUpdate(input: $input) {
-                productVariant {
-                  id
-                  title
-                }
-                userErrors {
-                  field
-                  message
-                }
-              }
-            }",
-            variables: {
-              input: {
-                id: $productId,
-                title: $variantTitle,
-                digitalFile: {
-                  fileId: $fileId
-                }
-              }
-            }
-          }')
-
-        update_response=$(curl -s -X POST \
-          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
-          -H "Content-Type: application/json" \
-          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-          -d "$update_payload")
-
-        # Check for errors in the update response
-        errors_present=$(echo "$update_response" | jq '.data.productVariantUpdate.userErrors | length > 0')
-
-        if [ "$errors_present" == "true" ]; then
-          echo "Error in productVariantUpdate response:"
-          echo "$update_response"
-          exit 1
-        fi
-
-        echo "Product variant updated successfully with new file"
-
-        set +x  # Disable debug mode
-      shell: bash
