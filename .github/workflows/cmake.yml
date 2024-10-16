@@ -696,6 +696,8 @@ jobs:
         echo "Redirect updated successfully for path: $REDIRECT_PATH"
       shell: bash
 
+
+
     # Update Product Digital File in Shopify
     # ==========================================================================================
     - name: Update Product Digital File in Shopify
@@ -705,13 +707,20 @@ jobs:
         SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
         SHOPIFY_PRODUCT_ID: ${{ secrets.SHOPIFY_PRODUCT_ID }}
       run: |
+        set -x  # Enable debug mode
+
+        echo "Starting Shopify update process"
+
         # Check if required environment variables are set
         if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ] || [ -z "$SHOPIFY_PRODUCT_ID" ]; then
           echo "Shopify credentials or Product ID not set. Skipping Shopify product update step."
           exit 0
         fi
 
+        echo "All required environment variables are set"
+
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+        echo "Repository name: $REPO_NAME"
 
         # Set file path and name based on OS
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
@@ -727,24 +736,29 @@ jobs:
           exit 1
         fi
 
-        # Use a compatible base64 encoding command for both macOS and Linux
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-          ENCODED_FILE=$(base64 -i "${FILE_PATH}")
-        else
-          ENCODED_FILE=$(base64 -w 0 "${FILE_PATH}")
+        echo "File path: $FILE_PATH"
+        echo "File name: $FILE_NAME"
+        echo "Variant title: $VARIANT_TITLE"
+
+        # Check if file exists
+        if [ ! -f "$FILE_PATH" ]; then
+          echo "Error: File does not exist at $FILE_PATH"
+          ls -R ${{github.workspace}}/build/
+          exit 1
         fi
 
-        # Upload the new file
+        echo "File exists. File size: $(wc -c < "$FILE_PATH") bytes"
+
+        # Instead of base64 encoding the entire file, we'll use curl's --data-binary option
+        echo "Uploading file to Shopify"
         upload_response=$(curl -s -X POST \
           "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/files.json" \
           -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-          -H "Content-Type: application/json" \
-          -d "{
-            \"file\": {
-              \"name\": \"${FILE_NAME}\",
-              \"source\": \"${ENCODED_FILE}\"
-            }
-          }")
+          -H "Content-Type: application/octet-stream" \
+          -H "X-Shopify-Content-Type: ${FILE_NAME##*.}" \
+          --data-binary @"$FILE_PATH")
+
+        echo "Upload response: $upload_response"
 
         # Extract the new file's ID from the response
         NEW_FILE_ID=$(echo $upload_response | jq -r '.file.id')
@@ -755,21 +769,30 @@ jobs:
           exit 1
         fi
 
+        echo "New file ID: $NEW_FILE_ID"
+
         # Fetch the product details
+        echo "Fetching product details"
         product_response=$(curl -s -X GET \
           "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/products/${SHOPIFY_PRODUCT_ID}.json" \
           -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}")
+
+        echo "Product response: $product_response"
 
         # Find the correct variant ID based on the title
         VARIANT_ID=$(echo $product_response | jq -r ".product.variants[] | select(.title == \"$VARIANT_TITLE\") | .id")
 
         if [ -z "$VARIANT_ID" ] || [ "$VARIANT_ID" == "null" ]; then
           echo "Failed to find variant with title: $VARIANT_TITLE"
-          echo "Product response: $product_response"
+          echo "Available variants:"
+          echo $product_response | jq '.product.variants[]'
           exit 1
         fi
 
+        echo "Variant ID: $VARIANT_ID"
+
         # Update the specific variant with the new file
+        echo "Updating variant with new file"
         update_response=$(curl -s -X PUT \
           "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/variants/${VARIANT_ID}.json" \
           -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
@@ -783,7 +806,7 @@ jobs:
             }
           }")
 
-        echo "Shopify API Update Response: $update_response"
+        echo "Update response: $update_response"
 
         # Check if update was successful
         if echo "$update_response" | grep -q "\"id\":"; then
@@ -792,4 +815,6 @@ jobs:
           echo "Failed to update product digital file for $VARIANT_TITLE in Shopify"
           exit 1
         fi
+
+        set +x  # Disable debug mode
       shell: bash
