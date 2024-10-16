@@ -603,12 +603,10 @@ jobs:
         # ==========================================================================================
         echo "Querying for permanent file URL..."
 
-        get_url_payload=$(jq -n --arg id "$file_id" 
-          '{
-            query: "query ($id: ID!) { node(id: $id) { ... on GenericFile { fileStatus url } } }",
-            variables: { "id": $id }
-          }'
-        )
+        get_url_payload=$(jq -n --arg id "$file_id" '{
+          query: "query ($id: ID!) { node(id: $id) { ... on GenericFile { fileStatus url } } }",
+          variables: { "id": $id }
+        }')
 
         # Keep querying Shopify until the file is ready
         process=false
