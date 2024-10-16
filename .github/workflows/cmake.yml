@@ -844,7 +844,7 @@ jobs:
         # Attach File to Product Variant
         # ==========================================================================================
         echo "Attaching file to product variant..."
-    
+
         attach_payload=$(jq -n \
           --arg variant_id "$variant_id" \
           --arg file_id "$file_id" \
@@ -866,26 +866,25 @@ jobs:
                 metafields: [{
                   namespace: "digital_attachment",
                   key: "file_id",
-                  value: $file_id,
-                  valueType: "STRING"
+                  value: $file_id
                 }]
               }
             }
           }')
-    
+
         attach_response=$(curl -s -X POST \
           "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
           -H "Content-Type: application/json" \
           -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
           -d "$attach_payload")
-    
+
         errors_present=$(echo "$attach_response" | jq '(.errors, .data.productVariantUpdate.userErrors) | select(. != null and . != []) | length > 0')
         if [ "$errors_present" == "true" ]; then
           echo "Error in attaching file to product variant:"
           echo "$attach_response"
           exit 1
         fi
-    
+
         echo "File successfully attached to product variant."
         
       shell: bash
