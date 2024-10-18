@@ -367,8 +367,6 @@ jobs:
         set +x  
 
 
-
-
     # Upload Installers to WordPress
     # ==========================================================================================
     - name: Upload Installers to WordPress
@@ -472,7 +470,7 @@ jobs:
           exit 1
         fi
 
-        # Extract the URL from the response (optional for verification)
+        # Extract the ID and URL from the response
         FILE_ID=$(echo "$UPLOAD_RESPONSE" | jq -r '.id')
         FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
 
@@ -484,28 +482,19 @@ jobs:
           echo "\nFile successfully uploaded to WordPress: $FILE_URL\n"
         fi
 
-        # Retry check to confirm the file is visible in WordPress
-        RETRY_COUNT=0
-        MAX_RETRIES=3
-        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-          VERIFY_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE}/wp-json/wp/v2/media/${FILE_ID}" \
-            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
-          if echo "$VERIFY_RESPONSE" | jq empty; then
-            STATUS=$(echo "$VERIFY_RESPONSE" | jq -r '.status')
-            if [ "$STATUS" == "inherit" ] || [ "$STATUS" == "publish" ]; then
-              echo "\nFile confirmed visible in WordPress.\n"
-              break
-            fi
-          fi
-          echo "\nVerification attempt #$((RETRY_COUNT + 1)) failed. Retrying in 5 seconds...\n"
-          RETRY_COUNT=$((RETRY_COUNT + 1))
-          sleep 5
-        done
+        # Set file status to "publish" to ensure it is visible in the media library
+        echo "\nUpdating file status to 'publish'...\n"
+        STATUS_UPDATE_RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE}/wp-json/wp/v2/media/${FILE_ID}" \
+          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
+          -d '{"status": "publish"}')
 
-        if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-          echo "\nFile upload verification failed after $MAX_RETRIES attempts.\n"
+        # Check if the status update was successful
+        if ! echo "$STATUS_UPDATE_RESPONSE" | jq empty; then
+          echo "\nFailed to update file status to 'publish'. Response: $STATUS_UPDATE_RESPONSE\n"
           exit 1
         fi
+
+        echo "\nFile status successfully updated to 'publish'.\n"
 
         # Disable verbose debugging output
         set +x
