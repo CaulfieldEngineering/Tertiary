@@ -373,7 +373,7 @@ jobs:
 
 
 
-    
+
     # Upload Full-Version Installers to WordPress
     # ==========================================================================================
     - name: Upload Full-Version Installers to WordPress
@@ -389,6 +389,10 @@ jobs:
           exit 0
         fi
         
+        # Extract the repository name from the GitHub repository environment variable
+        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+        echo "REPO_NAME set to: $REPO_NAME"
+
         # Define the file path based on the OS
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
           FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
