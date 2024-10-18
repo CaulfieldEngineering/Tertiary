@@ -351,17 +351,17 @@ jobs:
         fi
     
         # After the upload, create a zip archive of the entire version folder on the server
-        # The archive will be named REPO_NAME_vVERSION.zip and stored in the same version folder
-        ZIP_NAME="${REPO_NAME}_v${wPROJECT_VERSION}.zip"
-        echo "Creating zip archive of the version folder: $ZIP_NAME"
-        ZIP_COMMAND="ssh $SERVER 'cd /home/caulfiel/public_html/plug-ins/${REPO_NAME}/uploads/${DEST_DIR} && zip -r $ZIP_NAME ./*'"
+        #### The archive will be named REPO_NAME_vVERSION.zip and stored in the same version folder
+        ####ZIP_NAME="${REPO_NAME}_v${wPROJECT_VERSION}.zip"
+        ####echo "Creating zip archive of the version folder: $ZIP_NAME"
+        ####ZIP_COMMAND="ssh $SERVER 'cd /home/caulfiel/public_html/plug-ins/${REPO_NAME}/uploads/${DEST_DIR} && zip -r $ZIP_NAME ./*'"
         
-        if eval $ZIP_COMMAND; then
-          echo "Zip file created successfully: $ZIP_NAME"
-        else
-          echo "Failed to create zip file with exit code $?"
-          exit 1
-        fi
+        ####if eval $ZIP_COMMAND; then
+        ####  echo "Zip file created successfully: $ZIP_NAME"
+        ####else
+        ####  echo "Failed to create zip file with exit code $?"
+        ####  exit 1
+        ####fi
     
         # Disable debugging output
         set +x  
