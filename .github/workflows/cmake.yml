@@ -372,7 +372,6 @@ jobs:
     # ==========================================================================================
 
 
-
     # Upload Full-Version Installers to WordPress
     # ==========================================================================================
     - name: Upload Full-Version Installers to WordPress
@@ -404,9 +403,11 @@ jobs:
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
           FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
           FILE_TITLE="${REPO_NAME} Mac Installer v${wPROJECT_VERSION}"
+          FILE_DESCRIPTION="${REPO_NAME} Installer v${wPROJECT_VERSION} for Mac"
         elif [ "${{ matrix.os }}" == "windows-latest" ]; then
           FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
           FILE_TITLE="${REPO_NAME} Windows Installer v${wPROJECT_VERSION}"
+          FILE_DESCRIPTION="${REPO_NAME} Installer v${wPROJECT_VERSION} for Windows"
         else
           echo "\nUnsupported OS for WordPress upload\n"
           exit 1
@@ -442,7 +443,7 @@ jobs:
           -F "title=${FILE_TITLE}" \
           -F "alt_text=${REPO_NAME} Full Version Installer" \
           -F "caption=Installer for ${REPO_NAME} v${wPROJECT_VERSION}" \
-          -F "description=Uploaded via GitHub Actions CI/CD Pipeline")
+          -F "description=${FILE_DESCRIPTION}")
 
         # Check if the response is a valid JSON
         echo "Upload response: $UPLOAD_RESPONSE\n"
