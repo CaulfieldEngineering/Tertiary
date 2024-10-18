@@ -374,7 +374,10 @@ jobs:
 
 
 
+
+
     
+
     # Upload Full-Version Installers to WordPress
     # ==========================================================================================
     - name: Upload Full-Version Installers to WordPress
@@ -405,11 +408,11 @@ jobs:
         # Define the file path based on the OS
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
           FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
-          FILE_TITLE="${REPO_NAME} Installer v${wPROJECT_VERSION}" for Mac\"
+          FILE_TITLE="${REPO_NAME} Installer v${wPROJECT_VERSION} for Mac"
           FILE_DESCRIPTION="${REPO_NAME} Installer v${wPROJECT_VERSION} for Mac"
         elif [ "${{ matrix.os }}" == "windows-latest" ]; then
           FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
-          FILE_TITLE="${REPO_NAME} Installer v${wPROJECT_VERSION}" for Windows\"
+          FILE_TITLE="${REPO_NAME} Installer v${wPROJECT_VERSION} for Windows"
           FILE_DESCRIPTION="${REPO_NAME} Installer v${wPROJECT_VERSION} for Windows"
         else
           echo "\nUnsupported OS for WordPress upload\n"
@@ -468,7 +471,6 @@ jobs:
 
         # Disable verbose debugging output
         set +x
-
         # Add spacing to indicate the end of the process
         echo "\n\n============================================"
         echo "WordPress Upload Process Completed"
