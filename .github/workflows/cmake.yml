@@ -418,6 +418,12 @@ jobs:
           -F "caption=Installer for ${REPO_NAME} v${wPROJECT_VERSION}" \
           -F "description=Uploaded via GitHub Actions CI/CD Pipeline")
 
+        # Check if the response is a valid JSON
+        if ! echo "$UPLOAD_RESPONSE" | jq empty; then
+          echo "Invalid JSON response from WordPress: $UPLOAD_RESPONSE"
+          exit 1
+        fi
+
         # Extract the URL from the response (optional for verification)
         FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
 
