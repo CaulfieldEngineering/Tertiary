@@ -366,10 +366,10 @@ jobs:
         # Disable debugging output
         set +x  
 
-
-    # Upload Installers to WordPress
+        
+    # Upload Installers to WordPress (Demo Versions)
     # ==========================================================================================
-    - name: Upload Installers to WordPress      
+    - name: Upload Demo Installers to WordPress
       if: matrix.version == 'Demo'
       env:
         WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
@@ -394,31 +394,18 @@ jobs:
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
         echo "\nREPO_NAME set to: $REPO_NAME\n"
 
-        # Determine the suffix based on the version
-        SUFFIX=""
-        if [ "${{ matrix.version }}" == "Demo" ]; then
-          SUFFIX=".D"
-        fi
+        # Define the suffix for Demo version
+        SUFFIX=".D"
 
-        # Define the file path based on the OS
+        # Define the file path and title based on the OS for Demo versions
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
           FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
-          if [ "${{ matrix.version }}" == "Demo" ]; then
-            FILE_TITLE="${REPO_NAME} Installer v${wPROJECT_VERSION} for Mac (Demo Version)"
-            FILE_DESCRIPTION="${REPO_NAME} Installer v${wPROJECT_VERSION} for Mac (Demo Version)"
-          else
-            FILE_TITLE="${REPO_NAME} Installer v${wPROJECT_VERSION} for Mac"
-            FILE_DESCRIPTION="${REPO_NAME} Installer v${wPROJECT_VERSION} for Mac"
-          fi
+          FILE_TITLE="${REPO_NAME} Installer v${wPROJECT_VERSION} for Mac (Demo Version)"
+          FILE_DESCRIPTION="${REPO_NAME} Installer v${wPROJECT_VERSION} for Mac (Demo Version)"
         elif [ "${{ matrix.os }}" == "windows-latest" ]; then
           FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}${SUFFIX}.exe"
-          if [ "${{ matrix.version }}" == "Demo" ]; then
-            FILE_TITLE="${REPO_NAME} Installer v${wPROJECT_VERSION} for Windows (Demo Version)"
-            FILE_DESCRIPTION="${REPO_NAME} Installer v${wPROJECT_VERSION} for Windows (Demo Version)"
-          else
-            FILE_TITLE="${REPO_NAME} Installer v${wPROJECT_VERSION} for Windows"
-            FILE_DESCRIPTION="${REPO_NAME} Installer v${wPROJECT_VERSION} for Windows"
-          fi
+          FILE_TITLE="${REPO_NAME} Installer v${wPROJECT_VERSION} for Windows (Demo Version)"
+          FILE_DESCRIPTION="${REPO_NAME} Installer v${wPROJECT_VERSION} for Windows (Demo Version)"
         else
           echo "\nUnsupported OS for WordPress upload\n"
           exit 1
@@ -504,3 +491,104 @@ jobs:
         echo "WordPress Upload Process Completed"
         echo "============================================\n\n"
       shell: bash
+
+
+
+    # Upload Full-Version Installers to WordPress.
+    # ==========================================================================================
+    - name: Upload Full-Version Installers to WordPress
+      if: matrix.version == 'Full'
+      env:
+        WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
+        WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.WORDPRESS_APPLICATION_PASSWORD }}
+        WORDPRESS_SITE: ${{ secrets.WORDPRESS_SITE }}
+      run: |
+        # Enable verbose debugging output
+        set -x
+
+        # Add some spacing for readability
+        echo "\n\n============================================"
+        echo "Starting WordPress Upload Process"
+        echo "============================================\n\n"
+
+        # Ensure required environment variables are set
+        if [ -z "$WORDPRESS_USERNAME" ] || [ -z "$WORDPRESS_APPLICATION_PASSWORD" ] || [ -z "$WORDPRESS_SITE" ]; then
+          echo "\nWordPress credentials not set. Skipping WordPress upload step.\n"
+          exit 0
+        fi
+        
+        # Extract the repository name from the GitHub repository environment variable
+        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+        echo "\nREPO_NAME set to: $REPO_NAME\n"
+
+        # Define the file path based on the OS
+        if [ "${{ matrix.os }}" == "macos-latest" ]; then
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+          FILE_TITLE="${REPO_NAME} Installer v${wPROJECT_VERSION} for Mac"
+          FILE_DESCRIPTION="${REPO_NAME} Installer v${wPROJECT_VERSION} for Mac"
+        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+          FILE_TITLE="${REPO_NAME} Installer v${wPROJECT_VERSION} for Windows"
+          FILE_DESCRIPTION="${REPO_NAME} Installer v${wPROJECT_VERSION} for Windows"
+        else
+          echo "\nUnsupported OS for WordPress upload\n"
+          exit 1
+        fi
+
+        # Check if the file exists
+        if [ ! -f "$FILE_PATH" ]; then
+          echo "\nFile not found: $FILE_PATH\n"
+          exit 1
+        fi
+
+        # Check if a file with the same name already exists in WordPress
+        echo "\nChecking if a file with the same name already exists in WordPress...\n"
+        EXISTING_FILE_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE}/wp-json/wp/v2/media?search=$(echo ${FILE_TITLE} | sed 's/ /%20/g')" \
+          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
+        echo "Existing file response: $EXISTING_FILE_RESPONSE\n"
+        EXISTING_FILE_ID=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[0].id')
+        EXISTING_FILE_NAME=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[0].title.rendered')
+
+        # If the file exists, delete it
+        if [ "$EXISTING_FILE_ID" != "null" ] && [ -n "$EXISTING_FILE_ID" ]; then
+          echo "\nDeleting existing file with ID: $EXISTING_FILE_ID and Name: $EXISTING_FILE_NAME\n"
+          DELETE_RESPONSE=$(curl -s -X DELETE "${WORDPRESS_SITE}/wp-json/wp/v2/media/${EXISTING_FILE_ID}?force=true" \
+            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
+          echo "Delete response: $DELETE_RESPONSE\n"
+        fi
+
+        # Upload the file to WordPress using CURL
+        echo "\nUploading the file to WordPress...\n"
+        UPLOAD_RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE}/wp-json/wp/v2/media" \
+          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
+          -F "file=@${FILE_PATH}" \
+          -F "title=${FILE_TITLE}" \
+          -F "alt_text=${REPO_NAME} Full Version Installer" \
+          -F "caption=Installer for ${REPO_NAME} v${wPROJECT_VERSION}" \
+          -F "description=${FILE_DESCRIPTION}")
+
+        # Check if the response is a valid JSON
+        echo "Upload response: $UPLOAD_RESPONSE\n"
+        if ! echo "$UPLOAD_RESPONSE" | jq empty; then
+          echo "\nInvalid JSON response from WordPress: $UPLOAD_RESPONSE\n"
+          exit 1
+        fi
+
+        # Extract the URL from the response (optional for verification)
+        FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
+
+        if [ -z "$FILE_URL" ] || [ "$FILE_URL" == "null" ]; then
+          echo "\nFailed to upload file to WordPress\n"
+          echo "$UPLOAD_RESPONSE"
+          exit 1
+        else
+          echo "\nFile successfully uploaded to WordPress: $FILE_URL\n"
+        fi
+
+        # Disable verbose debugging output
+        set +x
+        # Add spacing to indicate the end of the process
+        echo "\n\n============================================"
+        echo "WordPress Upload Process Completed"
+        echo "============================================\n\n"
+      shell: bash    
