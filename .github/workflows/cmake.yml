@@ -385,62 +385,69 @@ jobs:
         # Enable verbose debugging output
         set -x
 
+        # Add some spacing for readability
+        echo "\n\n============================================"
+        echo "Starting WordPress Upload Process"
+        echo "============================================\n\n"
+
         # Ensure required environment variables are set
         if [ -z "$WORDPRESS_USERNAME" ] || [ -z "$WORDPRESS_APPLICATION_PASSWORD" ] || [ -z "$WORDPRESS_SITE" ]; then
-          echo "WordPress credentials not set. Skipping WordPress upload step."
+          echo "\nWordPress credentials not set. Skipping WordPress upload step.\n"
           exit 0
         fi
         
         # Extract the repository name from the GitHub repository environment variable
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
-        echo "REPO_NAME set to: $REPO_NAME"
+        echo "\nREPO_NAME set to: $REPO_NAME\n"
 
         # Define the file path based on the OS
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
           FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+          FILE_TITLE="${REPO_NAME} Mac Installer v${wPROJECT_VERSION}"
         elif [ "${{ matrix.os }}" == "windows-latest" ]; then
           FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+          FILE_TITLE="${REPO_NAME} Windows Installer v${wPROJECT_VERSION}"
         else
-          echo "Unsupported OS for WordPress upload"
+          echo "\nUnsupported OS for WordPress upload\n"
           exit 1
         fi
 
         # Check if the file exists
         if [ ! -f "$FILE_PATH" ]; then
-          echo "File not found: $FILE_PATH"
+          echo "\nFile not found: $FILE_PATH\n"
           exit 1
         fi
 
         # Check if a file with the same name already exists in WordPress
-        echo "Checking if a file with the same name already exists in WordPress..."
-        EXISTING_FILE_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE}/wp-json/wp/v2/media?search=$(echo ${REPO_NAME} Installer v${wPROJECT_VERSION} | sed 's/ /%20/g')" \
+        echo "\nChecking if a file with the same name already exists in WordPress...\n"
+        EXISTING_FILE_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE}/wp-json/wp/v2/media?search=$(echo ${FILE_TITLE} | sed 's/ /%20/g')" \
           -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
-        echo "Existing file response: $EXISTING_FILE_RESPONSE"
+        echo "Existing file response: $EXISTING_FILE_RESPONSE\n"
         EXISTING_FILE_ID=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[0].id')
         EXISTING_FILE_NAME=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[0].title.rendered')
 
         # If the file exists, delete it
         if [ "$EXISTING_FILE_ID" != "null" ] && [ -n "$EXISTING_FILE_ID" ]; then
-          echo "Deleting existing file with ID: $EXISTING_FILE_ID and Name: $EXISTING_FILE_NAME"
+          echo "\nDeleting existing file with ID: $EXISTING_FILE_ID and Name: $EXISTING_FILE_NAME\n"
           DELETE_RESPONSE=$(curl -s -X DELETE "${WORDPRESS_SITE}/wp-json/wp/v2/media/${EXISTING_FILE_ID}?force=true" \
             -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
-          echo "Delete response: $DELETE_RESPONSE"
+          echo "Delete response: $DELETE_RESPONSE\n"
         fi
 
         # Upload the file to WordPress using CURL
-        echo "Uploading the file to WordPress..."
+        echo "\nUploading the file to WordPress...\n"
         UPLOAD_RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE}/wp-json/wp/v2/media" \
           -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
           -F "file=@${FILE_PATH}" \
-          -F "title=${REPO_NAME} Installer v${wPROJECT_VERSION}" \
+          -F "title=${FILE_TITLE}" \
           -F "alt_text=${REPO_NAME} Full Version Installer" \
           -F "caption=Installer for ${REPO_NAME} v${wPROJECT_VERSION}" \
           -F "description=Uploaded via GitHub Actions CI/CD Pipeline")
 
         # Check if the response is a valid JSON
-        echo "Upload response: $UPLOAD_RESPONSE"
+        echo "Upload response: $UPLOAD_RESPONSE\n"
         if ! echo "$UPLOAD_RESPONSE" | jq empty; then
-          echo "Invalid JSON response from WordPress: $UPLOAD_RESPONSE"
+          echo "\nInvalid JSON response from WordPress: $UPLOAD_RESPONSE\n"
           exit 1
         fi
 
@@ -448,13 +455,18 @@ jobs:
         FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
 
         if [ -z "$FILE_URL" ] || [ "$FILE_URL" == "null" ]; then
-          echo "Failed to upload file to WordPress"
+          echo "\nFailed to upload file to WordPress\n"
           echo "$UPLOAD_RESPONSE"
           exit 1
         else
-          echo "File successfully uploaded to WordPress: $FILE_URL"
+          echo "\nFile successfully uploaded to WordPress: $FILE_URL\n"
         fi
 
         # Disable verbose debugging output
         set +x
+
+        # Add spacing to indicate the end of the process
+        echo "\n\n============================================"
+        echo "WordPress Upload Process Completed"
+        echo "============================================\n\n"
       shell: bash
