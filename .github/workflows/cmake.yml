@@ -473,6 +473,7 @@ jobs:
         fi
 
         # Extract the URL from the response (optional for verification)
+        FILE_ID=$(echo "$UPLOAD_RESPONSE" | jq -r '.id')
         FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
 
         if [ -z "$FILE_URL" ] || [ "$FILE_URL" == "null" ]; then
@@ -481,6 +482,29 @@ jobs:
           exit 1
         else
           echo "\nFile successfully uploaded to WordPress: $FILE_URL\n"
+        fi
+
+        # Retry check to confirm the file is visible in WordPress
+        RETRY_COUNT=0
+        MAX_RETRIES=3
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+          VERIFY_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE}/wp-json/wp/v2/media/${FILE_ID}" \
+            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
+          if echo "$VERIFY_RESPONSE" | jq empty; then
+            STATUS=$(echo "$VERIFY_RESPONSE" | jq -r '.status')
+            if [ "$STATUS" == "inherit" ] || [ "$STATUS" == "publish" ]; then
+              echo "\nFile confirmed visible in WordPress.\n"
+              break
+            fi
+          fi
+          echo "\nVerification attempt #$((RETRY_COUNT + 1)) failed. Retrying in 5 seconds...\n"
+          RETRY_COUNT=$((RETRY_COUNT + 1))
+          sleep 5
+        done
+
+        if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+          echo "\nFile upload verification failed after $MAX_RETRIES attempts.\n"
+          exit 1
         fi
 
         # Disable verbose debugging output
