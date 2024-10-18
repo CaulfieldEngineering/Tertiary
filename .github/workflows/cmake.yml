@@ -6,10 +6,6 @@ on:
   pull_request:
     branches: [ "main" ]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:
     strategy:
@@ -24,6 +20,10 @@ jobs:
             cmake_arch: -DCMAKE_OSX_ARCHITECTURES=x86_64
 
     runs-on: ${{ matrix.os }}
+
+    concurrency:
+      group: wordpress-upload-group
+      cancel-in-progress: false
 
     steps:
     - name: Checkout code
