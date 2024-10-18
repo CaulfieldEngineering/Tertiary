@@ -378,7 +378,7 @@ jobs:
 
     
 
-    # Upload Full-Version Installers to WordPress
+    # Upload Full-Version Installers to WordPress.
     # ==========================================================================================
     - name: Upload Full-Version Installers to WordPress
       if: matrix.version == 'Full'
