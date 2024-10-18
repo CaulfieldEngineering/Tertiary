@@ -369,7 +369,8 @@ jobs:
 
     # Upload Installers to WordPress
     # ==========================================================================================
-    - name: Upload Installers to WordPress
+    - name: Upload Installers to WordPress      
+      if: matrix.version == 'Demo'
       env:
         WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
         WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.WORDPRESS_APPLICATION_PASSWORD }}
