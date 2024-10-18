@@ -12,6 +12,7 @@ jobs:
   # ==========================================================================================
   # ==========================================================================================
   build:
+
     strategy:
       matrix:
         os: [macos-latest, windows-latest]
@@ -377,11 +378,26 @@ jobs:
   # ==========================================================================================
   # ==========================================================================================
   wordpress_upload:
-      runs-on: ubuntu-latest
+
+      strategy:
+        matrix:
+          os: [macos-latest, windows-latest]
+          build_type: [Release]
+          version: [Full, Demo]
+          include:
+            - os: windows-latest
+              cmake_arch: -A x64
+            - os: macos-latest
+              cmake_arch: -DCMAKE_OSX_ARCHITECTURES=x86_64
+
+      runs-on: ${{ matrix.os }}
+
       needs: build  # This ensures that the WordPress upload only runs after the build job completes.
+
       concurrency:
         group: wordpress-upload-group
         cancel-in-progress: false
+
       steps:
         - name: Checkout code
           uses: actions/checkout@v4
@@ -394,7 +410,6 @@ jobs:
             WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
             WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.WORDPRESS_APPLICATION_PASSWORD }}
             WORDPRESS_SITE: ${{ secrets.WORDPRESS_SITE }}
-          if: matrix.os == 'macos-latest'
           run: |
             # Enable verbose debugging output
             set -x
