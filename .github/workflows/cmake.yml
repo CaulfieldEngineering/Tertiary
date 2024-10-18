@@ -368,310 +368,60 @@ jobs:
 
 
 
-    # Upload Demo Installers to Shopify Files
+    # Upload Demo Installers to WordPress
     # ==========================================================================================
-    - name: Upload Demo Files to Shopify Files
-      if: matrix.version == 'Demo'
-      env:
-        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
-        SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
-      run: |
-
-        # Ensure required tools are installed
-        # ==========================================================================================
-        if ! command -v jq &> /dev/null; then
-          echo "jq could not be found, installing..."
-          if [ "$(uname)" == "Darwin" ]; then
-            brew install jq
-          else
-            sudo apt-get update && sudo apt-get install -y jq
-          fi
-        fi
-    
-        set -e  # Exit immediately if a command exits with a non-zero status
-        set -x  # Enable bash debugging
-    
-        # Check if required environment variables are set
-        # ==========================================================================================
-        if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ]; then
-          echo "Shopify credentials not set. Skipping Shopify upload step."
-          exit 0
-        fi
-    
-        echo "SHOPIFY_SHOP_DOMAIN: $SHOPIFY_SHOP_DOMAIN"
-        echo "SHOPIFY_ACCESS_TOKEN length: ${#SHOPIFY_ACCESS_TOKEN}"
-    
-        # Acquire Repository Name
-        # ==========================================================================================
-        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
-        echo "REPO_NAME: $REPO_NAME"
-    
-        # Set file path and name based on OS
-        # ==========================================================================================
-        if [ "${{ matrix.os }}" == "macos-latest" ]; then
-          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
-          FILE_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
-        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
-          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
-          FILE_NAME="${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
-        else
-          echo "Unsupported OS: ${{ matrix.os }}"
-          exit 1
-        fi
-    
-        echo "FILE_PATH: $FILE_PATH"
-        echo "FILE_NAME: $FILE_NAME"
-    
-        if [ ! -f "$FILE_PATH" ]; then
-          echo "Error: File does not exist at $FILE_PATH"
-          exit 1
-        fi
-    
-        # Check for existing file on Shopify and delete if it exists
-        # ==========================================================================================
-        search_payload=$(jq -n \
-          --arg filename "$FILE_NAME" \
-          '{
-            query: "query ($filename: String!) { files(first: 10, query: $filename) { edges { node { id } } } }",
-            variables: { "filename": $filename }
-          }')
-    
-        search_response=$(curl -s -X POST \
-          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
-          -H "Content-Type: application/json" \
-          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-          -d "$search_payload")
-    
-        file_id=$(echo "$search_response" | jq -r '.data.files.edges[0].node.id')
-
-        if [ "$file_id" != "null" ]; then
-          echo "Existing file found with ID: $file_id, deleting it..."
-          
-        delete_payload=$(jq -n \
-          --arg id "$file_id" \
-          '{
-            query: "mutation fileDelete($fileIds: [ID!]!) { fileDelete(fileIds: $fileIds) { deletedFileIds userErrors { field message } } }",
-            variables: { "fileIds": [$id] }
-          }')
-
-          delete_response=$(curl -s -X POST \
-            "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
-            -H "Content-Type: application/json" \
-            -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-            -d "$delete_payload")
-
-          echo "Delete response: $delete_response"
-        else
-          echo "No existing file found. Proceeding with upload."
-        fi
-    
-        # Proceed with upload
-        # ==========================================================================================
-        FILE_SIZE=$(wc -c < "$FILE_PATH" | xargs)
-        echo "File size: $FILE_SIZE bytes"
-    
-        # Get staged upload URL and parameters
-        # ==========================================================================================
-        echo "Requesting staged upload URL from Shopify..."
-    
-        payload=$(jq -n \
-          --arg filename "$FILE_NAME" \
-          --arg filesize "$FILE_SIZE" \
-          '{
-            query: "mutation stagedUploadsCreate($input: [StagedUploadInput!]!) {
-              stagedUploadsCreate(input: $input) {
-                stagedTargets {
-                  url
-                  resourceUrl
-                  parameters {
-                    name
-                    value
-                  }
-                }
-                userErrors {
-                  field
-                  message
-                }
-              }
-            }",
-            variables: {
-              input: [{
-                resource: "FILE",
-                filename: $filename,
-                mimeType: "application/octet-stream",
-                fileSize: $filesize,
-                httpMethod: "POST"
-              }]
-            }
-          }')
-    
-        staged_response=$(curl -s -X POST \
-          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
-          -H "Content-Type: application/json" \
-          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-          -d "$payload")
-    
-        # Check for errors in the staged upload response
-        # ==========================================================================================
-        errors_present=$(echo "$staged_response" | jq '(.errors, .data.stagedUploadsCreate.userErrors) | select(. != null and . != []) | length > 0')
-    
-        if [ "$errors_present" == "true" ]; then
-          echo "Error in stagedUploadsCreate response:"
-          echo "$staged_response"
-          exit 1
-        fi
-    
-        # Extract upload URL and resource URL
-        # ==========================================================================================
-        upload_url=$(echo "$staged_response" | jq -r '.data.stagedUploadsCreate.stagedTargets[0].url')
-        resource_url=$(echo "$staged_response" | jq -r '.data.stagedUploadsCreate.stagedTargets[0].resourceUrl')
-    
-        if [ -z "$upload_url" ] || [ "$upload_url" == "null" ]; then
-          echo "Failed to get upload URL for staged upload."
-          echo "Response: $staged_response"
-          exit 1
-        fi
-    
-        echo "Upload URL: $upload_url"
-    
-        # Extract parameters
-        # ==========================================================================================
-        parameters=$(echo "$staged_response" | jq -c '.data.stagedUploadsCreate.stagedTargets[0].parameters')
-    
-        # Build the form data for the upload
-        # ==========================================================================================
-        upload_cmd=(curl -s -X POST "$upload_url")
-    
-        # Add parameters to the form data
-        # ==========================================================================================
-        for param in $(echo "$parameters" | jq -c '.[]'); do
-          name=$(echo "$param" | jq -r '.name')
-          value=$(echo "$param" | jq -r '.value')
-          upload_cmd+=(-F "$name=$value")
-        done
-    
-        # Add the file to the form data
-        # ==========================================================================================
-        upload_cmd+=(-F "file=@$FILE_PATH")
-    
-        # Execute the upload
-        # ==========================================================================================
-        echo "Uploading file to staged URL..."
-        "${upload_cmd[@]}"
-    
-        # Step 3: Finalize the upload with fileCreate mutation
-        # ==========================================================================================
-        echo "Finalizing upload with fileCreate mutation..."
-    
-        final_payload=$(jq -n \
-          --arg filename "$FILE_NAME" \
-          --arg originalSource "$resource_url" \
-          '{
-            query: "mutation fileCreate($files: [FileCreateInput!]!) {
-              fileCreate(files: $files) {
-                files {
-                  id
-                  fileStatus
-                  alt
-                  createdAt
-                }
-                userErrors {
-                  field
-                  message
-                }
-              }
-            }",
-            variables: {
-              files: [{
-                originalSource: $originalSource,
-                contentType: "FILE",
-                filename: $filename
-              }]
-            }
-          }')
-    
-        final_response=$(curl -s -X POST \
-          "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
-          -H "Content-Type: application/json" \
-          -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-          -d "$final_payload")
-    
-        # Check for errors in the final upload response
-        # ==========================================================================================
-        errors_present=$(echo "$final_response" | jq '(.errors, .data.fileCreate.userErrors) | select(. != null and . != []) | length > 0')
-    
-        if [ "$errors_present" == "true" ]; then
-          echo "Error in fileCreate response:"
-          echo "$final_response"
-          exit 1
-        fi
-    
-        echo "File uploaded successfully to Shopify Files"
-    
-        # Extract the file ID from the final upload step
-        file_id=$(echo "$final_response" | jq -r '.data.fileCreate.files[0].id')
-        echo "File uploaded with ID: $file_id"
 
 
-        # Step 2: Query Shopify API for the Permanent URL
-        # ==========================================================================================
-        echo "Querying for permanent file URL..."
 
-        get_url_payload=$(jq -n --arg id "$file_id" '{
-          query: "query ($id: ID!) { node(id: $id) { ... on GenericFile { fileStatus url } } }",
-          variables: { "id": $id }
-        }')
-
-        # Keep querying Shopify until the file is ready
-        process=false
-        while [ "$process" == "false" ]; do
-          get_url_response=$(curl -s -X POST \
-            "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-07/graphql.json" \
-            -H "Content-Type: application/json" \
-            -H "X-Shopify-Access-Token: ${SHOPIFY_ACCESS_TOKEN}" \
-            -d "$get_url_payload")
-
-          # Extract file status and URL
-          file_status=$(echo "$get_url_response" | jq -r '.data.node.fileStatus')
-          permanent_url=$(echo "$get_url_response" | jq -r '.data.node.url')
-
-          if [ "$file_status" == "READY" ]; then
-            echo "File is ready. Permanent URL: $permanent_url"
-            echo "PERMANENT_FILE_URL=$permanent_url" >> $GITHUB_ENV
-            process=true
-          else
-            echo "File still processing. Status: $file_status. Waiting..."
-            sleep 5
-          fi
-        done
-
-        echo "Permanent file URL: $permanent_url"
-
-      shell: bash
-
-      
-
-    # Redirect Demo Download Buttons to latest version.
+    
+    # Upload Full-Version Installers to WordPress
     # ==========================================================================================
-    - name: Update Shopify Redirect for Demo Versions
-      if: matrix.version == 'Demo'
+    - name: Upload Full-Version Installers to WordPress
+      if: matrix.version == 'Full'
       env:
-        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
-        SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
+        WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
+        WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.WORDPRESS_APPLICATION_PASSWORD }}
+        WORDPRESS_SITE: ${{ secrets.WORDPRESS_SITE }}
       run: |
         # Ensure required environment variables are set
-        # ==========================================================================================
-        if [ -z "$SHOPIFY_ACCESS_TOKEN" ] || [ -z "$SHOPIFY_SHOP_DOMAIN" ]; then
-          echo "Shopify credentials not set. Skipping Shopify redirect step."
+        if [ -z "$WORDPRESS_USERNAME" ] || [ -z "$WORDPRESS_APPLICATION_PASSWORD" ] || [ -z "$WORDPRESS_SITE" ]; then
+          echo "WordPress credentials not set. Skipping WordPress upload step."
           exit 0
         fi
+        
+        # Define the file path based on the OS
+        if [ "${{ matrix.os }}" == "macos-latest" ]; then
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+        else
+          echo "Unsupported OS for WordPress upload"
+          exit 1
+        fi
 
+        # Check if the file exists
+        if [ ! -f "$FILE_PATH" ]; then
+          echo "File not found: $FILE_PATH"
+          exit 1
+        fi
 
+        # Upload the file to WordPress using CURL
+        UPLOAD_RESPONSE=$(curl -X POST "${WORDPRESS_SITE}/wp-json/wp/v2/media" \
+          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
+          -F "file=@${FILE_PATH}" \
+          -F "title=${REPO_NAME} Installer v${wPROJECT_VERSION}" \
+          -F "alt_text=${REPO_NAME} Full Version Installer" \
+          -F "caption=Installer for ${REPO_NAME} v${wPROJECT_VERSION}" \
+          -F "description=Uploaded via GitHub Actions CI/CD Pipeline")
 
-        file_url=$FILE_URL
-        file_url=$PERMANENT_FILE_URL
-    
-        echo "SHOPIFY_SHOP_DOMAIN: $SHOPIFY_SHOP_DOMAIN"
-        echo "SHOPIFY_ACCESS_TOKEN length: ${#SHOPIFY_ACCESS_TOKEN}"
+        # Extract the URL from the response (optional for verification)
+        FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
 
+        if [ -z "$FILE_URL" ] || [ "$FILE_URL" == "null" ]; then
+          echo "Failed to upload file to WordPress"
+          echo "$UPLOAD_RESPONSE"
+          exit 1
+        else
+          echo "File successfully uploaded to WordPress: $FILE_URL"
+        fi
       shell: bash
