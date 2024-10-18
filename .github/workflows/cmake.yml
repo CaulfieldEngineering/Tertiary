@@ -417,10 +417,11 @@ jobs:
           -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
         echo "Existing file response: $EXISTING_FILE_RESPONSE"
         EXISTING_FILE_ID=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[0].id')
+        EXISTING_FILE_NAME=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[0].title.rendered')
 
         # If the file exists, delete it
         if [ "$EXISTING_FILE_ID" != "null" ] && [ -n "$EXISTING_FILE_ID" ]; then
-          echo "Deleting existing file with ID: $EXISTING_FILE_ID"
+          echo "Deleting existing file with ID: $EXISTING_FILE_ID and Name: $EXISTING_FILE_NAME"
           DELETE_RESPONSE=$(curl -s -X DELETE "${WORDPRESS_SITE}/wp-json/wp/v2/media/${EXISTING_FILE_ID}?force=true" \
             -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
           echo "Delete response: $DELETE_RESPONSE"
