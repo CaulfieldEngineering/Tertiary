@@ -368,7 +368,7 @@ jobs:
 
 
 
-    # Upload Installers to WordPress
+    # Upload Installers to WordPress Media Library
     # ==========================================================================================
     - name: Upload Installers to WordPress
       env:
@@ -479,7 +479,6 @@ jobs:
         FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
         echo "File successfully uploaded to WordPress: $FILE_URL"
 
-
     # Update WooCommerce Fields
     # ==========================================================================================
     - name: Update WooCommerce Downloadable Files
@@ -508,10 +507,10 @@ jobs:
 
         # Define file URLs and file names
         FILE_URL_WIN="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryWinInstaller_0.0.1.exe"
-        FILE_NAME_WIN="GITHUB TEST 0 WIN"
+        FILE_NAME_WIN="GITHUB TEST WIN - 626"
         
         FILE_URL_MAC="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryMacInstaller_0.0.1.pkg"
-        FILE_NAME_MAC="GITHUB TEST 0 MAC"
+        FILE_NAME_MAC="GITHUB TEST MAC - 626"
 
         echo "Using the following file names and URLs:"
         echo "Windows File: Name: $FILE_NAME_WIN, URL: $FILE_URL_WIN"
