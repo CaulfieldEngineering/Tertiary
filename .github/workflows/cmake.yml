@@ -363,19 +363,6 @@ jobs:
           exit 1
         fi
     
-        # After the upload, create a zip archive of the entire version folder on the server
-        #### The archive will be named REPO_NAME_vVERSION.zip and stored in the same version folder
-        ####ZIP_NAME="${REPO_NAME}_v${wPROJECT_VERSION}.zip"
-        ####echo "Creating zip archive of the version folder: $ZIP_NAME"
-        ####ZIP_COMMAND="ssh $SERVER 'cd /home/caulfiel/public_html/plug-ins/${REPO_NAME}/uploads/${DEST_DIR} && zip -r $ZIP_NAME ./*'"
-        
-        ####if eval $ZIP_COMMAND; then
-        ####  echo "Zip file created successfully: $ZIP_NAME"
-        ####else
-        ####  echo "Failed to create zip file with exit code $?"
-        ####  exit 1
-        ####fi
-    
         # Disable debugging output
         set +x  
 
@@ -384,43 +371,51 @@ jobs:
 
 
         
-    # Upload Installers to Wordpress
+    # Upload Installers to WordPress
     # ==========================================================================================
     - name: Upload Installers to WordPress
       env:
+        # Setting up environment variables using GitHub secrets for secure access
         WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
         WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.WORDPRESS_APPLICATION_PASSWORD }}
         WORDPRESS_SITE: ${{ secrets.WORDPRESS_SITE }}
       shell: bash
       run: |
-        set -e  # Exit immediately if a command exits with a non-zero status
+        set -e  # Exit immediately if any command exits with a non-zero status, ensuring the script stops on failure.
         
-        # Function to URL encode a string
+        # Function to URL encode a string to safely transmit file titles in URLs
         urlencode() {
-            local string="${1}"
-            local strlen=${#string}
-            local encoded=""
-            local pos c o
+            local string="${1}"  # The input string to be encoded
+            local strlen=${#string}  # Length of the input string
+            local encoded=""  # Variable to hold the encoded string
+            local pos c o  # Variables for loop position, character, and output
+            
+            # Iterate through each character in the string
             for (( pos=0 ; pos<strlen ; pos++ )); do
-                c=${string:$pos:1}
+                c=${string:$pos:1}  # Extract character at the current position
                 case "$c" in
+                    # If character is alphanumeric or one of the allowed symbols, leave it as is
                     [-_.~a-zA-Z0-9]) o="${c}" ;;
+                    # Otherwise, convert the character to its hex value and prefix with %
                     *) printf -v o '%%%02x' "'$c"
                 esac
-                encoded+="${o}"
+                encoded+="${o}"  # Append the encoded character to the result
             done
-            echo "${encoded}"
+            echo "${encoded}"  # Return the fully encoded string
         }
         
-        # Check for required environment variables
+        # Ensure that the required WordPress credentials are set
         if [ -z "$WORDPRESS_USERNAME" ] || [ -z "$WORDPRESS_APPLICATION_PASSWORD" ] || [ -z "$WORDPRESS_SITE" ]; then
           echo "WordPress credentials not set. Skipping WordPress upload step."
-          exit 0
+          exit 0  # Skip the upload step if any required credentials are missing
         fi
         
+        # Extract the repository name from the GitHub repository environment variable
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+        # Determine the suffix for demo versions based on the matrix configuration
         SUFFIX="${{ matrix.version == 'Demo' && '.D' || '' }}"
         
+        # Set file paths and titles based on the operating system
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
           FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
           FILE_TITLE="Tertiary${{ matrix.version == 'Demo' && ' Demo' || '' }} Installer v${wPROJECT_VERSION}${SUFFIX} for Mac"
@@ -429,38 +424,45 @@ jobs:
           FILE_TITLE="Tertiary${{ matrix.version == 'Demo' && ' Demo' || '' }} Installer v${wPROJECT_VERSION}${SUFFIX} for Windows"
         else
           echo "Unsupported OS for WordPress upload"
-          exit 1
+          exit 1  # Terminate if the OS is unsupported
         fi
         
+        # Check if the file exists at the determined path
         if [ ! -f "$FILE_PATH" ]; then
           echo "File not found: $FILE_PATH"
-          exit 1
+          exit 1  # Exit if the file is missing
         fi
         
+        # Encode the file title for safe use in a URL
         ENCODED_TITLE=$(urlencode "$FILE_TITLE")
         echo "Searching for existing file with title: $FILE_TITLE"
         
+        # Make a GET request to WordPress API to search for existing files with the same title
         EXISTING_FILE_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE}/wp-json/wp/v2/media?search=${ENCODED_TITLE}" \
           -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
         
+        # Extract the ID of the existing file if found
         EXISTING_FILE_ID=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[] | select(.title.rendered == "'"$FILE_TITLE"'") | .id')
         
         if [ -n "$EXISTING_FILE_ID" ]; then
           echo "Existing file found with ID: $EXISTING_FILE_ID. Deleting..."
+          # Delete the existing file using the WordPress API
           DELETE_RESPONSE=$(curl -s -X DELETE "${WORDPRESS_SITE}/wp-json/wp/v2/media/${EXISTING_FILE_ID}?force=true" \
             -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
           
+          # Check if the file deletion was successful
           if echo "$DELETE_RESPONSE" | jq -e '.deleted == true' > /dev/null; then
             echo "Existing file successfully deleted."
           else
             echo "Failed to delete existing file. Response: $DELETE_RESPONSE"
-            exit 1
+            exit 1  # Exit if file deletion fails
           fi
         else
           echo "No existing file found with the exact title."
         fi
         
         echo "Uploading new file to WordPress..."
+        # Upload the new file to WordPress using the media API
         UPLOAD_RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE}/wp-json/wp/v2/media" \
           -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
           -H "Content-Disposition: attachment; filename=$(basename "$FILE_PATH")" \
@@ -470,10 +472,12 @@ jobs:
           -F "caption=Installer for ${REPO_NAME} v${wPROJECT_VERSION}${SUFFIX}" \
           -F "description=${FILE_TITLE}")
         
+        # Check if the upload was successful by verifying the response
         if ! echo "$UPLOAD_RESPONSE" | jq -e '.id' > /dev/null; then
           echo "Failed to upload file to WordPress. Response: $UPLOAD_RESPONSE"
-          exit 1
+          exit 1  # Exit if the upload fails
         fi
         
+        # Extract the URL of the uploaded file from the response
         FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
         echo "File successfully uploaded to WordPress: $FILE_URL"
