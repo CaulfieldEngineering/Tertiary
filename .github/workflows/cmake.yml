@@ -537,8 +537,15 @@ jobs:
         echo "$EXISTING_PRODUCT" | jq '.downloads'
     
         # Extract ID for the file based on the OS
-        DOWNLOAD_ID=$(echo "$EXISTING_PRODUCT" | jq -r --arg os "$matrix.os" '.downloads[] | select(.name | test("(?i)\($os)")) | .id')
-    
+        if [ "${{ matrix.os }}" == "windows-latest" ]; then
+          DOWNLOAD_ID=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)win")) | .id')
+        elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+          DOWNLOAD_ID=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)mac")) | .id')
+        else
+          echo "Unsupported OS: ${{ matrix.os }}. Skipping WooCommerce update."
+          exit 1
+        fi
+
         echo "Download ID for ${{ matrix.os }}: $DOWNLOAD_ID"
     
         # Check if the ID was found
