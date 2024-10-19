@@ -501,7 +501,7 @@ jobs:
         echo "WORDPRESS_PRODUCT_ID: $WORDPRESS_PRODUCT_ID"
         
         # Check if all required environment variables are set
-        if [ -z "$WOOCOMMERCE_CONSUMER_KEY" ] || [ -z "$WOOCOMMERCE_CONSUMER_SECRET" ] || [ -z "$WOOCOMMERCE_SITE_URL" ] || [ -z "$WORDPRESS_PRODUCT_ID" ]; then
+        if [ -z "$WOOCOMMERCE_CONSUMER_KEY" ] || [ -z "$WOOCOMMERCE_CONSUMER_SECRET" ] || [ -z "$WORDPRESS_SITE_URL" ] || [ -z "$WORDPRESS_PRODUCT_ID" ]; then
           echo "Error: Required WooCommerce credentials or Product ID not set. Skipping WooCommerce update step."
           exit 0  # Exit if any required credentials or variables are missing
         fi
