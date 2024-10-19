@@ -479,6 +479,8 @@ jobs:
         FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
         echo "File successfully uploaded to WordPress: $FILE_URL"
 
+
+
     # Update WooCommerce Fields
     # ==========================================================================================
     - name: Update WooCommerce Downloadable Files
@@ -504,35 +506,51 @@ jobs:
           echo "Error: Required WooCommerce credentials or Product ID not set. Skipping WooCommerce update step."
           exit 0  # Exit if any required credentials or variables are missing
         fi
-
+    
         # Define file URLs and file names
         FILE_URL_WIN="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryWinInstaller_0.0.1.exe"
-        FILE_NAME_WIN="GITHUB TEST WIN - 626"
-        
+        FILE_NAME_WIN="GITHUB TEST WIN - 641"
         FILE_URL_MAC="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryMacInstaller_0.0.1.pkg"
-        FILE_NAME_MAC="GITHUB TEST MAC - 626"
-
+        FILE_NAME_MAC="GITHUB TEST MAC - 641"
+    
         echo "Using the following file names and URLs:"
         echo "Windows File: Name: $FILE_NAME_WIN, URL: $FILE_URL_WIN"
         echo "Mac File: Name: $FILE_NAME_MAC, URL: $FILE_URL_MAC"
-
+    
         # WooCommerce API endpoint for updating the product
         API_ENDPOINT="${WORDPRESS_SITE_URL}/wp-json/wc/v3/products/${WORDPRESS_PRODUCT_ID}"
         AUTH="${WOOCOMMERCE_CONSUMER_KEY}:${WOOCOMMERCE_CONSUMER_SECRET}"
-
+    
         echo "API Endpoint: $API_ENDPOINT"
-
-        # Prepare JSON payload to update downloadable files
+    
+        # Fetch existing product details to get current download IDs
+        EXISTING_PRODUCT=$(curl -s -X GET "${API_ENDPOINT}" -u "$AUTH" -H "Content-Type: application/json")
+        DOWNLOAD_ID_WIN=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | contains("Windows")) | .id')
+        DOWNLOAD_ID_MAC=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | contains("Mac")) | .id')
+    
+        if [ -z "$DOWNLOAD_ID_WIN" ] || [ -z "$DOWNLOAD_ID_MAC" ]; then
+          echo "Error: Could not find existing download IDs for Windows or Mac files. Exiting."
+          exit 1
+        fi
+    
+        echo "Existing download ID for Windows: $DOWNLOAD_ID_WIN"
+        echo "Existing download ID for Mac: $DOWNLOAD_ID_MAC"
+    
+        # Prepare JSON payload to update downloadable files with existing IDs
         echo "Building JSON payload for API request..."
         PAYLOAD=$(jq -n --arg name_win "$FILE_NAME_WIN" --arg url_win "$FILE_URL_WIN" \
+                          --arg id_win "$DOWNLOAD_ID_WIN" \
                           --arg name_mac "$FILE_NAME_MAC" --arg url_mac "$FILE_URL_MAC" \
+                          --arg id_mac "$DOWNLOAD_ID_MAC" \
                           '{
                             "downloads": [
                                 {
+                                    "id": $id_win,
                                     "name": $name_win,
                                     "file": $url_win
                                 },
                                 {
+                                    "id": $id_mac,
                                     "name": $name_mac,
                                     "file": $url_mac
                                 }
