@@ -486,15 +486,23 @@ jobs:
       env:
         WOOCOMMERCE_CONSUMER_KEY: ${{ secrets.WOO_CK }}
         WOOCOMMERCE_CONSUMER_SECRET: ${{ secrets.WOO_CS }}
-        WOOCOMMERCE_SITE_URL: ${{ secrets.WORDPRESS_SITE }}
+        WORDPRESS_SITE_URL: ${{ secrets.WORDPRESS_SITE }}
         WORDPRESS_PRODUCT_ID: ${{ secrets.WORDPRESS_PRODUCT_ID }}
       shell: bash
       run: |
         set -e
         
+        echo "Starting WooCommerce update step..."
+        
+        # Debug: Print all environment variables used
+        echo "WOOCOMMERCE_CONSUMER_KEY: ${WOOCOMMERCE_CONSUMER_KEY:0:4}**** (masked for security)"
+        echo "WOOCOMMERCE_CONSUMER_SECRET: ${WOOCOMMERCE_CONSUMER_SECRET:0:4}**** (masked for security)"
+        echo "WOOCOMMERCE_SITE_URL: $WOOCOMMERCE_SITE_URL"
+        echo "WORDPRESS_PRODUCT_ID: $WORDPRESS_PRODUCT_ID"
+        
         # Check if all required environment variables are set
         if [ -z "$WOOCOMMERCE_CONSUMER_KEY" ] || [ -z "$WOOCOMMERCE_CONSUMER_SECRET" ] || [ -z "$WOOCOMMERCE_SITE_URL" ] || [ -z "$WORDPRESS_PRODUCT_ID" ]; then
-          echo "Required WooCommerce credentials or Product ID not set. Skipping WooCommerce update step."
+          echo "Error: Required WooCommerce credentials or Product ID not set. Skipping WooCommerce update step."
           exit 0  # Exit if any required credentials or variables are missing
         fi
 
@@ -505,11 +513,18 @@ jobs:
         FILE_URL_MAC="FILE_URL_TEST_1_MAC"
         FILE_NAME_MAC="GITHUB TEST 1 MAC"
 
+        echo "Using the following file names and URLs:"
+        echo "Windows File: Name: $FILE_NAME_WIN, URL: $FILE_URL_WIN"
+        echo "Mac File: Name: $FILE_NAME_MAC, URL: $FILE_URL_MAC"
+
         # WooCommerce API endpoint for updating the product
-        API_ENDPOINT="${WORDPRESS_SITE_URL}/wp-json/wc/v3/products/${WORDPRESS_PRODUCT_ID}"
+        API_ENDPOINT="${WOOCOMMERCE_SITE_URL}/wp-json/wc/v3/products/${WORDPRESS_PRODUCT_ID}"
         AUTH="${WOOCOMMERCE_CONSUMER_KEY}:${WOOCOMMERCE_CONSUMER_SECRET}"
 
+        echo "API Endpoint: $API_ENDPOINT"
+
         # Prepare JSON payload to update downloadable files
+        echo "Building JSON payload for API request..."
         PAYLOAD=$(jq -n --arg name_win "$FILE_NAME_WIN" --arg url_win "$FILE_URL_WIN" \
                           --arg name_mac "$FILE_NAME_MAC" --arg url_mac "$FILE_URL_MAC" \
                           '{
@@ -525,16 +540,21 @@ jobs:
                             ]
                           }')
         
+        echo "JSON Payload: $PAYLOAD"
+        
         # Make API request to update the product's downloadable files
+        echo "Sending API request..."
         RESPONSE=$(curl -s -X PUT "${API_ENDPOINT}" \
           -u "$AUTH" \
           -H "Content-Type: application/json" \
           -d "$PAYLOAD")
         
+        echo "API Response: $RESPONSE"
+        
         # Check if the update was successful
         if echo "$RESPONSE" | jq -e '.id' > /dev/null; then
           echo "Product downloads updated successfully."
         else
-          echo "Failed to update product downloads. Response: $RESPONSE"
+          echo "Error: Failed to update product downloads. Response: $RESPONSE"
           exit 1
         fi
