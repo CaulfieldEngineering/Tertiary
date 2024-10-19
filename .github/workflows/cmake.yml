@@ -479,6 +479,12 @@ jobs:
         FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
         echo "File successfully uploaded to WordPress: $FILE_URL"
 
+        # Get the root path by stripping off the filename and extension
+        URL_ROOT_PATH=$(dirname "$FILE_URL")
+        echo "URL root path: $URL_ROOT_PATH"
+
+        # Save the URL_ROOT_PATH as an environment variable for future steps
+        echo "URL_ROOT_PATH=$URL_ROOT_PATH" >> $GITHUB_ENV
 
 
     # Update WooCommerce Fields
@@ -522,12 +528,18 @@ jobs:
         FILE_NAME_MAC=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)mac")) | .name')
         FILE_URL_MAC=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)mac")) | .file')
         
-        # Update the file URLs and names for both platforms
-        FILE_URL_WIN="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryWinInstaller_0.0.1.exe"
-        FILE_NAME_WIN="GITHUB TEST WIN - 732"
+        # Update the file URLs and names dynamically based on the root path
+        FILE_URL_WIN="${URL_ROOT_PATH}/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+        FILE_NAME_WIN="${REPO_NAME} v${wPROJECT_VERSION} for Windows"
 
-        FILE_URL_MAC="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryMacInstaller_0.0.1.pkg"
-        FILE_NAME_MAC="GITHUB TEST MAC - 732"
+        FILE_URL_MAC="${URL_ROOT_PATH}/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+        FILE_NAME_MAC="${REPO_NAME} v${wPROJECT_VERSION} for Mac"
+
+        # Output the dynamic URLs and names for debugging
+        echo "Windows file URL: $FILE_URL_WIN"
+        echo "Windows file name: $FILE_NAME_WIN"
+        echo "Mac file URL: $FILE_URL_MAC"
+        echo "Mac file name: $FILE_NAME_MAC"
         
         echo "Using file: $FILE_NAME_WIN with URL: $FILE_URL_WIN"
         echo "Using file: $FILE_NAME_MAC with URL: $FILE_URL_MAC"
