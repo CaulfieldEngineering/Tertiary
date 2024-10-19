@@ -32,6 +32,8 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+
+
     # Cache Dependencies
     # ==========================================================================================
     # - name: Cache dependencies
@@ -41,7 +43,6 @@ jobs:
     #     path: | 
     #       ${{github.workspace}}/libs
     #     key: libs
-
 
 
 
@@ -80,6 +81,8 @@ jobs:
         done < <(grep 'set(w' ${GITHUB_WORKSPACE}/config.cmake | sed -e 's/set(//g' -e 's/)//g' -e 's/\s\+/ /g')
       shell: bash
       
+
+
       # Debug; print project variables
       # ==========================================================================================
     - name: Use Variables
@@ -439,21 +442,21 @@ jobs:
           exit 1
         fi
 
-        # Check if a file with the same name already exists in WordPress
-        echo "\nChecking if a file with the same name already exists in WordPress...\n"
-        EXISTING_FILE_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE}/wp-json/wp/v2/media?search=$(echo ${FILE_TITLE} | sed 's/ /%20/g')" \
-          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
-        echo "Existing file response: $EXISTING_FILE_RESPONSE\n"
-        EXISTING_FILE_ID=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[0].id')
-        EXISTING_FILE_NAME=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[0].title.rendered')
+        # # Check if a file with the same name already exists in WordPress
+        # echo "\nChecking if a file with the same name already exists in WordPress...\n"
+        # EXISTING_FILE_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE}/wp-json/wp/v2/media?search=$(echo ${FILE_TITLE} | sed 's/ /%20/g')" \
+        #   -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
+        # echo "Existing file response: $EXISTING_FILE_RESPONSE\n"
+        # EXISTING_FILE_ID=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[0].id')
+        # EXISTING_FILE_NAME=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[0].title.rendered')
 
-        # If the file exists, delete it
-        if [ "$EXISTING_FILE_ID" != "null" ] && [ -n "$EXISTING_FILE_ID" ]; then
-          echo "\nDeleting existing file with ID: $EXISTING_FILE_ID and Name: $EXISTING_FILE_NAME\n"
-          DELETE_RESPONSE=$(curl -s -X DELETE "${WORDPRESS_SITE}/wp-json/wp/v2/media/${EXISTING_FILE_ID}?force=true" \
-            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
-          echo "Delete response: $DELETE_RESPONSE\n"
-        fi
+        # # If the file exists, delete it
+        # if [ "$EXISTING_FILE_ID" != "null" ] && [ -n "$EXISTING_FILE_ID" ]; then
+        #   echo "\nDeleting existing file with ID: $EXISTING_FILE_ID and Name: $EXISTING_FILE_NAME\n"
+        #   DELETE_RESPONSE=$(curl -s -X DELETE "${WORDPRESS_SITE}/wp-json/wp/v2/media/${EXISTING_FILE_ID}?force=true" \
+        #     -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
+        #   echo "Delete response: $DELETE_RESPONSE\n"
+        # fi
 
         # Upload the file to WordPress using CURL
         echo "\nUploading the file to WordPress...\n"
