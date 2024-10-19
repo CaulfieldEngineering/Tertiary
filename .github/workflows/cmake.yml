@@ -504,7 +504,7 @@ jobs:
         # Check if all required environment variables are set
         if [ -z "$WOOCOMMERCE_CONSUMER_KEY" ] || [ -z "$WOOCOMMERCE_CONSUMER_SECRET" ] || [ -z "$WORDPRESS_SITE_URL" ] || [ -z "$WORDPRESS_PRODUCT_ID" ]; then
           echo "Error: Required WooCommerce credentials or Product ID not set. Skipping WooCommerce update step."
-          exit 0  # Exit if any required credentials or variables are missing
+          exit 0
         fi
     
         # Define file URLs and file names
@@ -525,16 +525,27 @@ jobs:
     
         # Fetch existing product details to get current download IDs
         EXISTING_PRODUCT=$(curl -s -X GET "${API_ENDPOINT}" -u "$AUTH" -H "Content-Type: application/json")
+    
+        # Log the entire product details for debugging
+        echo "Existing product details:"
+        echo "$EXISTING_PRODUCT" | jq '.'
+    
+        # Log the existing downloads specifically for clarity
+        echo "Existing downloads:"
+        echo "$EXISTING_PRODUCT" | jq '.downloads'
+    
+        # Extract IDs for Windows and Mac files
         DOWNLOAD_ID_WIN=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | contains("Win")) | .id')
         DOWNLOAD_ID_MAC=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | contains("Mac")) | .id')
     
+        echo "Download ID for Windows: $DOWNLOAD_ID_WIN"
+        echo "Download ID for Mac: $DOWNLOAD_ID_MAC"
+    
+        # Check if both IDs were found
         if [ -z "$DOWNLOAD_ID_WIN" ] || [ -z "$DOWNLOAD_ID_MAC" ]; then
           echo "Error: Could not find existing download IDs for Windows or Mac files. Exiting."
           exit 1
         fi
-    
-        echo "Existing download ID for Windows: $DOWNLOAD_ID_WIN"
-        echo "Existing download ID for Mac: $DOWNLOAD_ID_MAC"
     
         # Prepare JSON payload to update downloadable files with existing IDs
         echo "Building JSON payload for API request..."
