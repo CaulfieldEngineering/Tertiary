@@ -376,6 +376,15 @@ jobs:
         # Disable debugging output
         set +x  
 
+    # Store Artefacts within GitHub
+    # ==========================================================================================
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifacts-${{ matrix.os }}-${{ matrix.version }}
+        path: ${{ github.workspace }}/build/
+
+
   # Job: Wordpress Upload - Demo (Concurrency)
   # ==========================================================================================
   # ==========================================================================================
@@ -421,6 +430,16 @@ jobs:
               echo "$key=$value" >> $GITHUB_ENV
             done < <(grep 'set(w' ${GITHUB_WORKSPACE}/config.cmake | sed -e 's/set(//g' -e 's/)//g' -e 's/\s\+/ /g')
   
+
+
+        # Download Build Artefacts
+        # ==========================================================================================
+        - name: Download build artifacts
+          uses: actions/download-artifact@v3
+          with:
+            name: build-artifacts-${{ matrix.os }}-${{ matrix.version }}
+            path: ${{ github.workspace }}/build/
+
 
 
         # Upload Installers to WordPress (Demo Versions)
@@ -539,8 +558,6 @@ jobs:
 
 
 
-
-
   # Job: Wordpress Upload - Full (Concurrency)
   # ==========================================================================================
   # ==========================================================================================
@@ -586,7 +603,13 @@ jobs:
             echo "$key=$value" >> $GITHUB_ENV
           done < <(grep 'set(w' ${GITHUB_WORKSPACE}/config.cmake | sed -e 's/set(//g' -e 's/)//g' -e 's/\s\+/ /g')
 
-
+      # Download Build Artefacts
+      # ==========================================================================================
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts-${{ matrix.os }}-${{ matrix.version }}
+          path: ${{ github.workspace }}/build/
 
       # Upload Installers to WordPress (Full Versions)
       # ==========================================================================================
