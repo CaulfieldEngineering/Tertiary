@@ -497,7 +497,7 @@ jobs:
         # Debug: Print all environment variables used
         echo "WOOCOMMERCE_CONSUMER_KEY: ${WOOCOMMERCE_CONSUMER_KEY:0:4}**** (masked for security)"
         echo "WOOCOMMERCE_CONSUMER_SECRET: ${WOOCOMMERCE_CONSUMER_SECRET:0:4}**** (masked for security)"
-        echo "WOOCOMMERCE_SITE_URL: $WOOCOMMERCE_SITE_URL"
+        echo "WORDPRESS SITE URL: $WORDPRESS_SITE_URL"
         echo "WORDPRESS_PRODUCT_ID: $WORDPRESS_PRODUCT_ID"
         
         # Check if all required environment variables are set
@@ -518,7 +518,7 @@ jobs:
         echo "Mac File: Name: $FILE_NAME_MAC, URL: $FILE_URL_MAC"
 
         # WooCommerce API endpoint for updating the product
-        API_ENDPOINT="${WOOCOMMERCE_SITE_URL}/wp-json/wc/v3/products/${WORDPRESS_PRODUCT_ID}"
+        API_ENDPOINT="${WORDPRESS_SITE_URL}/wp-json/wc/v3/products/${WORDPRESS_PRODUCT_ID}"
         AUTH="${WOOCOMMERCE_CONSUMER_KEY}:${WOOCOMMERCE_CONSUMER_SECRET}"
 
         echo "API Endpoint: $API_ENDPOINT"
