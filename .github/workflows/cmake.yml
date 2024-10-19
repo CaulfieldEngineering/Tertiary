@@ -526,17 +526,13 @@ jobs:
         # Fetch existing product details to get current download IDs
         EXISTING_PRODUCT=$(curl -s -X GET "${API_ENDPOINT}" -u "$AUTH" -H "Content-Type: application/json")
     
-        # Log the entire product details for debugging
-        echo "Existing product details:"
-        echo "$EXISTING_PRODUCT" | jq '.'
-    
         # Log the existing downloads specifically for clarity
         echo "Existing downloads:"
         echo "$EXISTING_PRODUCT" | jq '.downloads'
     
-        # Extract IDs for Windows and Mac files
-        DOWNLOAD_ID_WIN=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | contains("Win")) | .id')
-        DOWNLOAD_ID_MAC=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | contains("Mac")) | .id')
+        # Extract IDs for Windows and Mac files using case-insensitive matching
+        DOWNLOAD_ID_WIN=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)win")) | .id')
+        DOWNLOAD_ID_MAC=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)mac")) | .id')
     
         echo "Download ID for Windows: $DOWNLOAD_ID_WIN"
         echo "Download ID for Mac: $DOWNLOAD_ID_MAC"
