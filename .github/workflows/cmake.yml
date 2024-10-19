@@ -368,9 +368,6 @@ jobs:
 
 
 
-
-
-        
     # Upload Installers to WordPress
     # ==========================================================================================
     - name: Upload Installers to WordPress
@@ -481,3 +478,63 @@ jobs:
         # Extract the URL of the uploaded file from the response
         FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
         echo "File successfully uploaded to WordPress: $FILE_URL"
+
+
+        # Update WooCommerce Fields
+        # ==========================================================================================
+        - name: Update WooCommerce Downloadable Files
+        env:
+          WOOCOMMERCE_CONSUMER_KEY: ${{ secrets.WOO_CK }}
+          WOOCOMMERCE_CONSUMER_SECRET: ${{ secrets.WOO_CS }}
+          WOOCOMMERCE_SITE_URL: ${{ secrets.WORDPRESS_SITE }}
+          WORDPRESS_PRODUCT_ID: ${{ secrets.WORDPRESS_PRODUCT_ID }}
+        shell: bash
+        run: |
+          set -e
+          
+          # Check if all required environment variables are set
+          if [ -z "$WOOCOMMERCE_CONSUMER_KEY" ] || [ -z "$WOOCOMMERCE_CONSUMER_SECRET" ] || [ -z "$WOOCOMMERCE_SITE_URL" ] || [ -z "$WORDPRESS_PRODUCT_ID" ]; then
+            echo "Required WooCommerce credentials or Product ID not set. Skipping WooCommerce update step."
+            exit 0  # Exit if any required credentials or variables are missing
+          fi
+
+          # Define file URLs and file names
+          FILE_URL_WIN="FILE_URL_TEST_1_WIN"
+          FILE_NAME_WIN="GITHUB TEST 1 WIN"
+          
+          FILE_URL_MAC="FILE_URL_TEST_1_MAC"
+          FILE_NAME_MAC="GITHUB TEST 1 MAC"
+  
+          # WooCommerce API endpoint for updating the product
+          API_ENDPOINT="${WORDPRESS_SITE_URL}/wp-json/wc/v3/products/${WORDPRESS_PRODUCT_ID}"
+          AUTH="${WOOCOMMERCE_CONSUMER_KEY}:${WOOCOMMERCE_CONSUMER_SECRET}"
+  
+          # Prepare JSON payload to update downloadable files
+          PAYLOAD=$(jq -n --arg name_win "$FILE_NAME_WIN" --arg url_win "$FILE_URL_WIN" \
+                            --arg name_mac "$FILE_NAME_MAC" --arg url_mac "$FILE_URL_MAC" \
+                            '{
+                              "downloads": [
+                                  {
+                                      "name": $name_win,
+                                      "file": $url_win
+                                  },
+                                  {
+                                      "name": $name_mac,
+                                      "file": $url_mac
+                                  }
+                              ]
+                            }')
+          
+          # Make API request to update the product's downloadable files
+          RESPONSE=$(curl -s -X PUT "${API_ENDPOINT}" \
+            -u "$AUTH" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+          
+          # Check if the update was successful
+          if echo "$RESPONSE" | jq -e '.id' > /dev/null; then
+            echo "Product downloads updated successfully."
+          else
+            echo "Failed to update product downloads. Response: $RESPONSE"
+            exit 1
+          fi
