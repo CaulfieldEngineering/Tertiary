@@ -508,63 +508,47 @@ jobs:
           exit 0
         fi
     
-        # Define file URLs and file names based on OS
-        if [ "${{ matrix.os }}" == "windows-latest" ]; then
-          FILE_URL="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryWinInstaller_0.0.1.exe"
-          FILE_NAME="GITHUB TEST WIN - 713"
-
-        elif [ "${{ matrix.os }}" == "macos-latest" ]; then
-          FILE_URL="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryMacInstaller_0.0.1.pkg"
-          FILE_NAME="GITHUB TEST MAC - 713"
-        else
-          echo "Unsupported OS: ${{ matrix.os }}. Skipping WooCommerce update."
-          exit 1
-        fi
-    
-        echo "Using file: $FILE_NAME with URL: $FILE_URL"
-    
-        # WooCommerce API endpoint for updating the product
+        # Fetch existing product details to get current download IDs
         API_ENDPOINT="${WORDPRESS_SITE_URL}/wp-json/wc/v3/products/${WORDPRESS_PRODUCT_ID}"
         AUTH="${WOOCOMMERCE_CONSUMER_KEY}:${WOOCOMMERCE_CONSUMER_SECRET}"
-    
-        echo "API Endpoint: $API_ENDPOINT"
-    
-        # Fetch existing product details to get current download IDs
         EXISTING_PRODUCT=$(curl -s -X GET "${API_ENDPOINT}" -u "$AUTH" -H "Content-Type: application/json")
-    
-        # Log the existing downloads specifically for clarity
-        echo "Existing downloads:"
-        echo "$EXISTING_PRODUCT" | jq '.downloads'
-    
-        # Extract ID for the file based on the OS
-        if [ "${{ matrix.os }}" == "windows-latest" ]; then
-          DOWNLOAD_ID=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)win")) | .id')
-        elif [ "${{ matrix.os }}" == "macos-latest" ]; then
-          DOWNLOAD_ID=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)mac")) | .id')
-        else
-          echo "Unsupported OS: ${{ matrix.os }}. Skipping WooCommerce update."
-          exit 1
-        fi
+        
+        # Extract existing download details for both macOS and Windows files
+        DOWNLOAD_ID_WIN=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)win")) | .id')
+        FILE_NAME_WIN=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)win")) | .name')
+        FILE_URL_WIN=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)win")) | .file')
+        
+        DOWNLOAD_ID_MAC=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)mac")) | .id')
+        FILE_NAME_MAC=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)mac")) | .name')
+        FILE_URL_MAC=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)mac")) | .file')
+        
+        # Update the file URLs and names for both platforms
+        FILE_URL_WIN="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryWinInstaller_0.0.1.exe"
+        FILE_NAME_WIN="GITHUB TEST WIN - 732"
 
-        echo "Download ID for ${{ matrix.os }}: $DOWNLOAD_ID"
-    
-        # Check if the ID was found
-        if [ -z "$DOWNLOAD_ID" ]; then
-          echo "Error: Could not find existing download ID for ${{ matrix.os }}. Exiting."
-          exit 1
-        fi
-    
-        # Prepare JSON payload to update downloadable file with existing ID
-        PAYLOAD=$(jq -n --arg name "$FILE_NAME" --arg url "$FILE_URL" --arg id "$DOWNLOAD_ID" \
-                          '{
-                            "downloads": [
-                                {
-                                    "id": $id,
-                                    "name": $name,
-                                    "file": $url
-                                }
-                            ]
-                          }')
+        FILE_URL_MAC="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryMacInstaller_0.0.1.pkg"
+        FILE_NAME_MAC="GITHUB TEST MAC - 732"
+        
+        echo "Using file: $FILE_NAME_WIN with URL: $FILE_URL_WIN"
+        echo "Using file: $FILE_NAME_MAC with URL: $FILE_URL_MAC"
+        
+        # Prepare JSON payload to update both downloadable files
+        PAYLOAD=$(jq -n --arg name_win "$FILE_NAME_WIN" --arg url_win "$FILE_URL_WIN" --arg id_win "$DOWNLOAD_ID_WIN" \
+                              --arg name_mac "$FILE_NAME_MAC" --arg url_mac "$FILE_URL_MAC" --arg id_mac "$DOWNLOAD_ID_MAC" \
+                              '{
+                                "downloads": [
+                                    {
+                                        "id": $id_win,
+                                        "name": $name_win,
+                                        "file": $url_win
+                                    },
+                                    {
+                                        "id": $id_mac,
+                                        "name": $name_mac,
+                                        "file": $url_mac
+                                    }
+                                ]
+                              }')
         
         echo "JSON Payload: $PAYLOAD"
         
