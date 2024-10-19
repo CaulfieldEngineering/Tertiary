@@ -484,6 +484,7 @@ jobs:
     # Update WooCommerce Fields
     # ==========================================================================================
     - name: Update WooCommerce Downloadable Files
+      if: matrix.version == 'Full'
       env:
         WOOCOMMERCE_CONSUMER_KEY: ${{ secrets.WOO_CK }}
         WOOCOMMERCE_CONSUMER_SECRET: ${{ secrets.WOO_CS }}
@@ -507,15 +508,20 @@ jobs:
           exit 0
         fi
     
-        # Define file URLs and file names
-        FILE_URL_WIN="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryWinInstaller_0.0.1.exe"
-        FILE_NAME_WIN="GITHUB TEST WIN - 641"
-        FILE_URL_MAC="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryMacInstaller_0.0.1.pkg"
-        FILE_NAME_MAC="GITHUB TEST MAC - 641"
+        # Define file URLs and file names based on OS
+        if [ "${{ matrix.os }}" == "windows-latest" ]; then
+          FILE_URL="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryWinInstaller_0.0.1.exe"
+          FILE_NAME="GITHUB TEST WIN - 713"
+
+        elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+          FILE_URL="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryMacInstaller_0.0.1.pkg"
+          FILE_NAME="GITHUB TEST MAC - 713"
+        else
+          echo "Unsupported OS: ${{ matrix.os }}. Skipping WooCommerce update."
+          exit 1
+        fi
     
-        echo "Using the following file names and URLs:"
-        echo "Windows File: Name: $FILE_NAME_WIN, URL: $FILE_URL_WIN"
-        echo "Mac File: Name: $FILE_NAME_MAC, URL: $FILE_URL_MAC"
+        echo "Using file: $FILE_NAME with URL: $FILE_URL"
     
         # WooCommerce API endpoint for updating the product
         API_ENDPOINT="${WORDPRESS_SITE_URL}/wp-json/wc/v3/products/${WORDPRESS_PRODUCT_ID}"
@@ -530,36 +536,25 @@ jobs:
         echo "Existing downloads:"
         echo "$EXISTING_PRODUCT" | jq '.downloads'
     
-        # Extract IDs for Windows and Mac files using case-insensitive matching
-        DOWNLOAD_ID_WIN=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)win")) | .id')
-        DOWNLOAD_ID_MAC=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)mac")) | .id')
+        # Extract ID for the file based on the OS
+        DOWNLOAD_ID=$(echo "$EXISTING_PRODUCT" | jq -r --arg os "$matrix.os" '.downloads[] | select(.name | test("(?i)\($os)")) | .id')
     
-        echo "Download ID for Windows: $DOWNLOAD_ID_WIN"
-        echo "Download ID for Mac: $DOWNLOAD_ID_MAC"
+        echo "Download ID for ${{ matrix.os }}: $DOWNLOAD_ID"
     
-        # Check if both IDs were found
-        if [ -z "$DOWNLOAD_ID_WIN" ] || [ -z "$DOWNLOAD_ID_MAC" ]; then
-          echo "Error: Could not find existing download IDs for Windows or Mac files. Exiting."
+        # Check if the ID was found
+        if [ -z "$DOWNLOAD_ID" ]; then
+          echo "Error: Could not find existing download ID for ${{ matrix.os }}. Exiting."
           exit 1
         fi
     
-        # Prepare JSON payload to update downloadable files with existing IDs
-        echo "Building JSON payload for API request..."
-        PAYLOAD=$(jq -n --arg name_win "$FILE_NAME_WIN" --arg url_win "$FILE_URL_WIN" \
-                          --arg id_win "$DOWNLOAD_ID_WIN" \
-                          --arg name_mac "$FILE_NAME_MAC" --arg url_mac "$FILE_URL_MAC" \
-                          --arg id_mac "$DOWNLOAD_ID_MAC" \
+        # Prepare JSON payload to update downloadable file with existing ID
+        PAYLOAD=$(jq -n --arg name "$FILE_NAME" --arg url "$FILE_URL" --arg id "$DOWNLOAD_ID" \
                           '{
                             "downloads": [
                                 {
-                                    "id": $id_win,
-                                    "name": $name_win,
-                                    "file": $url_win
-                                },
-                                {
-                                    "id": $id_mac,
-                                    "name": $name_mac,
-                                    "file": $url_mac
+                                    "id": $id,
+                                    "name": $name,
+                                    "file": $url
                                 }
                             ]
                           }')
@@ -567,7 +562,6 @@ jobs:
         echo "JSON Payload: $PAYLOAD"
         
         # Make API request to update the product's downloadable files
-        echo "Sending API request..."
         RESPONSE=$(curl -s -X PUT "${API_ENDPOINT}" \
           -u "$AUTH" \
           -H "Content-Type: application/json" \
