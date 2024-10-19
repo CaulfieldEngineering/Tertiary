@@ -507,11 +507,11 @@ jobs:
         fi
 
         # Define file URLs and file names
-        FILE_URL_WIN="FILE_URL_TEST_1_WIN"
-        FILE_NAME_WIN="GITHUB TEST 1 WIN"
+        FILE_URL_WIN="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryWinInstaller_0.0.1.exe"
+        FILE_NAME_WIN="GITHUB TEST 0 WIN"
         
-        FILE_URL_MAC="FILE_URL_TEST_1_MAC"
-        FILE_NAME_MAC="GITHUB TEST 1 MAC"
+        FILE_URL_MAC="https://wonderlandaudio.blog/wp-content/uploads/2024/10/TertiaryMacInstaller_0.0.1.pkg"
+        FILE_NAME_MAC="GITHUB TEST 0 MAC"
 
         echo "Using the following file names and URLs:"
         echo "Windows File: Name: $FILE_NAME_WIN, URL: $FILE_URL_WIN"
