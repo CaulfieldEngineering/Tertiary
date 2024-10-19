@@ -525,7 +525,7 @@ jobs:
     
         # Fetch existing product details to get current download IDs
         EXISTING_PRODUCT=$(curl -s -X GET "${API_ENDPOINT}" -u "$AUTH" -H "Content-Type: application/json")
-        DOWNLOAD_ID_WIN=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | contains("Windows")) | .id')
+        DOWNLOAD_ID_WIN=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | contains("Win")) | .id')
         DOWNLOAD_ID_MAC=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | contains("Mac")) | .id')
     
         if [ -z "$DOWNLOAD_ID_WIN" ] || [ -z "$DOWNLOAD_ID_MAC" ]; then
