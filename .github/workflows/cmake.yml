@@ -381,8 +381,8 @@ jobs:
 
 
 
-        
-    # Upload Installers to WordPress.
+
+    # Upload Installers to WordPress
     # ==========================================================================================
     - name: Upload Installers to WordPress
       env:
