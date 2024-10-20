@@ -404,17 +404,32 @@ jobs:
 
         # Extract repository name and set version-specific variables
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
-        IS_DEMO="${{ matrix.version == 'Demo' }}"
-        SUFFIX="${IS_DEMO && '.D' || ''}"
+        
+        # Correctly evaluate matrix.version
+        if [ "${{ matrix.version }}" == "Demo" ]; then
+          IS_DEMO=true
+          SUFFIX=".D"
+        else
+          IS_DEMO=false
+          SUFFIX=""
+        fi
 
         # Set file paths and titles based on OS and version
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
-          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
-          FILE_TITLE="Tertiary${IS_DEMO && ' Demo' || ''} Installer v${wPROJECT_VERSION}${SUFFIX} for Mac"
+          FILE_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
+          if [ "$IS_DEMO" == true ]; then
+            FILE_TITLE="Tertiary Demo Installer v${wPROJECT_VERSION}${SUFFIX} for Mac"
+          else
+            FILE_TITLE="Tertiary Installer v${wPROJECT_VERSION}${SUFFIX} for Mac"
+          fi
           FILE_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
         elif [ "${{ matrix.os }}" == "windows-latest" ]; then
-          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}${SUFFIX}.exe"
-          FILE_TITLE="Tertiary${IS_DEMO && ' Demo' || ''} Installer v${wPROJECT_VERSION}${SUFFIX} for Windows"
+          FILE_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}${SUFFIX}.exe"
+          if [ "$IS_DEMO" == true ]; then
+            FILE_TITLE="Tertiary Demo Installer v${wPROJECT_VERSION}${SUFFIX} for Windows"
+          else
+            FILE_TITLE="Tertiary Installer v${wPROJECT_VERSION}${SUFFIX} for Windows"
+          fi
           FILE_NAME="${REPO_NAME}WinInstaller_${wPROJECT_VERSION}${SUFFIX}.exe"
         else
           echo "Unsupported OS for WordPress upload"
@@ -428,7 +443,7 @@ jobs:
         fi
 
         # Upload process differs for Demo and Full versions
-        if $IS_DEMO; then
+        if [ "$IS_DEMO" == true ]; then
           echo "Uploading Demo Version to WordPress Media Library"
           
           # Search for existing file
@@ -491,7 +506,7 @@ jobs:
         fi
 
         # Check upload response and extract URL
-        if $IS_DEMO; then
+        if [ "$IS_DEMO" == true ]; then
           if echo "$UPLOAD_RESPONSE" | jq -e '.id' > /dev/null; then
             echo "PASS: Demo version file successfully uploaded."
             FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
