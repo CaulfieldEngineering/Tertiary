@@ -540,13 +540,14 @@ jobs:
         
         echo "Uploading full version file to WordPress using custom endpoint..."
         # Upload the file to WordPress using the custom API endpoint
-        UPLOAD_RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE}/wp-json/custom/v1/upload-file" \
+        UPLOAD_RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE}/wp-json/custom/v1/upload-file-to-woo" \
           -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
           -F "file=@${FILE_PATH}")
-
+    
         # Check if the upload was successful by verifying the response
         if echo "$UPLOAD_RESPONSE" | grep -q "File uploaded successfully"; then
           echo "PASS: Full version file successfully uploaded."
+          echo "Response: $UPLOAD_RESPONSE"
         else
           echo "FAIL: Upload failed. Response: $UPLOAD_RESPONSE"
           exit 1  # Exit if the upload fails
