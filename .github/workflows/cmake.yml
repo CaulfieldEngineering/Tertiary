@@ -480,7 +480,7 @@ jobs:
         echo "File successfully uploaded to WordPress: $FILE_URL"
 
         # Get the root path by stripping off the filename and extension
-        #URL_ROOT_PATH=$(dirname "$FILE_URL")
+        URL_ROOT_PATH=$(dirname "$FILE_URL")
         #echo "URL root path: $URL_ROOT_PATH"
 
         # Save the URL_ROOT_PATH as an environment variable for future steps
@@ -493,9 +493,9 @@ jobs:
 
 
 
-      # Upload Full Version Installers to WooCommerce Folder
-      # ==========================================================================================
-      name: Upload Full Version Installers to WordPress
+    # Upload Full Version Installers to WooCommerce Folder
+    # ==========================================================================================
+    - name: Upload Full Version Installers to WordPress
       if: matrix.version == 'Full'  # Only run this step for Full versions
       env:
         WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
