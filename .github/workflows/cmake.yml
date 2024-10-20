@@ -372,132 +372,6 @@ jobs:
     # ==========================================================================================
     - name: Upload Installers to WordPress
       env:
-        # Setting up environment variables using GitHub secrets for secure access
-        WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
-        WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.WORDPRESS_APPLICATION_PASSWORD }}
-        WORDPRESS_SITE: ${{ secrets.WORDPRESS_SITE }}
-      shell: bash
-      run: |
-        set -e  # Exit immediately if any command exits with a non-zero status, ensuring the script stops on failure.
-        
-        # Function to URL encode a string to safely transmit file titles in URLs
-        urlencode() {
-            local string="${1}"  # The input string to be encoded
-            local strlen=${#string}  # Length of the input string
-            local encoded=""  # Variable to hold the encoded string
-            local pos c o  # Variables for loop position, character, and output
-            
-            # Iterate through each character in the string
-            for (( pos=0 ; pos<strlen ; pos++ )); do
-                c=${string:$pos:1}  # Extract character at the current position
-                case "$c" in
-                    # If character is alphanumeric or one of the allowed symbols, leave it as is
-                    [-_.~a-zA-Z0-9]) o="${c}" ;;
-                    # Otherwise, convert the character to its hex value and prefix with %
-                    *) printf -v o '%%%02x' "'$c"
-                esac
-                encoded+="${o}"  # Append the encoded character to the result
-            done
-            echo "${encoded}"  # Return the fully encoded string
-        }
-        
-        # Ensure that the required WordPress credentials are set
-        if [ -z "$WORDPRESS_USERNAME" ] || [ -z "$WORDPRESS_APPLICATION_PASSWORD" ] || [ -z "$WORDPRESS_SITE" ]; then
-          echo "WordPress credentials not set. Skipping WordPress upload step."
-          exit 0  # Skip the upload step if any required credentials are missing
-        fi
-        
-        # Extract the repository name from the GitHub repository environment variable
-        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
-        # Determine the suffix for demo versions based on the matrix configuration
-        SUFFIX="${{ matrix.version == 'Demo' && '.D' || '' }}"
-        
-        # Set file paths and titles based on the operating system
-        if [ "${{ matrix.os }}" == "macos-latest" ]; then
-          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
-          FILE_TITLE="Tertiary${{ matrix.version == 'Demo' && ' Demo' || '' }} Installer v${wPROJECT_VERSION}${SUFFIX} for Mac"
-        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
-          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}${SUFFIX}.exe"
-          FILE_TITLE="Tertiary${{ matrix.version == 'Demo' && ' Demo' || '' }} Installer v${wPROJECT_VERSION}${SUFFIX} for Windows"
-        else
-          echo "Unsupported OS for WordPress upload"
-          exit 1  # Terminate if the OS is unsupported
-        fi
-        
-        # Check if the file exists at the determined path
-        if [ ! -f "$FILE_PATH" ]; then
-          echo "File not found: $FILE_PATH"
-          exit 1  # Exit if the file is missing
-        fi
-        
-        # Encode the file title for safe use in a URL
-        ENCODED_TITLE=$(urlencode "$FILE_TITLE")
-        echo "Searching for existing file with title: $FILE_TITLE"
-        
-        # Make a GET request to WordPress API to search for existing files with the same title
-        EXISTING_FILE_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE}/wp-json/wp/v2/media?search=${ENCODED_TITLE}" \
-          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
-        
-        # Extract the ID of the existing file if found
-        EXISTING_FILE_ID=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[] | select(.title.rendered == "'"$FILE_TITLE"'") | .id')
-        
-        if [ -n "$EXISTING_FILE_ID" ]; then
-          echo "Existing file found with ID: $EXISTING_FILE_ID. Deleting..."
-          # Delete the existing file using the WordPress API
-          DELETE_RESPONSE=$(curl -s -X DELETE "${WORDPRESS_SITE}/wp-json/wp/v2/media/${EXISTING_FILE_ID}?force=true" \
-            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
-          
-          # Check if the file deletion was successful
-          if echo "$DELETE_RESPONSE" | jq -e '.deleted == true' > /dev/null; then
-            echo "Existing file successfully deleted."
-          else
-            echo "Failed to delete existing file. Response: $DELETE_RESPONSE"
-            exit 1  # Exit if file deletion fails
-          fi
-        else
-          echo "No existing file found with the exact title."
-        fi
-        
-        echo "Uploading new file to WordPress..."
-        # Upload the new file to WordPress using the media API
-        UPLOAD_RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE}/wp-json/wp/v2/media" \
-          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
-          -H "Content-Disposition: attachment; filename=$(basename "$FILE_PATH")" \
-          -F "file=@${FILE_PATH}" \
-          -F "title=${FILE_TITLE}" \
-          -F "alt_text=${REPO_NAME} Installer" \
-          -F "caption=Installer for ${REPO_NAME} v${wPROJECT_VERSION}${SUFFIX}" \
-          -F "description=${FILE_TITLE}")
-        
-        # Check if the upload was successful by verifying the response
-        if ! echo "$UPLOAD_RESPONSE" | jq -e '.id' > /dev/null; then
-          echo "Failed to upload file to WordPress. Response: $UPLOAD_RESPONSE"
-          exit 1  # Exit if the upload fails
-        fi
-        
-        # Extract the URL of the uploaded file from the response
-        FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
-        echo "File successfully uploaded to WordPress: $FILE_URL"
-
-        # Get the root path by stripping off the filename and extension
-        URL_ROOT_PATH=$(dirname "$FILE_URL")
-        #echo "URL root path: $URL_ROOT_PATH"
-
-        # Save the URL_ROOT_PATH as an environment variable for future steps
-        #echo "URL_ROOT_PATH=$URL_ROOT_PATH" >> $GITHUB_ENV
-
-
-
-
-
-
-
-
-    # Upload Full Version Installers to WooCommerce Folder
-    # ==========================================================================================
-    - name: Upload Full Version Installers to WordPress
-      if: matrix.version == 'Full'  # Only run this step for Full versions
-      env:
         WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
         WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.WORDPRESS_APPLICATION_PASSWORD }}
         WORDPRESS_SITE: ${{ secrets.WORDPRESS_SITE }}
@@ -505,84 +379,142 @@ jobs:
       run: |
         set -e  # Exit immediately if any command exits with a non-zero status
 
-        # Ensure that the required WordPress credentials are set
+        # Function to URL encode a string
+        urlencode() {
+          local string="${1}"
+          local strlen=${#string}
+          local encoded=""
+          local pos c o
+          for (( pos=0 ; pos<strlen ; pos++ )); do
+            c=${string:$pos:1}
+            case "$c" in
+              [-_.~a-zA-Z0-9]) o="${c}" ;;
+              *) printf -v o '%%%02x' "'$c"
+            esac
+            encoded+="${o}"
+          done
+          echo "${encoded}"
+        }
+
+        # Check if WordPress credentials are set
         if [ -z "$WORDPRESS_USERNAME" ] || [ -z "$WORDPRESS_APPLICATION_PASSWORD" ] || [ -z "$WORDPRESS_SITE" ]; then
           echo "WordPress credentials not set. Skipping WordPress upload step."
           exit 0
         fi
 
-        # Extract the repository name from the GitHub repository environment variable
+        # Extract repository name and set version-specific variables
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+        IS_DEMO="${{ matrix.version == 'Demo' }}"
+        SUFFIX="${IS_DEMO && '.D' || ''}"
 
-        # Set file paths and names based on the operating system
+        # Set file paths and titles based on OS and version
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
-          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
-          FILE_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
+          FILE_TITLE="Tertiary${IS_DEMO && ' Demo' || ''} Installer v${wPROJECT_VERSION}${SUFFIX} for Mac"
+          FILE_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
         elif [ "${{ matrix.os }}" == "windows-latest" ]; then
-          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
-          FILE_NAME="${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}${SUFFIX}.exe"
+          FILE_TITLE="Tertiary${IS_DEMO && ' Demo' || ''} Installer v${wPROJECT_VERSION}${SUFFIX} for Windows"
+          FILE_NAME="${REPO_NAME}WinInstaller_${wPROJECT_VERSION}${SUFFIX}.exe"
         else
           echo "Unsupported OS for WordPress upload"
           exit 1
         fi
 
-        # Check if the file exists at the determined path
+        # Check if file exists
         if [ ! -f "$FILE_PATH" ]; then
           echo "File not found: $FILE_PATH"
           exit 1
         fi
 
-        echo "Attempting to delete existing file before upload..."
-        # Try to delete the file if it exists
-        DELETE_RESPONSE=$(curl -s -X DELETE "${WORDPRESS_SITE}/wp-json/custom/v1/upload-file-to-woo" \
-          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
-          -H "Content-Type: application/json" \
-          -d "{\"filename\":\"$FILE_NAME\"}")
+        # Upload process differs for Demo and Full versions
+        if $IS_DEMO; then
+          echo "Uploading Demo Version to WordPress Media Library"
+          
+          # Search for existing file
+          ENCODED_TITLE=$(urlencode "$FILE_TITLE")
+          echo "Searching for existing file with title: $FILE_TITLE"
+          EXISTING_FILE_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE}/wp-json/wp/v2/media?search=${ENCODED_TITLE}" \
+            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
+          EXISTING_FILE_ID=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[] | select(.title.rendered == "'"$FILE_TITLE"'") | .id')
 
-        if echo "$DELETE_RESPONSE" | grep -q "File deleted successfully"; then
-          echo "Existing file deleted successfully."
-        elif echo "$DELETE_RESPONSE" | grep -q "File not found"; then
-          echo "No existing file found. Proceeding with upload."
+          # Delete existing file if found
+          if [ -n "$EXISTING_FILE_ID" ]; then
+            echo "Existing file found with ID: $EXISTING_FILE_ID. Deleting..."
+            DELETE_RESPONSE=$(curl -s -X DELETE "${WORDPRESS_SITE}/wp-json/wp/v2/media/${EXISTING_FILE_ID}?force=true" \
+              -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
+            
+            if echo "$DELETE_RESPONSE" | jq -e '.deleted == true' > /dev/null; then
+              echo "Existing file successfully deleted."
+            else
+              echo "Failed to delete existing file. Response: $DELETE_RESPONSE"
+              exit 1
+            fi
+          else
+            echo "No existing file found with the exact title."
+          fi
+
+          # Upload new file
+          echo "Uploading new file to WordPress..."
+          UPLOAD_RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE}/wp-json/wp/v2/media" \
+            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
+            -H "Content-Disposition: attachment; filename=$(basename "$FILE_PATH")" \
+            -F "file=@${FILE_PATH}" \
+            -F "title=${FILE_TITLE}" \
+            -F "alt_text=${REPO_NAME} Installer" \
+            -F "caption=Installer for ${REPO_NAME} v${wPROJECT_VERSION}${SUFFIX}" \
+            -F "description=${FILE_TITLE}")
+
         else
-          echo "Unexpected response during delete attempt: $DELETE_RESPONSE"
+          echo "Uploading Full Version to WooCommerce Folder"
+          
+          # Attempt to delete existing file
+          echo "Attempting to delete existing file before upload..."
+          DELETE_RESPONSE=$(curl -s -X DELETE "${WORDPRESS_SITE}/wp-json/custom/v1/upload-file-to-woo" \
+            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
+            -H "Content-Type: application/json" \
+            -d "{\"filename\":\"$FILE_NAME\"}")
+
+          if echo "$DELETE_RESPONSE" | grep -q "File deleted successfully"; then
+            echo "Existing file deleted successfully."
+          elif echo "$DELETE_RESPONSE" | grep -q "File not found"; then
+            echo "No existing file found. Proceeding with upload."
+          else
+            echo "Unexpected response during delete attempt: $DELETE_RESPONSE"
+          fi
+
+          # Upload new file
+          echo "Uploading full version file to WordPress using custom endpoint..."
+          UPLOAD_RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE}/wp-json/custom/v1/upload-file-to-woo" \
+            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
+            -F "file=@${FILE_PATH}")
         fi
 
-        echo "Uploading full version file to WordPress using custom endpoint..."
-        # Upload the file to WordPress using the custom API endpoint
-        UPLOAD_RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE}/wp-json/custom/v1/upload-file-to-woo" \
-          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
-          -F "file=@${FILE_PATH}")
-
-        # Check if the upload was successful by verifying the response
-        if echo "$UPLOAD_RESPONSE" | grep -q "File uploaded successfully"; then
-          echo "PASS: Full version file successfully uploaded."
-          FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.url')
-          echo "Uploaded file URL: $FILE_URL"
-
-          # Get the root path by stripping off the filename and extension
-          URL_ROOT_PATH=$(dirname "$FILE_URL")
-          echo "URL root path: $URL_ROOT_PATH"
-
-          # Save the URL_ROOT_PATH as an environment variable for future steps
-          echo "URL_ROOT_PATH=$URL_ROOT_PATH" >> $GITHUB_ENV
+        # Check upload response and extract URL
+        if $IS_DEMO; then
+          if echo "$UPLOAD_RESPONSE" | jq -e '.id' > /dev/null; then
+            echo "PASS: Demo version file successfully uploaded."
+            FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
+          else
+            echo "FAIL: Upload failed. Response: $UPLOAD_RESPONSE"
+            exit 1
+          fi
         else
-          echo "FAIL: Upload failed. Response: $UPLOAD_RESPONSE"
-          exit 1
+          if echo "$UPLOAD_RESPONSE" | grep -q "File uploaded successfully"; then
+            echo "PASS: Full version file successfully uploaded."
+            FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.url')
+          else
+            echo "FAIL: Upload failed. Response: $UPLOAD_RESPONSE"
+            exit 1
+          fi
         fi
 
+        echo "Uploaded file URL: $FILE_URL"
 
-
-
-
-
-
-
-
-
-
-
-
-
+        # Extract and save URL root path
+        URL_ROOT_PATH=$(dirname "$FILE_URL")
+        echo "URL root path: $URL_ROOT_PATH"
+        echo "URL_ROOT_PATH=$URL_ROOT_PATH" >> $GITHUB_ENV
 
 
     # Update WooCommerce Fields
