@@ -487,6 +487,86 @@ jobs:
         echo "URL_ROOT_PATH=$URL_ROOT_PATH" >> $GITHUB_ENV
 
 
+
+
+
+
+
+
+    # TEST!!!!!!!!!!
+    # Upload Full Version Installers to WooCommerce Folder
+    # ==========================================================================================
+    # ==========================================================================================
+    # ==========================================================================================
+    # ==========================================================================================
+    # ==========================================================================================
+    # ==========================================================================================
+    - name: Upload Full Version Installers to WordPress
+      if: matrix.version == 'Full'  # Only run this step if the version is "Full"
+      env:
+        WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
+        WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.WORDPRESS_APPLICATION_PASSWORD }}
+        WORDPRESS_SITE: ${{ secrets.WORDPRESS_SITE }}
+      shell: bash
+      run: |
+        set -e  # Exit immediately if any command exits with a non-zero status, ensuring the script stops on failure.
+        
+        # Ensure that the required WordPress credentials are set
+        if [ -z "$WORDPRESS_USERNAME" ] || [ -z "$WORDPRESS_APPLICATION_PASSWORD" ] || [ -z "$WORDPRESS_SITE" ]; then
+          echo "WordPress credentials not set. Skipping WordPress upload step."
+          exit 0  # Skip the upload step if any required credentials are missing
+        fi
+        
+        # Extract the repository name from the GitHub repository environment variable
+        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+        
+        # Set file paths and titles based on the operating system
+        if [ "${{ matrix.os }}" == "macos-latest" ]; then
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+          FILE_TITLE="Tertiary Installer v${wPROJECT_VERSION} for Mac"
+        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+          FILE_PATH="${{github.workspace}}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+          FILE_TITLE="Tertiary Installer v${wPROJECT_VERSION} for Windows"
+        else
+          echo "Unsupported OS for WordPress upload"
+          exit 1  # Terminate if the OS is unsupported
+        fi
+        
+        # Check if the file exists at the determined path
+        if [ ! -f "$FILE_PATH" ]; then
+          echo "File not found: $FILE_PATH"
+          exit 1  # Exit if the file is missing
+        fi
+        
+        echo "Uploading full version file to WordPress using custom endpoint..."
+        # Upload the file to WordPress using the custom API endpoint
+        UPLOAD_RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE}/wp-json/custom/v1/upload-file" \
+          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
+          -F "file=@${FILE_PATH}")
+
+        # Check if the upload was successful by verifying the response
+        if echo "$UPLOAD_RESPONSE" | grep -q "File uploaded successfully"; then
+          echo "PASS: Full version file successfully uploaded."
+        else
+          echo "FAIL: Upload failed. Response: $UPLOAD_RESPONSE"
+          exit 1  # Exit if the upload fails
+        fi
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     # Update WooCommerce Fields
     # ==========================================================================================
     - name: Update WooCommerce Downloadable Files
