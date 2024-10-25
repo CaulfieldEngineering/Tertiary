@@ -121,7 +121,14 @@ jobs:
 
 
 
-    # Sign Binaries (Mac) - 2024.10.25
+
+
+    # MAC INSTALLER ######################################################################################
+    # ====================================================================================================
+    # ====================================================================================================
+    # ====================================================================================================
+
+    # Sign Payload (Mac) - 2024.10.25
     # ==========================================================================================
     - name: Sign Mac Binaries
       if: matrix.os == 'macos-latest'
@@ -131,43 +138,74 @@ jobs:
         KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         REPOSITORY_NAME: ${{ github.event.repository.name }}
       run: |
+
         # Check for required secrets
+        # ===============================================
         if [ -z "$APPLICATION_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
           echo "Required secrets for application signing are not set. Skipping application signing step."
           exit 0
         fi
 
+        echo "Starting the signing process for macOS binaries..."
+
         # Determine the suffix based on the version
+        # ===============================================
         SUFFIX=""
         if [[ "${{ matrix.version }}" == "Demo" ]]; then
           SUFFIX=".D"
+          echo "Demo version detected. Suffix set to: $SUFFIX"
+        else
+          echo "Full version detected. No suffix applied."
         fi
+    
+        # 1. Sign VST3
+        # ===============================================
+        VST3_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3/${REPOSITORY_NAME}.vst3"
+        echo "VST3 path set to: $VST3_PATH"
+        if [ -d "$VST3_PATH" ]; then
+          echo "VST3 binary found at $VST3_PATH. Proceeding to sign."
+          codesign --force -s "$DEVELOPER_ID_APPLICATION" -v "$VST3_PATH" --deep --strict --options=runtime --timestamp
+          if [ $? -eq 0 ]; then
+            echo "PASS: VST3 binary successfully signed."
+          else
+            echo "FAIL: Failed to sign the VST3 binary."
+            exit 1
+          fi
+        else
+          echo "ERROR: VST3 binary not found at $VST3_PATH."
+          echo "Listing contents of the Release/VST3 directory for debugging:"
+          ls -la "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3"
+          exit 1
+        fi
+    
+        # 2. Sign Standalone Application
+        # ===============================================
+        APP_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone/${REPOSITORY_NAME}.app"
+        echo "Standalone application path set to: $APP_PATH"
+        if [ -d "$APP_PATH" ]; then
+          echo "Standalone application found at $APP_PATH. Proceeding to sign."
+          codesign --force -s "$DEVELOPER_ID_APPLICATION" -v "$APP_PATH" --deep --strict --options=runtime --timestamp
+          if [ $? -eq 0 ]; then
+            echo "PASS: Standalone application successfully signed."
+          else
+            echo "FAIL: Failed to sign the Standalone application."
+            exit 1
+          fi
+        else
+          echo "ERROR: Standalone application not found at $APP_PATH."
+          echo "Listing contents of the Release/Standalone directory for debugging:"
+          ls -la "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone"
+          exit 1
+        fi
+    
+        echo "Signing process completed for all macOS binaries."
 
-        # Create temporary keychain
-        security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-        security default-keychain -s build.keychain
-        security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-        security set-keychain-settings -t 3600 -u build.keychain
 
-        # Import application certificate to keychain
-        echo $APPLICATION_CERTIFICATE_BASE64 | base64 --decode > application_certificate.p12
-        security import application_certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
 
-        # Sign the .app bundle
-        codesign --force --options runtime --sign "Developer ID Application" \
-          --deep --strict --timestamp \
-          "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone/${REPOSITORY_NAME}${SUFFIX}.app"
 
-        # Sign the .vst3 bundle
-        codesign --force --options runtime --sign "Developer ID Application" \
-          --deep --strict --timestamp \
-          "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3/${REPOSITORY_NAME}${SUFFIX}.vst3"
-        
-        # Clean up and restore default keychain
-        security default-keychain -s login.keychain
-        security delete-keychain build.keychain
-        rm application_certificate.p12
+
+
+
 
 
     # Package: Standalone (Mac)
@@ -182,6 +220,12 @@ jobs:
         # Format COMPANY_NAME by removing spaces
         FORMATTED_COMPANY_NAME=$(echo "$wCOMPANY_NAME" | tr -d ' ')
 
+        # Determine the suffix based on the version
+        SUFFIX=""
+        if [[ "${{ matrix.version }}" == "Demo" ]]; then
+          SUFFIX=".D"
+        fi
+
         echo "Using formatted company name: $FORMATTED_COMPANY_NAME"
         echo "Using version: $VERSION"
 
@@ -190,8 +234,9 @@ jobs:
           --identifier com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.app \
           --version $wPROJECT_VERSION \
           --install-location /Applications/${REPOSITORY_NAME} \
-          ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone.pkg
+          ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg
 
+          # ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone.pkg
         
 
     # Package: VST3 (Mac)
@@ -206,6 +251,12 @@ jobs:
         # Format COMPANY_NAME by removing spaces
         FORMATTED_COMPANY_NAME=$(echo "$wCOMPANY_NAME" | tr -d ' ')
 
+        # Determine the suffix based on the version
+        SUFFIX=""
+        if [[ "${{ matrix.version }}" == "Demo" ]]; then
+          SUFFIX=".D"
+        fi
+
         echo "Using formatted company name: $FORMATTED_COMPANY_NAME"
         echo "Using version: $VERSION"
 
@@ -214,10 +265,11 @@ jobs:
           --identifier com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.vst3 \
           --version $wPROJECT_VERSION \
           --install-location /Library/Audio/Plug-Ins/VST3 \
-          ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3.pkg
+          ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg"
 
-
+          # ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3.pkg
           
+
     # Sign Individual Packages (Mac) - 2024.10.25 CLAUDE
     # ==========================================================================================
     - name: Sign Individual Packages
@@ -294,7 +346,6 @@ jobs:
           --package-path ${GITHUB_WORKSPACE}/build/output \
           ${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg
       shell: bash
-
 
 
 
