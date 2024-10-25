@@ -16,7 +16,7 @@
     <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.standalone"/>
   </choice>
 
-  <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.vst3" version="@wPROJECT_VERSION@">@wPLUGIN_NAME@_VST3.pkg</pkg-ref>
-  <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.standalone" version="@wPROJECT_VERSION@">@wPLUGIN_NAME@_Standalone.pkg</pkg-ref>
+  <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.vst3" version="@wPROJECT_VERSION@">@wPLUGIN_NAME@_VST3_@wPROJECT_VERSION@.pkg</pkg-ref>
+  <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.standalone" version="@wPROJECT_VERSION@">@wPLUGIN_NAME@_Standalone_@wPROJECT_VERSION@.pkg</pkg-ref>
 
 </installer-script>
