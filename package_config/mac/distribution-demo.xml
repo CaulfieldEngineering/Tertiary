@@ -8,11 +8,11 @@
     <line choice="standalone"/>
   </choices-outline>
 
-  <choice id="vst3" title="@wPLUGIN_NAME@ - VST3" description="Install the VST3 demo version of @wPLUGIN_NAME@" start_selected="true">
+  <choice id="vst3" title="@wPLUGIN_NAME@ - VST3 (Demo)" description="Install the VST3 demo version of @wPLUGIN_NAME@" start_selected="true">
     <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.vst3"/>
   </choice>
 
-  <choice id="standalone" title="@wPLUGIN_NAME@ - Standalone" description="Install the standalone demo version of @wPLUGIN_NAME@" start_selected="true">
+  <choice id="standalone" title="@wPLUGIN_NAME@ - Standalone (Demo)" description="Install the standalone demo version of @wPLUGIN_NAME@" start_selected="true">
     <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.standalone"/>
   </choice>
 
