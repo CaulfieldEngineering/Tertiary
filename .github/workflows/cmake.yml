@@ -157,9 +157,10 @@ jobs:
           --deep --strict --timestamp \
           "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3/${REPOSITORY_NAME}.vst3"
         
-        # Clean up
+        # Clean up and restore default keychain
+        security default-keychain -s login.keychain
         security delete-keychain build.keychain
-        rm application_certificate.p12
+        rm installer_certificate.p12  # or application_certificate.p12 for the first signing step
 
 
 
@@ -253,9 +254,10 @@ jobs:
         mv "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_signed.pkg" \
           "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3.pkg"
         
-        # Clean up
+        # Clean up and restore default keychain
+        security default-keychain -s login.keychain
         security delete-keychain build.keychain
-        rm installer_certificate.p12
+        rm installer_certificate.p12  # or application_certificate.p12 for the first signing step
 
 
 
