@@ -26,6 +26,12 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    # CMAKE BUILD #################################################################################################################
+    # =============================================================================================================================
+    # =============================================================================================================================
+    # =============================================================================================================================
+
+
     # Checkout Code
     # ==========================================================================================
     steps:
@@ -45,7 +51,6 @@ jobs:
     #     key: libs
 
 
-
     # Configure Projects
     # ==========================================================================================
     - name: Configure CMake
@@ -61,12 +66,10 @@ jobs:
       shell: bash
 
 
-
     # Compile Executables
     # ==========================================================================================
     - name: Build
       run: cmake --build ${{github.workspace}}/build --config ${{ matrix.build_type }}
-
 
 
     # Gather project variables from config.cmake
@@ -98,6 +101,11 @@ jobs:
         echo "Plugin Code: $wPLUGIN_CODE"
 
 
+    # WIN INSTALLER ###############################################################################################################
+    # =============================================================================================================================
+    # =============================================================================================================================
+    # =============================================================================================================================
+
 
     # Install Inno Setup (Windows Only)
     # ==========================================================================================
@@ -121,12 +129,10 @@ jobs:
 
 
 
-
-
-    # MAC INSTALLER ######################################################################################
-    # ====================================================================================================
-    # ====================================================================================================
-    # ====================================================================================================
+    # MAC INSTALLER ###############################################################################################################
+    # =============================================================================================================================
+    # =============================================================================================================================
+    # =============================================================================================================================
 
     # Sign Payload (Mac) - 2024.10.25.
     # ==========================================================================================
@@ -343,8 +349,6 @@ jobs:
         echo "Package signing process completed successfully."
 
 
-
-
     # Package: Distribution (Mac)
     # ==========================================================================================
     - name: Create Distribution Package (Mac Only)
@@ -367,7 +371,6 @@ jobs:
           --package-path ${GITHUB_WORKSPACE}/build/output \
           ${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg
       shell: bash
-
 
 
     # Notarize the Distribution Package (Mac) - 2024.10.25 CLAUDE
@@ -405,21 +408,24 @@ jobs:
 
         # Submit for notarization and capture the submission ID
         echo "Submitting for notarization..."
-        SUBMISSION_ID=$(xcrun notarytool submit \
-          "$INSTALLER_PATH" \
-          --keychain-profile "notarytool-profile" \
-          --wait | grep "id:" | awk '{print $2}')
+        SUBMISSION_RESPONSE=$(xcrun notarytool submit "$INSTALLER_PATH" --keychain-profile "notarytool-profile")
+        SUBMISSION_ID=$(echo "$SUBMISSION_RESPONSE" | grep "Submission ID:" | awk '{print $NF}')
 
         if [ -z "$SUBMISSION_ID" ]; then
           echo "Failed to get submission ID"
+          echo "Full submission response: $SUBMISSION_RESPONSE"
           exit 1
         fi
 
         echo "Submission ID: $SUBMISSION_ID"
 
+        # Add a timeout counter
+        ATTEMPTS=0
+        MAX_ATTEMPTS=30  # 15 minutes maximum (30 * 30 seconds)
+
         # Wait and check status
-        while true; do
-          STATUS=$(xcrun notarytool info $SUBMISSION_ID --keychain-profile "notarytool-profile" | grep "status:" | awk '{print $2}')
+        while [ $ATTEMPTS -lt $MAX_ATTEMPTS ]; do
+          STATUS=$(xcrun notarytool info "$SUBMISSION_ID" --keychain-profile "notarytool-profile" | grep "status:" | awk '{print $2}')
           echo "Notarization status: $STATUS"
           
           if [ "$STATUS" = "Accepted" ]; then
@@ -427,17 +433,25 @@ jobs:
             break
           elif [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
             echo "Notarization failed with status: $STATUS"
-            xcrun notarytool log $SUBMISSION_ID --keychain-profile "notarytool-profile"
+            xcrun notarytool log "$SUBMISSION_ID" --keychain-profile "notarytool-profile"
             exit 1
           fi
           
-          echo "Waiting for notarization to complete..."
+          ATTEMPTS=$((ATTEMPTS + 1))
+          if [ $ATTEMPTS -eq $MAX_ATTEMPTS ]; then
+            echo "Timeout waiting for notarization after 15 minutes"
+            exit 1
+          fi
+          
+          echo "Waiting for notarization to complete... (Attempt $ATTEMPTS of $MAX_ATTEMPTS)"
           sleep 30
         done
 
         # Show notarization history for debugging
         xcrun notarytool history --keychain-profile "notarytool-profile"
 
+
+        
     # Staple the Notarization Ticket to Distribution Package (Mac) - 2024.10.25 CLAUDE
     # ==========================================================================================
     - name: Staple Notarization Ticket
@@ -473,7 +487,10 @@ jobs:
         echo "Stapling process completed successfully."
 
 
-
+    # BACKUP TO SERVER ############################################################################################################
+    # =============================================================================================================================
+    # =============================================================================================================================
+    # =============================================================================================================================
 
 
     # Print build folder contents
@@ -485,17 +502,12 @@ jobs:
       shell: pwsh
 
 
-
-
-    
-
     # Setup SSH
     # ==========================================================================================
     - name: Setup SSH
       uses: webfactory/ssh-agent@v0.5.3
       with:
         ssh-private-key: ${{ secrets.ID_GITHUB }}
-
 
 
     # Add Host Key (Windows)
@@ -510,7 +522,6 @@ jobs:
         ssh-keyscan -p 7822 CaulfieldEngineering.com | Out-File -Append -Encoding ascii $HOME/.ssh/known_hosts
 
 
-
     # Add Host Key (macOS)
     # ==========================================================================================
     - name: Add Host Key (macOS)
@@ -518,7 +529,6 @@ jobs:
       run: |
         mkdir -p ~/.ssh
         ssh-keyscan -p 7822 CaulfieldEngineering.com >> ~/.ssh/known_hosts
-
 
 
     # Create SSH Configuration
@@ -535,7 +545,6 @@ jobs:
           StrictHostKeyChecking no" > ~/.ssh/config
 
 
-
     # Verify SSH Key and Connection
     # ==========================================================================================
     - name: Verify SSH Key and Connection
@@ -546,7 +555,6 @@ jobs:
         
         echo "Attempting SSH connection:"
         ssh -vvv CaulfieldEngineering.com exit
-
 
 
     # Debug SSH Connection
@@ -626,6 +634,11 @@ jobs:
         # Disable debugging output
         set +x  
 
+
+    # UPDATE WORDPRESS ############################################################################################################
+    # =============================================================================================================================
+    # =============================================================================================================================
+    # =============================================================================================================================
 
 
     # Upload Installers to WordPress Media Library
