@@ -221,55 +221,55 @@ jobs:
     # Sign Individual Packages (Mac) - 2024.10.25 CLAUDE
     # ==========================================================================================
     - name: Sign Individual Packages
-    if: matrix.os == 'macos-latest'
-    env:
-      INSTALLER_CERTIFICATE_BASE64: ${{ secrets.MAC_INSTALLER_CERTIFICATE_BASE64 }}
-      CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
-      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-      REPOSITORY_NAME: ${{ github.event.repository.name }}
-    run: |
-      # Check for required secrets
-      if [ -z "$INSTALLER_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
-        echo "Required secrets for installer signing are not set. Skipping installer signing step."
-        exit 0
-      fi
+      if: matrix.os == 'macos-latest'
+      env:
+        INSTALLER_CERTIFICATE_BASE64: ${{ secrets.MAC_INSTALLER_CERTIFICATE_BASE64 }}
+        CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+      run: |
+        # Check for required secrets
+        if [ -z "$INSTALLER_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
+          echo "Required secrets for installer signing are not set. Skipping installer signing step."
+          exit 0
+        fi
 
-      # Determine the suffix based on the version
-      SUFFIX=""
-      if [[ "${{ matrix.version }}" == "Demo" ]]; then
-        SUFFIX=".D"
-      fi
+        # Determine the suffix based on the version
+        SUFFIX=""
+        if [[ "${{ matrix.version }}" == "Demo" ]]; then
+          SUFFIX=".D"
+        fi
 
-      # Create temporary keychain
-      security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-      security default-keychain -s build.keychain
-      security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-      security set-keychain-settings -t 3600 -u build.keychain
+        # Create temporary keychain
+        security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+        security set-keychain-settings -t 3600 -u build.keychain
 
-      # Import installer certificate to keychain
-      echo $INSTALLER_CERTIFICATE_BASE64 | base64 --decode > installer_certificate.p12
-      security import installer_certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/productsign
-      security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+        # Import installer certificate to keychain
+        echo $INSTALLER_CERTIFICATE_BASE64 | base64 --decode > installer_certificate.p12
+        security import installer_certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/productsign
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
 
-      # Sign the individual packages
-      productsign --sign "Developer ID Installer" \
-        "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg" \
-        "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}_signed.pkg"
-      
-      productsign --sign "Developer ID Installer" \
-        "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg" \
-        "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}_signed.pkg"
+        # Sign the individual packages
+        productsign --sign "Developer ID Installer" \
+          "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg" \
+          "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}_signed.pkg"
+        
+        productsign --sign "Developer ID Installer" \
+          "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg" \
+          "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}_signed.pkg"
 
-      # Replace unsigned with signed packages
-      mv "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}_signed.pkg" \
-        "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg"
-      mv "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}_signed.pkg" \
-        "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg"
-      
-      # Clean up and restore default keychain
-      security default-keychain -s login.keychain
-      security delete-keychain build.keychain
-      rm installer_certificate.p12
+        # Replace unsigned with signed packages
+        mv "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}_signed.pkg" \
+          "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg"
+        mv "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}_signed.pkg" \
+          "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg"
+        
+        # Clean up and restore default keychain
+        security default-keychain -s login.keychain
+        security delete-keychain build.keychain
+        rm installer_certificate.p12
 
 
     # Package: Distribution (Mac)
