@@ -133,7 +133,8 @@ jobs:
     - name: Sign Mac Binaries
       if: matrix.os == 'macos-latest'
       env:
-        APPLICATION_CERTIFICATE_BASE64: ${{ secrets.MAC_APPLICATION_CERTIFICATE_BASE64 }}
+        MAC_APPLICATION_CERTIFICATE_BASE64: ${{ secrets.MAC_APPLICATION_CERTIFICATE_BASE64 }}
+        MAC_DEVELOPER_ID_APPLICATION_STRING: ${{ secrets.MAC_DEVELOPER_ID_APPLICATION_STRING }}
         CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
         KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         REPOSITORY_NAME: ${{ github.event.repository.name }}
@@ -148,23 +149,13 @@ jobs:
 
         echo "Starting the signing process for macOS binaries..."
 
-        # Determine the suffix based on the version
-        # ===============================================
-        SUFFIX=""
-        if [[ "${{ matrix.version }}" == "Demo" ]]; then
-          SUFFIX=".D"
-          echo "Demo version detected. Suffix set to: $SUFFIX"
-        else
-          echo "Full version detected. No suffix applied."
-        fi
-    
         # 1. Sign VST3
         # ===============================================
         VST3_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3/${REPOSITORY_NAME}.vst3"
-        echo "VST3 path set to: $VST3_PATH"
-        if [ -d "$VST3_PATH" ]; then
+        
+        if [ -f "$VST3_PATH" ]; then
           echo "VST3 binary found at $VST3_PATH. Proceeding to sign."
-          codesign --force -s "$DEVELOPER_ID_APPLICATION" -v "$VST3_PATH" --deep --strict --options=runtime --timestamp
+          codesign --force -s "$MAC_DEVELOPER_ID_APPLICATION_STRING" -v "$VST3_PATH" --deep --strict --options=runtime --timestamp
           if [ $? -eq 0 ]; then
             echo "PASS: VST3 binary successfully signed."
           else
@@ -177,18 +168,18 @@ jobs:
           ls -la "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3"
           exit 1
         fi
-    
+
         # 2. Sign Standalone Application
         # ===============================================
         APP_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone/${REPOSITORY_NAME}.app"
-        echo "Standalone application path set to: $APP_PATH"
+        
         if [ -d "$APP_PATH" ]; then
           echo "Standalone application found at $APP_PATH. Proceeding to sign."
-          codesign --force -s "$DEVELOPER_ID_APPLICATION" -v "$APP_PATH" --deep --strict --options=runtime --timestamp
+          codesign --force -s "$MAC_DEVELOPER_ID_APPLICATION_STRING" -v "$APP_PATH" --deep --strict --options=runtime --timestamp
           if [ $? -eq 0 ]; then
             echo "PASS: Standalone application successfully signed."
           else
-            echo "FAIL: Failed to sign the Standalone application."
+            echo "FAIL: Failed to sign the standalone application."
             exit 1
           fi
         else
@@ -265,7 +256,7 @@ jobs:
           --identifier com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.vst3 \
           --version $wPROJECT_VERSION \
           --install-location /Library/Audio/Plug-Ins/VST3 \
-          ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg"
+          ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg
 
           # ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3.pkg
           
