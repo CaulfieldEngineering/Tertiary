@@ -216,6 +216,7 @@ jobs:
       env:
         REPOSITORY_NAME: ${{ github.event.repository.name }}
       run: |
+        # Create output directory
         mkdir -p ${GITHUB_WORKSPACE}/build/output
     
         # Format COMPANY_NAME by removing spaces
@@ -227,17 +228,40 @@ jobs:
           SUFFIX=".D"
         fi
 
-        echo "Using formatted company name: $FORMATTED_COMPANY_NAME"
-        echo "Using version: $VERSION"
+        # Define paths
+        APP_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone/${REPOSITORY_NAME}.app"
+        PKG_PATH="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg"
+
+        echo "Checking for standalone app before packaging..."
+        if [ ! -d "$APP_PATH" ]; then
+          echo "ERROR: Standalone app not found at: $APP_PATH"
+          echo "Contents of $(dirname "$APP_PATH"):"
+          ls -la "$(dirname "$APP_PATH")"
+          exit 1
+        fi
+
+        echo "✓ Found standalone app at: $APP_PATH"
+        echo "Creating standalone package..."
 
         pkgbuild \
-          --root "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone" \
-          --identifier com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.app \
-          --version $wPROJECT_VERSION \
-          --install-location /Applications/${REPOSITORY_NAME} \
-          ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg
+          --root "$(dirname "$APP_PATH")" \
+          --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.app" \
+          --version "$wPROJECT_VERSION" \
+          --install-location "/Applications/${REPOSITORY_NAME}" \
+          "$PKG_PATH"
 
-          # ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone.pkg
+        # Verify package was created and is not empty
+        if [ ! -f "$PKG_PATH" ]; then
+          echo "ERROR: Package was not created at: $PKG_PATH"
+          exit 1
+        fi
+
+        if [ ! -s "$PKG_PATH" ]; then
+          echo "ERROR: Created package is empty: $PKG_PATH"
+          exit 1
+        fi
+
+        echo "✓ Successfully created standalone package at: $PKG_PATH"
         
 
     # Package: VST3 (Mac)
@@ -247,6 +271,7 @@ jobs:
       env:
         REPOSITORY_NAME: ${{ github.event.repository.name }}
       run: |
+        # Create output directory
         mkdir -p ${GITHUB_WORKSPACE}/build/output
 
         # Format COMPANY_NAME by removing spaces
@@ -258,17 +283,40 @@ jobs:
           SUFFIX=".D"
         fi
 
-        echo "Using formatted company name: $FORMATTED_COMPANY_NAME"
-        echo "Using version: $VERSION"
+        # Define paths
+        VST3_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3/${REPOSITORY_NAME}.vst3"
+        PKG_PATH="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg"
+
+        echo "Checking for VST3 bundle before packaging..."
+        if [ ! -d "$VST3_PATH" ]; then
+          echo "ERROR: VST3 bundle not found at: $VST3_PATH"
+          echo "Contents of $(dirname "$VST3_PATH"):"
+          ls -la "$(dirname "$VST3_PATH")"
+          exit 1
+        fi
+
+        echo "✓ Found VST3 bundle at: $VST3_PATH"
+        echo "Creating VST3 package..."
 
         pkgbuild \
-          --root "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3" \
-          --identifier com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.vst3 \
-          --version $wPROJECT_VERSION \
-          --install-location /Library/Audio/Plug-Ins/VST3 \
-          ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg
+          --root "$(dirname "$VST3_PATH")" \
+          --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.vst3" \
+          --version "$wPROJECT_VERSION" \
+          --install-location "/Library/Audio/Plug-Ins/VST3" \
+          "$PKG_PATH"
 
-          # ${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3.pkg
+        # Verify package was created and is not empty
+        if [ ! -f "$PKG_PATH" ]; then
+          echo "ERROR: Package was not created at: $PKG_PATH"
+          exit 1
+        fi
+
+        if [ ! -s "$PKG_PATH" ]; then
+          echo "ERROR: Created package is empty: $PKG_PATH"
+          exit 1
+        fi
+
+        echo "✓ Successfully created VST3 package at: $PKG_PATH"
           
 
     # Sign Individual Packages (Mac) - 2024.10.25 CLAUDE
