@@ -120,6 +120,7 @@ jobs:
       shell: pwsh
 
 
+
     # Sign Binaries (Mac) - 2024.10.25
     # ==========================================================================================
     - name: Sign Mac Binaries
@@ -136,6 +137,12 @@ jobs:
           exit 0
         fi
 
+        # Determine the suffix based on the version
+        SUFFIX=""
+        if [[ "${{ matrix.version }}" == "Demo" ]]; then
+          SUFFIX=".D"
+        fi
+
         # Create temporary keychain
         security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
         security default-keychain -s build.keychain
@@ -150,18 +157,17 @@ jobs:
         # Sign the .app bundle
         codesign --force --options runtime --sign "Developer ID Application" \
           --deep --strict --timestamp \
-          "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone/${REPOSITORY_NAME}.app"
+          "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone/${REPOSITORY_NAME}${SUFFIX}.app"
 
         # Sign the .vst3 bundle
         codesign --force --options runtime --sign "Developer ID Application" \
           --deep --strict --timestamp \
-          "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3/${REPOSITORY_NAME}.vst3"
+          "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3/${REPOSITORY_NAME}${SUFFIX}.vst3"
         
         # Clean up and restore default keychain
         security default-keychain -s login.keychain
         security delete-keychain build.keychain
-        rm installer_certificate.p12  # or application_certificate.p12 for the first signing step
-
+        rm application_certificate.p12
 
 
     # Package: Standalone (Mac)
@@ -212,53 +218,58 @@ jobs:
 
 
           
-    # Sign Individual Packages (Mac)
+    # Sign Individual Packages (Mac) - 2024.10.25 CLAUDE
     # ==========================================================================================
     - name: Sign Individual Packages
-      if: matrix.os == 'macos-latest'
-      env:
-        INSTALLER_CERTIFICATE_BASE64: ${{ secrets.MAC_INSTALLER_CERTIFICATE_BASE64 }}
-        CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
-        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
-      run: |
-        # Check for required secrets
-        if [ -z "$INSTALLER_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
-          echo "Required secrets for installer signing are not set. Skipping installer signing step."
-          exit 0
-        fi
+    if: matrix.os == 'macos-latest'
+    env:
+      INSTALLER_CERTIFICATE_BASE64: ${{ secrets.MAC_INSTALLER_CERTIFICATE_BASE64 }}
+      CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      REPOSITORY_NAME: ${{ github.event.repository.name }}
+    run: |
+      # Check for required secrets
+      if [ -z "$INSTALLER_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
+        echo "Required secrets for installer signing are not set. Skipping installer signing step."
+        exit 0
+      fi
 
-        # Create temporary keychain
-        security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-        security default-keychain -s build.keychain
-        security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-        security set-keychain-settings -t 3600 -u build.keychain
+      # Determine the suffix based on the version
+      SUFFIX=""
+      if [[ "${{ matrix.version }}" == "Demo" ]]; then
+        SUFFIX=".D"
+      fi
 
-        # Import installer certificate to keychain
-        echo $INSTALLER_CERTIFICATE_BASE64 | base64 --decode > installer_certificate.p12
-        security import installer_certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/productsign
-        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+      # Create temporary keychain
+      security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+      security default-keychain -s build.keychain
+      security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+      security set-keychain-settings -t 3600 -u build.keychain
 
-        # Sign the individual packages
-        productsign --sign "Developer ID Installer" \
-          "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone.pkg" \
-          "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_signed.pkg"
-        
-        productsign --sign "Developer ID Installer" \
-          "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3.pkg" \
-          "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_signed.pkg"
+      # Import installer certificate to keychain
+      echo $INSTALLER_CERTIFICATE_BASE64 | base64 --decode > installer_certificate.p12
+      security import installer_certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/productsign
+      security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
 
-        # Replace unsigned with signed packages
-        mv "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_signed.pkg" \
-          "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone.pkg"
-        mv "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_signed.pkg" \
-          "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3.pkg"
-        
-        # Clean up and restore default keychain
-        security default-keychain -s login.keychain
-        security delete-keychain build.keychain
-        rm installer_certificate.p12  # or application_certificate.p12 for the first signing step
+      # Sign the individual packages
+      productsign --sign "Developer ID Installer" \
+        "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg" \
+        "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}_signed.pkg"
+      
+      productsign --sign "Developer ID Installer" \
+        "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg" \
+        "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}_signed.pkg"
 
+      # Replace unsigned with signed packages
+      mv "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}_signed.pkg" \
+        "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg"
+      mv "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}_signed.pkg" \
+        "${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg"
+      
+      # Clean up and restore default keychain
+      security default-keychain -s login.keychain
+      security delete-keychain build.keychain
+      rm installer_certificate.p12
 
 
     # Package: Distribution (Mac)
@@ -286,10 +297,63 @@ jobs:
 
 
 
-    # Notarize the Distribution Package (Mac)
+
+    # Notarize the Distribution Package (Mac) - 2024.10.25 CLAUDE
     # ==========================================================================================
     - name: Notarize Mac Distribution Package
       if: matrix.os == 'macos-latest'
+      env:
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+      run: |
+        # Check for required secrets
+        if [ -z "$APPLE_ID" ] || [ -z "$APPLE_TEAM_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
+          echo "Required secrets for notarization are not set. Skipping notarization step."
+          exit 0
+        fi
+
+        # Create temporary keychain for notarization
+        xcrun notarytool store-credentials "notarytool-profile" \
+          --apple-id "$APPLE_ID" \
+          --team-id "$APPLE_TEAM_ID" \
+          --password "$APPLE_APP_SPECIFIC_PASSWORD"
+
+        # Submit for notarization and capture the submission ID
+        echo "Submitting for notarization..."
+        SUBMISSION_ID=$(xcrun notarytool submit \
+          "${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${{ matrix.version == 'Demo' && '.D' || '' }}.pkg" \
+          --keychain-profile "notarytool-profile" \
+          --wait | grep "id:" | awk '{print $2}')
+
+        if [ -z "$SUBMISSION_ID" ]; then
+          echo "Failed to get submission ID"
+          exit 1
+        fi
+
+        echo "Submission ID: $SUBMISSION_ID"
+
+        # Wait and check status
+        while true; do
+          STATUS=$(xcrun notarytool info $SUBMISSION_ID --keychain-profile "notarytool-profile" | grep "status:" | awk '{print $2}')
+          echo "Notarization status: $STATUS"
+          
+          if [ "$STATUS" = "Accepted" ]; then
+            echo "Notarization successful!"
+            break
+          elif [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
+            echo "Notarization failed with status: $STATUS"
+            xcrun notarytool log $SUBMISSION_ID --keychain-profile "notarytool-profile"
+            exit 1
+          fi
+          
+          echo "Waiting for notarization to complete..."
+          sleep 30
+        done
+
+        # Show notarization history for debugging
+        xcrun notarytool history --keychain-profile "notarytool-profile"
       env:
         APPLE_ID: ${{ secrets.APPLE_ID }}
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -320,7 +384,7 @@ jobs:
 
 
 
-    # Staple the Notarization Ticket to Distribution Package (Mac)
+    # Staple the Notarization Ticket to Distribution Package (Mac) - 2024.10.25 CLAUDE
     # ==========================================================================================
     - name: Staple Notarization Ticket
       if: matrix.os == 'macos-latest'
