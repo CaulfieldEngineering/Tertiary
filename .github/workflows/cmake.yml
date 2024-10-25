@@ -409,7 +409,7 @@ jobs:
         # Submit for notarization and capture the submission ID
         echo "Submitting for notarization..."
         SUBMISSION_RESPONSE=$(xcrun notarytool submit "$INSTALLER_PATH" --keychain-profile "notarytool-profile")
-        SUBMISSION_ID=$(echo "$SUBMISSION_RESPONSE" | grep "Submission ID:" | awk '{print $NF}')
+        SUBMISSION_ID=$(echo "$SUBMISSION_RESPONSE" | grep "id:" | head -n 1 | awk '{print $2}')
 
         if [ -z "$SUBMISSION_ID" ]; then
           echo "Failed to get submission ID"
@@ -417,7 +417,7 @@ jobs:
           exit 1
         fi
 
-        echo "Submission ID: $SUBMISSION_ID"
+        echo "Captured Submission ID: $SUBMISSION_ID"
 
         # Add a timeout counter
         ATTEMPTS=0
@@ -425,8 +425,12 @@ jobs:
 
         # Wait and check status
         while [ $ATTEMPTS -lt $MAX_ATTEMPTS ]; do
-          STATUS=$(xcrun notarytool info "$SUBMISSION_ID" --keychain-profile "notarytool-profile" | grep "status:" | awk '{print $2}')
-          echo "Notarization status: $STATUS"
+          echo "Checking status for submission ID: $SUBMISSION_ID"
+          STATUS_RESPONSE=$(xcrun notarytool info "$SUBMISSION_ID" --keychain-profile "notarytool-profile")
+          echo "Full status response: $STATUS_RESPONSE"
+          
+          STATUS=$(echo "$STATUS_RESPONSE" | grep "status:" | awk '{print $2}')
+          echo "Parsed status: $STATUS"
           
           if [ "$STATUS" = "Accepted" ]; then
             echo "Notarization successful!"
@@ -449,8 +453,6 @@ jobs:
 
         # Show notarization history for debugging
         xcrun notarytool history --keychain-profile "notarytool-profile"
-
-
         
     # Staple the Notarization Ticket to Distribution Package (Mac) - 2024.10.25 CLAUDE
     # ==========================================================================================
