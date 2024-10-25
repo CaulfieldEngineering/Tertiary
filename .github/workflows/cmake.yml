@@ -372,11 +372,105 @@ jobs:
 
     # Notarize the Distribution Package (Mac) - 2024.10.25 CLAUDE
     # ==========================================================================================
-  
+    - name: Notarize Mac Distribution Package
+      if: matrix.os == 'macos-latest'
+      env:
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+      run: |
+        # Check for required secrets
+        if [ -z "$APPLE_ID" ] || [ -z "$APPLE_TEAM_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
+          echo "Required secrets for notarization are not set. Skipping notarization step."
+          exit 0
+        fi
+
+        echo "Starting the notarization process..."
+
+        # Determine the suffix based on the version
+        SUFFIX=""
+        if [[ "${{ matrix.version }}" == "Demo" ]]; then
+          SUFFIX=".D"
+        fi
+
+        # Store the installer path
+        INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
+
+        # Create temporary keychain for notarization
+        xcrun notarytool store-credentials "notarytool-profile" \
+          --apple-id "$APPLE_ID" \
+          --team-id "$APPLE_TEAM_ID" \
+          --password "$APPLE_APP_SPECIFIC_PASSWORD"
+
+        # Submit for notarization and capture the submission ID
+        echo "Submitting for notarization..."
+        SUBMISSION_ID=$(xcrun notarytool submit \
+          "$INSTALLER_PATH" \
+          --keychain-profile "notarytool-profile" \
+          --wait | grep "id:" | awk '{print $2}')
+
+        if [ -z "$SUBMISSION_ID" ]; then
+          echo "Failed to get submission ID"
+          exit 1
+        fi
+
+        echo "Submission ID: $SUBMISSION_ID"
+
+        # Wait and check status
+        while true; do
+          STATUS=$(xcrun notarytool info $SUBMISSION_ID --keychain-profile "notarytool-profile" | grep "status:" | awk '{print $2}')
+          echo "Notarization status: $STATUS"
+          
+          if [ "$STATUS" = "Accepted" ]; then
+            echo "Notarization successful!"
+            break
+          elif [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
+            echo "Notarization failed with status: $STATUS"
+            xcrun notarytool log $SUBMISSION_ID --keychain-profile "notarytool-profile"
+            exit 1
+          fi
+          
+          echo "Waiting for notarization to complete..."
+          sleep 30
+        done
+
+        # Show notarization history for debugging
+        xcrun notarytool history --keychain-profile "notarytool-profile"
 
     # Staple the Notarization Ticket to Distribution Package (Mac) - 2024.10.25 CLAUDE
     # ==========================================================================================
-
+    - name: Staple Notarization Ticket
+      if: matrix.os == 'macos-latest'
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}  # Used to check if notarization was run
+      run: |
+        # Check if notarization was meant to run
+        if [ -z "$APPLE_ID" ]; then
+          echo "Notarization credentials not set. Skipping stapling step."
+          exit 0
+        fi
+    
+        # Determine the suffix based on the version
+        SUFFIX=""
+        if [[ "${{ matrix.version }}" == "Demo" ]]; then
+          SUFFIX=".D"
+        fi
+    
+        # Store the installer path
+        INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
+    
+        echo "Stapling notarization ticket to installer..."
+        xcrun stapler staple "$INSTALLER_PATH"
+    
+        echo "Validating stapled installer..."
+        xcrun stapler validate "$INSTALLER_PATH"
+    
+        # Additional verification
+        spctl --assess --type install "$INSTALLER_PATH"
+    
+        echo "Stapling process completed successfully."
 
 
 
