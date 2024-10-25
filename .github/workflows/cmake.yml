@@ -133,16 +133,16 @@ jobs:
     - name: Sign Mac Binaries
       if: matrix.os == 'macos-latest'
       env:
-        MAC_APPLICATION_CERTIFICATE_BASE64: ${{ secrets.MAC_APPLICATION_CERTIFICATE_BASE64 }}
+        #MAC_APPLICATION_CERTIFICATE_BASE64: ${{ secrets.MAC_APPLICATION_CERTIFICATE_BASE64 }}
         MAC_DEVELOPER_ID_APPLICATION_STRING: ${{ secrets.MAC_DEVELOPER_ID_APPLICATION_STRING }}
-        CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
-        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        #CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+        #KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         REPOSITORY_NAME: ${{ github.event.repository.name }}
       run: |
 
         # Check for required secrets
         # ===============================================
-        if [ -z "$APPLICATION_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
+        if [ -z "$MAC_DEVELOPER_ID_APPLICATION_STRING" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
           echo "Required secrets for application signing are not set. Skipping application signing step."
           exit 0
         fi
