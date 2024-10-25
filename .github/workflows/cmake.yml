@@ -352,36 +352,6 @@ jobs:
           sleep 30
         done
 
-        # Show notarization history for debugging
-        xcrun notarytool history --keychain-profile "notarytool-profile"
-      env:
-        APPLE_ID: ${{ secrets.APPLE_ID }}
-        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
-      run: |
-        # Check for required secrets
-        if [ -z "$APPLE_ID" ] || [ -z "$APPLE_TEAM_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
-          echo "Required secrets for notarization are not set. Skipping notarization step."
-          exit 0
-        fi
-
-        # Create temporary keychain for notarization
-        xcrun notarytool store-credentials "notarytool-profile" \
-          --apple-id "$APPLE_ID" \
-          --team-id "$APPLE_TEAM_ID" \
-          --password "$APPLE_APP_SPECIFIC_PASSWORD"
-
-        # Submit for notarization and wait for completion
-        echo "Submitting for notarization..."
-        xcrun notarytool submit \
-          "${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${{ matrix.version == 'Demo' && '.D' || '' }}.pkg" \
-          --keychain-profile "notarytool-profile" \
-          --wait
-
-        # Check notarization history
-        xcrun notarytool history --keychain-profile "notarytool-profile"
-
 
 
     # Staple the Notarization Ticket to Distribution Package (Mac) - 2024.10.25 CLAUDE
