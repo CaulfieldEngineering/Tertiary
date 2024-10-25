@@ -133,40 +133,60 @@ jobs:
     - name: Sign Mac Binaries
       if: matrix.os == 'macos-latest'
       env:
-        MAC_DEVELOPER_ID_APPLICATION_STRING: ${{ secrets.MAC_DEVELOPER_ID_APPLICATION_STRING }}
+        APPLICATION_CERTIFICATE_BASE64: ${{ secrets.MAC_APPLICATION_CERTIFICATE_BASE64 }}
+        CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         REPOSITORY_NAME: ${{ github.event.repository.name }}
       run: |
         # Check for required secrets
-        # ===============================================
-        if [ -z "$MAC_DEVELOPER_ID_APPLICATION_STRING" ]; then
+        if [ -z "$APPLICATION_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
           echo "Required secrets for application signing are not set. Skipping application signing step."
           exit 0
         fi
 
         echo "Starting the signing process for macOS binaries..."
 
-        # 1. Sign VST3
-        # ===============================================
+        # Create temporary keychain
+        # ====================================
+        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+        # Import certificate to keychain
+        # ====================================
+        echo -n "$APPLICATION_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+        security import "$RUNNER_TEMP/cert.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        security list-keychains -d user -s "$KEYCHAIN_PATH"
+        security default-keychain -s "$KEYCHAIN_PATH"
+        
+        # Add certificate to partition list
+        # ====================================
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
         echo "Signing VST3 bundle..."
+        # ====================================
         codesign --force \
-          -s "$MAC_DEVELOPER_ID_APPLICATION_STRING" \
-          -v "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3/${REPOSITORY_NAME}.vst3" \
-          --deep --strict --options=runtime --timestamp
+          --sign "Developer ID Application" \
+          --verbose \
+          --deep --strict --options=runtime --timestamp \
+          "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3/${REPOSITORY_NAME}.vst3"
 
-        # 2. Sign Standalone Application
-        # ===============================================
         echo "Signing standalone application..."
+        # ====================================
         codesign --force \
-          -s "$MAC_DEVELOPER_ID_APPLICATION_STRING" \
-          -v "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone/${REPOSITORY_NAME}.app" \
-          --deep --strict --options=runtime --timestamp
+          --sign "Developer ID Application" \
+          --verbose \
+          --deep --strict --options=runtime --timestamp \
+          "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone/${REPOSITORY_NAME}.app"
 
-        echo "Signing process completed."
+        # Clean up
+        # ====================================
+        security default-keychain -s login.keychain
+        security delete-keychain "$KEYCHAIN_PATH"
+        rm "$RUNNER_TEMP/cert.p12"
 
-
-
-
-
+        echo "Signing process completed successfully."
 
 
 
