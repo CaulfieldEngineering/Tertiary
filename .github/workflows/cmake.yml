@@ -150,17 +150,17 @@ jobs:
         # ===============================================
         VST3_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3/${REPOSITORY_NAME}.vst3"
         
-        if [ -f "$VST3_PATH" ]; then
-          echo "VST3 binary found at $VST3_PATH. Proceeding to sign."
+        if [ -d "$VST3_PATH" ]; then
+          echo "VST3 binary bundle found at $VST3_PATH. Proceeding to sign."
           codesign --force -s "$MAC_DEVELOPER_ID_APPLICATION_STRING" -v "$VST3_PATH" --deep --strict --options=runtime --timestamp
           if [ $? -eq 0 ]; then
-            echo "PASS: VST3 binary successfully signed."
+            echo "PASS: VST3 binary bundle successfully signed."
           else
-            echo "FAIL: Failed to sign the VST3 binary."
+            echo "FAIL: Failed to sign the VST3 binary bundle."
             exit 1
           fi
         else
-          echo "ERROR: VST3 binary not found at $VST3_PATH."
+          echo "ERROR: VST3 bundle not found at $VST3_PATH."
           echo "Listing contents of the Release/VST3 directory for debugging:"
           ls -la "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3"
           exit 1
@@ -169,18 +169,18 @@ jobs:
         # 2. Sign Standalone Application
         # ===============================================
         APP_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone/${REPOSITORY_NAME}.app"
-        
+
         if [ -d "$APP_PATH" ]; then
-          echo "Standalone application found at $APP_PATH. Proceeding to sign."
+          echo "Standalone application bundle found at $APP_PATH. Proceeding to sign."
           codesign --force -s "$MAC_DEVELOPER_ID_APPLICATION_STRING" -v "$APP_PATH" --deep --strict --options=runtime --timestamp
           if [ $? -eq 0 ]; then
-            echo "PASS: Standalone application successfully signed."
+            echo "PASS: Standalone application bundle successfully signed."
           else
-            echo "FAIL: Failed to sign the standalone application."
+            echo "FAIL: Failed to sign the standalone application bundle."
             exit 1
           fi
         else
-          echo "ERROR: Standalone application not found at $APP_PATH."
+          echo "ERROR: Standalone application bundle not found at $APP_PATH."
           echo "Listing contents of the Release/Standalone directory for debugging:"
           ls -la "${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone"
           exit 1
