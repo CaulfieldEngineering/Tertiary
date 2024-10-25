@@ -57,10 +57,19 @@ configure_file(
 
 # Configure the macOS Distribution package file
 # =====================================================================
-message(STATUS "CMakeLists.txt: Configuring macOS Distribution XML.")
+message(STATUS "CMakeLists.txt: Configuring macOS Distribution XML (Full).")
 configure_file(
-  ${CMAKE_SOURCE_DIR}/package_config/mac/distribution.xml
-  ${CMAKE_BINARY_DIR}/distribution.xml
+  ${CMAKE_SOURCE_DIR}/package_config/mac/distribution-full.xml
+  ${CMAKE_BINARY_DIR}/distribution-full.xml
+  @ONLY
+)
+
+# Configure the macOS Distribution package file
+# =====================================================================
+message(STATUS "CMakeLists.txt: Configuring macOS Distribution XML (Demo).")
+configure_file(
+  ${CMAKE_SOURCE_DIR}/package_config/mac/distribution-demo.xml
+  ${CMAKE_BINARY_DIR}/distribution-demo.xml
   @ONLY
 )
 
