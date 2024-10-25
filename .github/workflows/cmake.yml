@@ -405,24 +405,51 @@ jobs:
         REPOSITORY_NAME: ${{ github.event.repository.name }}
       run: |
         mkdir -p ${GITHUB_WORKSPACE}/build/output
-        cp ${{github.workspace}}/build/distribution.xml ${GITHUB_WORKSPACE}/build/output/distribution.xml
-        echo "File 'distribution.xml' copied to build/output folder."
 
-        # Determine the suffix & distribution file based on the version
+        # Determine the suffix and distribution file based on the version
         SUFFIX=""
-        DIST_FILE = ${GITHUB_WORKSPACE}/build/output/distribution-full.xml
-
+        DIST_FILE="distribution-full.xml"
+        
         if [[ "${{ matrix.version }}" == "Demo" ]]; then
           SUFFIX=".D"
-          DIST_FILE = ${GITHUB_WORKSPACE}/build/output/distribution-demo.xml
+          DIST_FILE="distribution-demo.xml"
         fi
 
-        # Determine the distribution file based on the version
-      
+        # Copy the appropriate distribution file
+        echo "Using distribution file: $DIST_FILE"
+        if [ ! -f "${{github.workspace}}/build/$DIST_FILE" ]; then
+          echo "ERROR: Distribution file not found: $DIST_FILE"
+          echo "Contents of build directory:"
+          ls -la ${{github.workspace}}/build/
+          exit 1
+        fi
+
+        # Copy and verify
+        cp "${{github.workspace}}/build/$DIST_FILE" "${GITHUB_WORKSPACE}/build/output/distribution.xml"
+        if [ ! -f "${GITHUB_WORKSPACE}/build/output/distribution.xml" ]; then
+          echo "ERROR: Failed to copy distribution file"
+          exit 1
+        fi
+        echo "✓ Distribution file copied successfully"
+
+        # Verify package path contains our packages
+        echo "Checking for component packages..."
+        ls -la ${GITHUB_WORKSPACE}/build/output/*.pkg
+        
+        echo "Creating distribution package..."
         productbuild \
-          --distribution ${SUFFIX} \
-          --package-path ${GITHUB_WORKSPACE}/build/output \
-          ${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg
+          --distribution "${GITHUB_WORKSPACE}/build/output/distribution.xml" \
+          --package-path "${GITHUB_WORKSPACE}/build/output" \
+          "${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
+
+        # Verify the final package was created
+        if [ ! -f "${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg" ]; then
+          echo "ERROR: Failed to create distribution package"
+          exit 1
+        fi
+        
+        echo "✓ Distribution package created successfully"
+        
       shell: bash
 
 
