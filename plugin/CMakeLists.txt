@@ -12,14 +12,15 @@ set(INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/source")
 # Adds a plugin target (that's basically what the Projucer does).
 # =====================================================================
 juce_add_plugin( ${PROJECT_NAME}
-    COMPANY_NAME ${wCOMPANY_NAME}
+    COMPANY_NAME "${wCOMPANY_NAME}"
+    BUNDLE_ID "com.${wCOMPANY_ID}.${wPLUGIN_NAME}"  # Valid bundle identifier without spaces
     IS_SYNTH ${wIS_SYNTH}
     NEEDS_MIDI_INPUT ${wNEEDS_MIDI_INPUT}
     NEEDS_MIDI_OUTPUT ${wNEEDS_MIDI_OUTPUT}
     PLUGIN_MANUFACTURER_CODE ${wPLUGIN_MANUFACTURER_CODE}
     PLUGIN_CODE ${wPLUGIN_CODE}
     FORMATS ${wFORMATS}
-    PRODUCT_NAME ${wPLUGIN_NAME}
+    PRODUCT_NAME "${wPLUGIN_NAME}"
 )
 
 # Pre-Processor Directive for Demo vs. Full Version
