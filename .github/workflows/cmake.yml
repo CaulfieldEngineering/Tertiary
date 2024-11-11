@@ -210,17 +210,6 @@ jobs:
         echo "Signing process completed successfully."
 
 
-
-
-
-
-
-
-
-
-
-
-
     # Package: Standalone (Mac)
     # ==========================================================================================
     - name: Create Standalone Package (Mac Only)
@@ -286,17 +275,6 @@ jobs:
           exit 1
         fi
 
-          
-
-
-
-
-
-
-
-
-
-
 
     # Package: VST3 (Mac)
     # ==========================================================================================
@@ -307,9 +285,6 @@ jobs:
       run: |
         # Create output directory
         mkdir -p ${GITHUB_WORKSPACE}/build/output
-
-        # Format COMPANY_NAME by removing spaces
-        FORMATTED_COMPANY_NAME=$(echo "$wCOMPANY_NAME" | tr -d ' ')
 
         # Determine the suffix based on the version
         SUFFIX=""
@@ -334,7 +309,7 @@ jobs:
 
         pkgbuild \
           --root "$(dirname "$VST3_PATH")" \
-          --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.vst3" \
+          --identifier "com.${wCOMPANY_ID}.${REPOSITORY_NAME}.vst3" \
           --version "$wPROJECT_VERSION" \
           --install-location "/Library/Audio/Plug-Ins/VST3" \
           "$PKG_PATH"
@@ -351,8 +326,22 @@ jobs:
         fi
 
         echo "✓ Successfully created VST3 package at: $PKG_PATH"
-          
 
+        # Inspect the package metadata
+        echo "Inspecting package metadata..."
+        pkgutil --expand "$PKG_PATH" "${PKG_PATH%.pkg}_expanded"
+        
+        # Extract PackageInfo file to read the details
+        PACKAGE_INFO="${PKG_PATH%.pkg}_expanded/PackageInfo"
+        if [ -f "$PACKAGE_INFO" ]; then
+          echo "PackageInfo contents:"
+          cat "$PACKAGE_INFO" | grep -E 'identifier=|version=|install-location=|CFBundleIdentifier|CFBundleVersion|CFBundleName'
+        else
+          echo "ERROR: PackageInfo not found in the expanded package"
+          exit 1
+        fi
+
+          
     # Sign Individual Packages (Mac) - 2024.10.25 CLAUDE
     # ==========================================================================================
     - name: Sign Individual Packages
@@ -438,6 +427,7 @@ jobs:
       env:
         REPOSITORY_NAME: ${{ github.event.repository.name }}
       run: |
+        # Create output directory if it doesn't exist
         mkdir -p ${GITHUB_WORKSPACE}/build/output
 
         # Determine the suffix and distribution file based on the version
@@ -451,15 +441,15 @@ jobs:
 
         # Copy the appropriate distribution file
         echo "Using distribution file: $DIST_FILE"
-        if [ ! -f "${{github.workspace}}/build/$DIST_FILE" ]; then
+        if [ ! -f "${GITHUB_WORKSPACE}/build/$DIST_FILE" ]; then
           echo "ERROR: Distribution file not found: $DIST_FILE"
           echo "Contents of build directory:"
-          ls -la ${{github.workspace}}/build/
+          ls -la ${GITHUB_WORKSPACE}/build/
           exit 1
         fi
 
         # Copy and verify
-        cp "${{github.workspace}}/build/$DIST_FILE" "${GITHUB_WORKSPACE}/build/output/distribution.xml"
+        cp "${GITHUB_WORKSPACE}/build/$DIST_FILE" "${GITHUB_WORKSPACE}/build/output/distribution.xml"
         if [ ! -f "${GITHUB_WORKSPACE}/build/output/distribution.xml" ]; then
           echo "ERROR: Failed to copy distribution file"
           exit 1
@@ -474,16 +464,38 @@ jobs:
         productbuild \
           --distribution "${GITHUB_WORKSPACE}/build/output/distribution.xml" \
           --package-path "${GITHUB_WORKSPACE}/build/output" \
-          "${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
+          "${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
 
-        # Verify the final package was created
-        if [ ! -f "${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg" ]; then
+        # Verify the final package was created and is not empty
+        FINAL_PKG="${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
+        if [ ! -f "$FINAL_PKG" ]; then
           echo "ERROR: Failed to create distribution package"
           exit 1
         fi
+
+        if [ ! -s "$FINAL_PKG" ]; then
+          echo "ERROR: Created distribution package is empty: $FINAL_PKG"
+          exit 1
+        fi
         
-        echo "✓ Distribution package created successfully"
+        echo "✓ Distribution package created successfully at: $FINAL_PKG"
+
+        # Inspect the final package for metadata
+        echo "Inspecting final distribution package metadata..."
+        pkgutil --expand "$FINAL_PKG" "${FINAL_PKG%.pkg}_expanded"
         
+        # Extract PackageInfo file to verify identifiers and details
+        PACKAGE_INFO="${FINAL_PKG%.pkg}_expanded/PackageInfo"
+        if [ -f "$PACKAGE_INFO" ]; then
+          echo "PackageInfo contents:"
+          cat "$PACKAGE_INFO" | grep -E 'identifier=|version=|install-location=|CFBundleIdentifier|CFBundleVersion|CFBundleName'
+        else
+          echo "ERROR: PackageInfo not found in the expanded distribution package"
+          exit 1
+        fi
+        
+        # Clean up expanded package to save space
+        rm -rf "${FINAL_PKG%.pkg}_expanded"
       shell: bash
 
 
