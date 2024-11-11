@@ -22,6 +22,19 @@ juce_add_plugin( ${PROJECT_NAME}
     PRODUCT_NAME ${wPLUGIN_NAME}
 )
 
+# Configure the macOS Info.plist File
+# =====================================================================
+message(STATUS "CMakeLists.txt: Configuring macOS Info.plist file.")
+configure_file(
+  ${CMAKE_SOURCE_DIR}/package_config/mac/Info.plist.in
+  ${CMAKE_BINARY_DIR}/Info.plist
+  @ONLY
+)
+
+# Link the generated Info.plist to the target bundle
+# =====================================================================
+set_property(TARGET ${PROJECT_NAME} PROPERTY MACOSX_BUNDLE_INFO_PLIST ${CMAKE_BINARY_DIR}/Info.plist)
+
 # Pre-Processor Directive for Demo vs. Full Version
 # =====================================================================
 if (BUILD_DEMO)
