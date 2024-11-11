@@ -1,9 +1,9 @@
 # config.cmake
 
 # Define global variables
-set(wPLUGIN_NAME                "TertiaryX")
-set(wCOMPANY_NAME               "Wonderland Audio")
-set(wCOMPANY_ID                 "WonderlandAudio")
+set(wPLUGIN_NAME                "Tertiary")
+set(wCOMPANY_NAME               "Wonderland Audioz")
+set(wCOMPANY_ID                 "WonderlandAudioz")
 set(wPROJECT_VERSION            "0.0.1")
 set(wPLUGIN_MANUFACTURER_CODE   "WLAD")
 set(wFORMATS                    VST3 Standalone)
