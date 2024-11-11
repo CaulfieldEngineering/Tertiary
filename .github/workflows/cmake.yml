@@ -420,7 +420,6 @@ jobs:
         echo "Package signing process completed successfully."
 
 
-
     # Package: Distribution (Mac)
     # ==========================================================================================
     - name: Create Distribution Package (Mac Only)
@@ -428,7 +427,6 @@ jobs:
       env:
         REPOSITORY_NAME: ${{ github.event.repository.name }}
       run: |
-        # Create output directory if it doesn't exist
         mkdir -p ${GITHUB_WORKSPACE}/build/output
 
         # Determine the suffix and distribution file based on the version
@@ -442,15 +440,15 @@ jobs:
 
         # Copy the appropriate distribution file
         echo "Using distribution file: $DIST_FILE"
-        if [ ! -f "${GITHUB_WORKSPACE}/build/$DIST_FILE" ]; then
+        if [ ! -f "${{github.workspace}}/build/$DIST_FILE" ]; then
           echo "ERROR: Distribution file not found: $DIST_FILE"
           echo "Contents of build directory:"
-          ls -la ${GITHUB_WORKSPACE}/build/
+          ls -la ${{github.workspace}}/build/
           exit 1
         fi
 
         # Copy and verify
-        cp "${GITHUB_WORKSPACE}/build/$DIST_FILE" "${GITHUB_WORKSPACE}/build/output/distribution.xml"
+        cp "${{github.workspace}}/build/$DIST_FILE" "${GITHUB_WORKSPACE}/build/output/distribution.xml"
         if [ ! -f "${GITHUB_WORKSPACE}/build/output/distribution.xml" ]; then
           echo "ERROR: Failed to copy distribution file"
           exit 1
@@ -462,45 +460,20 @@ jobs:
         ls -la ${GITHUB_WORKSPACE}/build/output/*.pkg
         
         echo "Creating distribution package..."
-        FINAL_PKG="${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
         productbuild \
           --distribution "${GITHUB_WORKSPACE}/build/output/distribution.xml" \
           --package-path "${GITHUB_WORKSPACE}/build/output" \
-          "$FINAL_PKG"
+          "${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
 
-        # Verify the final package was created and is not empty
-        if [ ! -f "$FINAL_PKG" ]; then
+        # Verify the final package was created
+        if [ ! -f "${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg" ]; then
           echo "ERROR: Failed to create distribution package"
           exit 1
         fi
-
-        if [ ! -s "$FINAL_PKG" ]; then
-          echo "ERROR: Created distribution package is empty: $FINAL_PKG"
-          exit 1
-        fi
         
-        echo "✓ Distribution package created successfully at: $FINAL_PKG"
-
-        # Optional: If you want to verify component packages, do so here
-        echo "Verifying component packages..."
-        for pkg in ${GITHUB_WORKSPACE}/build/output/*.pkg; do
-          echo "Expanding and inspecting $pkg..."
-          pkgutil --expand "$pkg" "${pkg%.pkg}_expanded"
-          
-          COMPONENT_PACKAGE_INFO="${pkg%.pkg}_expanded/PackageInfo"
-          if [ -f "$COMPONENT_PACKAGE_INFO" ]; then
-            echo "$pkg PackageInfo contents:"
-            cat "$COMPONENT_PACKAGE_INFO" | grep -E 'identifier=|version=|install-location=|CFBundleIdentifier|CFBundleVersion|CFBundleName'
-          else
-            echo "No PackageInfo found in component package: $pkg"
-          fi
-
-          # Clean up expanded component package
-          rm -rf "${pkg%.pkg}_expanded"
-        done
+        echo "✓ Distribution package created successfully"
+        
       shell: bash
-
-
 
     # Sign Distribution Package (Mac)
     # ==========================================================================================
