@@ -92,6 +92,7 @@ jobs:
       run: |
         echo "Plugin Name: $wPLUGIN_NAME"
         echo "Company Name: $wCOMPANY_NAME"
+        echo "Company ID: $wCOMPANY_ID"
         echo "Project Version: $wPROJECT_VERSION"
         echo "Manufacturer Code: $wPLUGIN_MANUFACTURER_CODE"
         echo "Formats: $wFORMATS"
@@ -219,6 +220,7 @@ jobs:
 
 
 
+
     # Package: Standalone (Mac)
     # ==========================================================================================
     - name: Create Standalone Package (Mac Only)
@@ -228,9 +230,6 @@ jobs:
       run: |
         # Create output directory
         mkdir -p ${GITHUB_WORKSPACE}/build/output
-
-        # Format COMPANY_NAME by removing spaces
-        FORMATTED_COMPANY_NAME=$(echo "$wCOMPANY_NAME" | tr -d ' ')
 
         # Determine the suffix based on the version
         SUFFIX=""
@@ -255,7 +254,7 @@ jobs:
 
         pkgbuild \
           --root "$(dirname "$APP_PATH")" \
-          --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.app" \
+          --identifier "com.${wCOMPANY_ID}.${REPOSITORY_NAME}.app" \
           --version "$wPROJECT_VERSION" \
           --install-location "/Applications/${REPOSITORY_NAME}" \
           "$PKG_PATH"
@@ -285,7 +284,8 @@ jobs:
         else
           echo "ERROR: PackageInfo not found in the expanded package"
           exit 1
-        fi  
+        fi
+
           
 
 
