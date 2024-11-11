@@ -2,7 +2,7 @@
 
 # Define global variables
 set(wPLUGIN_NAME                "Tertiary")
-set(wCOMPANY_NAME               "Wonderlandz Audio")
+set(wCOMPANY_NAME               "Wonderland Audio")
 set(wCOMPANY_ID                 "WonderlandAudio")
 set(wPROJECT_VERSION            "0.0.1")
 set(wPLUGIN_MANUFACTURER_CODE   "WLAD")
