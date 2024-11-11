@@ -73,10 +73,6 @@ configure_file(
   @ONLY
 )
 
-# Link the generated Info.plist to the target bundle
-# =====================================================================
-set_property(TARGET ${PROJECT_NAME} PROPERTY MACOSX_BUNDLE_INFO_PLIST ${CMAKE_BINARY_DIR}/Info.plist)
-
 # I like to download the dependencies to the same folder as the project.
 # If you want to install them system wide, set CPM_SOURCE_CACHE with the path to the dependencies
 # either as an environment variable or pass it to the cmake script with -DCPM_SOURCE_CACHE=<path>.
