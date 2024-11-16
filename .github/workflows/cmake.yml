@@ -135,9 +135,11 @@ jobs:
 
 
 
-    # Debugging: Verify Azure Secrets
+
+
+    # Set Azure Secrets as Environment Variables
     # ==========================================================================================
-    - name: Debug Azure Secrets
+    - name: Set Azure Secrets as Environment Variables
       if: matrix.os == 'windows-latest'
       env:
         AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -147,20 +149,12 @@ jobs:
         AZURE_CODE_SIGNING_NAME: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
         AZURE_CERT_PROFILE_NAME: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
       run: |
-        # Print the length of each secret to verify its presence and expected format
-        echo "AZURE_TENANT_ID length: ${#AZURE_TENANT_ID}, prefix: ${AZURE_TENANT_ID:0:4}****"
-        echo "AZURE_CLIENT_ID length: ${#AZURE_CLIENT_ID}, prefix: ${AZURE_CLIENT_ID:0:4}****"
-        echo "AZURE_CLIENT_SECRET length: ${#AZURE_CLIENT_SECRET}, prefix: ${AZURE_CLIENT_SECRET:0:4}****"
-        echo "AZURE_ENDPOINT length: ${#AZURE_ENDPOINT}, prefix: ${AZURE_ENDPOINT:0:10}****"
-        echo "AZURE_CODE_SIGNING_NAME length: ${#AZURE_CODE_SIGNING_NAME}, prefix: ${AZURE_CODE_SIGNING_NAME:0:4}****"
-        echo "AZURE_CERT_PROFILE_NAME length: ${#AZURE_CERT_PROFILE_NAME}, prefix: ${AZURE_CERT_PROFILE_NAME:0:4}****"
-        
-      shell: bash
-
-
-    
-
-
+        echo "AZURE_TENANT_ID=${AZURE_TENANT_ID}" >> $GITHUB_ENV
+        echo "AZURE_CLIENT_ID=${AZURE_CLIENT_ID}" >> $GITHUB_ENV
+        echo "AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}" >> $GITHUB_ENV
+        echo "AZURE_ENDPOINT=${AZURE_ENDPOINT}" >> $GITHUB_ENV
+        echo "AZURE_CODE_SIGNING_NAME=${AZURE_CODE_SIGNING_NAME}" >> $GITHUB_ENV
+        echo "AZURE_CERT_PROFILE_NAME=${AZURE_CERT_PROFILE_NAME}" >> $GITHUB_ENV
 
 
 
@@ -168,7 +162,13 @@ jobs:
     # Sign the Windows Installer Executable using Azure Trusted Signing
     # ==========================================================================================
     - name: Sign Windows Installer (Azure)
-      if: matrix.os == 'windows-latest'
+      if: matrix.os == 'windows-latest' &&
+          env.AZURE_TENANT_ID != '' &&
+          env.AZURE_CLIENT_ID != '' &&
+          env.AZURE_CLIENT_SECRET != '' &&
+          env.AZURE_ENDPOINT != '' &&
+          env.AZURE_CODE_SIGNING_NAME != '' &&
+          env.AZURE_CERT_PROFILE_NAME != ''
       uses: azure/trusted-signing-action@v0.5.0
       with:
         azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -177,12 +177,11 @@ jobs:
         endpoint: ${{ secrets.AZURE_ENDPOINT }}
         trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
         certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
-        files-folder: ${{github.workspace}}/build
+        files-folder: ${{ github.workspace }}/build
         files-folder-filter: exe
         file-digest: SHA256
         timestamp-rfc3161: http://timestamp.acs.microsoft.com
         timestamp-digest: SHA256
-
 
 
 
