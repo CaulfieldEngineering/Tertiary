@@ -115,10 +115,6 @@ jobs:
 
 
 
-    # Sign Payload (Win)
-    # ==========================================================================================
-
-
     # Compile Inno Setup script (Windows Only)
     # ==========================================================================================
     - name: Compile Inno Setup script (Windows Only)
@@ -126,6 +122,65 @@ jobs:
       run: |
         & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' "${{github.workspace}}\build\installer_win.iss"
       shell: pwsh
+
+
+
+
+
+    # Sign the Windows Installer Executable using Azure Trusted Signing
+    # This will run only for 'windows-latest' and versions 'Full' and 'Demo'
+    # ==========================================================================================
+    - name: Azure Trusted Signing
+      if: matrix.os == 'windows-latest'
+      env:
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
+        AZURE_CODE_SIGNING_NAME: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
+        AZURE_CERT_PROFILE_NAME: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
+        REPO_NAME: ${{ github.event.repository.name }}
+        VERSION: ${{ matrix.version }}
+        PROJECT_VERSION: ${wPROJECT_VERSION}
+      run: |
+        # Set the installer path based on version
+        if [[ "$VERSION" == "Demo" ]]; then
+          INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}WinInstaller_${PROJECT_VERSION}.D.exe"
+        else
+          INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}WinInstaller_${PROJECT_VERSION}.exe"
+        fi
+
+        # Check if all required environment variables are set
+        if [ -z "$AZURE_TENANT_ID" ] || [ -z "$AZURE_CLIENT_ID" ] || [ -z "$AZURE_CLIENT_SECRET" ] || [ -z "$AZURE_ENDPOINT" ] || [ -z "$AZURE_CODE_SIGNING_NAME" ] || [ -z "$AZURE_CERT_PROFILE_NAME" ]; then
+          echo "Required Azure signing environment variables are not set. Skipping Azure Trusted Signing step."
+          exit 0
+        fi
+
+        # Ensure the installer file exists
+        if [ ! -f "$INSTALLER_PATH" ]; then
+          echo "Installer executable not found at $INSTALLER_PATH. Skipping Azure Trusted Signing step."
+          exit 0
+        fi
+
+        # All required environment variables are set, proceed with Azure Trusted Signing
+        echo "All required environment variables are set. Proceeding with Azure Trusted Signing for $INSTALLER_PATH."
+        npx azure-trusted-signing sign \
+          --azure-tenant-id "$AZURE_TENANT_ID" \
+          --azure-client-id "$AZURE_CLIENT_ID" \
+          --azure-client-secret "$AZURE_CLIENT_SECRET" \
+          --endpoint "$AZURE_ENDPOINT" \
+          --trusted-signing-account-name "$AZURE_CODE_SIGNING_NAME" \
+          --certificate-profile-name "$AZURE_CERT_PROFILE_NAME" \
+          --files "$INSTALLER_PATH"
+      shell: bash
+
+
+
+
+
+
+
+
 
 
 
