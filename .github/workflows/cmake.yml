@@ -92,6 +92,7 @@ jobs:
       run: |
         echo "Plugin Name: $wPLUGIN_NAME"
         echo "Company Name: $wCOMPANY_NAME"
+        echo "Company ID: $wCOMPANY_ID"
         echo "Project Version: $wPROJECT_VERSION"
         echo "Manufacturer Code: $wPLUGIN_MANUFACTURER_CODE"
         echo "Formats: $wFORMATS"
@@ -273,9 +274,6 @@ jobs:
       run: |
         # Create output directory
         mkdir -p ${GITHUB_WORKSPACE}/build/output
-    
-        # Format COMPANY_NAME by removing spaces
-        FORMATTED_COMPANY_NAME=$(echo "$wCOMPANY_NAME" | tr -d ' ')
 
         # Determine the suffix based on the version
         SUFFIX=""
@@ -300,7 +298,7 @@ jobs:
 
         pkgbuild \
           --root "$(dirname "$APP_PATH")" \
-          --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.app" \
+          --identifier "com.${wCOMPANY_ID}.${REPOSITORY_NAME}.app" \
           --version "$wPROJECT_VERSION" \
           --install-location "/Applications/${REPOSITORY_NAME}" \
           "$PKG_PATH"
@@ -317,7 +315,21 @@ jobs:
         fi
 
         echo "✓ Successfully created standalone package at: $PKG_PATH"
+
+        # Inspect the package metadata
+        echo "Inspecting package metadata..."
+        pkgutil --expand "$PKG_PATH" "${PKG_PATH%.pkg}_expanded"
         
+        # Extract PackageInfo file to read the details
+        PACKAGE_INFO="${PKG_PATH%.pkg}_expanded/PackageInfo"
+        if [ -f "$PACKAGE_INFO" ]; then
+          echo "PackageInfo contents:"
+          cat "$PACKAGE_INFO" | grep -E 'identifier=|version=|install-location=|CFBundleIdentifier|CFBundleVersion|CFBundleName'
+        else
+          echo "ERROR: PackageInfo not found in the expanded package"
+          exit 1
+        fi
+
 
     # Package: VST3 (Mac)
     # ==========================================================================================
@@ -328,9 +340,6 @@ jobs:
       run: |
         # Create output directory
         mkdir -p ${GITHUB_WORKSPACE}/build/output
-
-        # Format COMPANY_NAME by removing spaces
-        FORMATTED_COMPANY_NAME=$(echo "$wCOMPANY_NAME" | tr -d ' ')
 
         # Determine the suffix based on the version
         SUFFIX=""
@@ -355,7 +364,7 @@ jobs:
 
         pkgbuild \
           --root "$(dirname "$VST3_PATH")" \
-          --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.vst3" \
+          --identifier "com.${wCOMPANY_ID}.${REPOSITORY_NAME}.vst3" \
           --version "$wPROJECT_VERSION" \
           --install-location "/Library/Audio/Plug-Ins/VST3" \
           "$PKG_PATH"
@@ -372,8 +381,22 @@ jobs:
         fi
 
         echo "✓ Successfully created VST3 package at: $PKG_PATH"
-          
 
+        # Inspect the package metadata
+        echo "Inspecting package metadata..."
+        pkgutil --expand "$PKG_PATH" "${PKG_PATH%.pkg}_expanded"
+        
+        # Extract PackageInfo file to read the details
+        PACKAGE_INFO="${PKG_PATH%.pkg}_expanded/PackageInfo"
+        if [ -f "$PACKAGE_INFO" ]; then
+          echo "PackageInfo contents:"
+          cat "$PACKAGE_INFO" | grep -E 'identifier=|version=|install-location=|CFBundleIdentifier|CFBundleVersion|CFBundleName'
+        else
+          echo "ERROR: PackageInfo not found in the expanded package"
+          exit 1
+        fi
+
+          
     # Sign Individual Packages (Mac) - 2024.10.25 CLAUDE
     # ==========================================================================================
     - name: Sign Individual Packages
@@ -506,7 +529,6 @@ jobs:
         echo "✓ Distribution package created successfully"
         
       shell: bash
-
 
     # Sign Distribution Package (Mac)
     # ==========================================================================================

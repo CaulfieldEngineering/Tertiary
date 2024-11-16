@@ -55,7 +55,7 @@ configure_file(
   @ONLY
 )
 
-# Configure the macOS Distribution package file
+# Configure the macOS Distribution package file - Full
 # =====================================================================
 message(STATUS "CMakeLists.txt: Configuring macOS Distribution XML (Full).")
 configure_file(
@@ -64,7 +64,7 @@ configure_file(
   @ONLY
 )
 
-# Configure the macOS Distribution package file
+# Configure the macOS Distribution package file - Demo
 # =====================================================================
 message(STATUS "CMakeLists.txt: Configuring macOS Distribution XML (Demo).")
 configure_file(
