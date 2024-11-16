@@ -135,13 +135,35 @@ jobs:
 
 
 
+    # Debugging: Verify Azure Secrets
+    # ==========================================================================================
+    - name: Debug Azure Secrets
+      if: matrix.os == 'windows-latest'
+      run: |
+        # Print the length of each secret to verify its presence and expected format
+        echo "AZURE_TENANT_ID length: ${#AZURE_TENANT_ID}"
+        echo "AZURE_CLIENT_ID length: ${#AZURE_CLIENT_ID}"
+        echo "AZURE_CLIENT_SECRET length: ${#AZURE_CLIENT_SECRET}"
+        echo "AZURE_ENDPOINT length: ${#AZURE_ENDPOINT}"
+        echo "AZURE_CODE_SIGNING_NAME length: ${#AZURE_CODE_SIGNING_NAME}"
+        echo "AZURE_CERT_PROFILE_NAME length: ${#AZURE_CERT_PROFILE_NAME}"
+    
+        # Print the first 4 characters of each secret to validate without exposing the full value
+        echo "AZURE_TENANT_ID prefix: ${AZURE_TENANT_ID:0:4}****"
+        echo "AZURE_CLIENT_ID prefix: ${AZURE_CLIENT_ID:0:4}****"
+        echo "AZURE_CLIENT_SECRET prefix: ${AZURE_CLIENT_SECRET:0:4}****"
+        echo "AZURE_ENDPOINT prefix: ${AZURE_ENDPOINT:0:10}****"
+        echo "AZURE_CODE_SIGNING_NAME prefix: ${AZURE_CODE_SIGNING_NAME:0:4}****"
+        echo "AZURE_CERT_PROFILE_NAME prefix: ${AZURE_CERT_PROFILE_NAME:0:4}****"
+      shell: bash
+    
 
 
 
 
 
 
-  # Sign the Windows Installer Executable using Azure Trusted Signing
+    # Sign the Windows Installer Executable using Azure Trusted Signing
     # ==========================================================================================
     - name: Sign Windows Installer (Azure)
       if: matrix.os == 'windows-latest'
@@ -154,7 +176,7 @@ jobs:
         trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
         certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
         files-folder: ${{github.workspace}}/build
-        files-folder-filter: exe, vst3
+        files-folder-filter: exe
         file-digest: SHA256
         timestamp-rfc3161: http://timestamp.acs.microsoft.com
         timestamp-digest: SHA256
