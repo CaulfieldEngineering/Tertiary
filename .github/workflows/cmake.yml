@@ -141,6 +141,9 @@ jobs:
         certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
         files-folder: ${{github.workspace}}/build
         files-folder-filter: exe
+        file-digest: SHA256
+        timestamp-rfc3161: http://timestamp.acs.microsoft.com
+        timestamp-digest: SHA256
 
 
 
