@@ -127,7 +127,21 @@ jobs:
       shell: pwsh
 
 
-    # Sign the Windows Installer Executable using Azure Trusted Signing
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  # Sign the Windows Installer Executable using Azure Trusted Signing
     # ==========================================================================================
     - name: Sign Windows Installer (Azure)
       if: matrix.os == 'windows-latest'
@@ -137,13 +151,17 @@ jobs:
         azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
         azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
         endpoint: ${{ secrets.AZURE_ENDPOINT }}
-        code-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
+        trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}  # Changed from code-signing-account-name
         certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
         files-folder: ${{github.workspace}}/build
         files-folder-filter: exe
         file-digest: SHA256
         timestamp-rfc3161: http://timestamp.acs.microsoft.com
         timestamp-digest: SHA256
+
+
+
+
 
 
 
