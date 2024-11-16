@@ -15,7 +15,8 @@ jobs:
 
     strategy:
       matrix:
-        os: [macos-latest, windows-latest]
+        #os: [macos-latest, windows-latest]
+        os: [windows-latest]
         build_type: [Release]
         version: [Full, Demo]
         include:
@@ -145,16 +146,16 @@ jobs:
     # ==========================================================================================
     - name: Sign Windows Installer (Azure)
       if: matrix.os == 'windows-latest'
-      uses: azure/trusted-signing-action@v0.3.16
+      uses: azure/trusted-signing-action@v0.5.0
       with:
         azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
         azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
         endpoint: ${{ secrets.AZURE_ENDPOINT }}
-        trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}  # Changed from code-signing-account-name
+        trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
         certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
         files-folder: ${{github.workspace}}/build
-        files-folder-filter: exe
+        files-folder-filter: exe, vst3
         file-digest: SHA256
         timestamp-rfc3161: http://timestamp.acs.microsoft.com
         timestamp-digest: SHA256
