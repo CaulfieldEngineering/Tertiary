@@ -21,14 +21,15 @@ runs:
     # Print build folder contents
     # ==========================================================================================
     - name: List Build Directory Contents
+      shell: pwsh
       run: |
         Write-Host "Listing all files and directories in the build/plugin directory:"
         Get-ChildItem -Path "${GITHUB_WORKSPACE}/build/" -Recurse
-      shell: pwsh
 
     # Setup SSH
     # ==========================================================================================
     - name: Setup SSH
+      shell: bash
       uses: webfactory/ssh-agent@v0.5.3
       with:
         ssh-private-key: ${{ inputs.ssh-private-key }}
@@ -47,6 +48,7 @@ runs:
     # Add Host Key (macOS)
     # ==========================================================================================
     - name: Add Host Key (macOS)
+      shell: bash
       if: matrix.os == 'macos-latest'
       run: |
         mkdir -p ~/.ssh
