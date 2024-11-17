@@ -288,6 +288,7 @@ runs:
         echo "Signing standalone package..."
         # ====================================
         STANDALONE_PKG="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg"
+        echo "Standalone Package Path: $STANDALONE_PKG"
         productsign --sign "Developer ID Installer" \
           "$STANDALONE_PKG" \
           "${STANDALONE_PKG%.pkg}_signed.pkg"
@@ -299,6 +300,7 @@ runs:
         echo "Signing VST3 package..."
         # ====================================
         VST3_PKG="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg"
+        echo "VST3 Package Path: $VST3_PKG"
         productsign --sign "Developer ID Installer" \
           "$VST3_PKG" \
           "${VST3_PKG%.pkg}_signed.pkg"
