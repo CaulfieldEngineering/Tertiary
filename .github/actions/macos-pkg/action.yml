@@ -470,12 +470,13 @@ runs:
         # Replace unsigned with signed package
         mv "$SIGNED_PKG" "$UNSIGNED_PKG"
 
-          # # Clean up
-          # #security default-keychain -s login.keychain
-          # #security delete-keychain "$KEYCHAIN_PATH"
-          # #rm "$RUNNER_TEMP/cert.p12"
+        # Clean up
+        security default-keychain -s login.keychain
+        security delete-keychain "$KEYCHAIN_PATH"
+        rm "$RUNNER_TEMP/cert.p12"
 
         echo "Distribution package signing completed successfully."
+
 
     # Notarize the Distribution Package (Mac) - 2024.10.25 CLAUDE
     # ==========================================================================================
@@ -505,11 +506,11 @@ runs:
         # Store the installer path
         INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
 
-          # # Create temporary keychain for notarization
-          # xcrun notarytool store-credentials "notarytool-profile" \
-          #   --apple-id "$APPLE_ID" \
-          #   --team-id "$APPLE_TEAM_ID" \
-          #   --password "$APPLE_APP_SPECIFIC_PASSWORD"
+        # Create temporary keychain for notarization
+        xcrun notarytool store-credentials "notarytool-profile" \
+          --apple-id "$APPLE_ID" \
+          --team-id "$APPLE_TEAM_ID" \
+          --password "$APPLE_APP_SPECIFIC_PASSWORD"
 
         # Submit for notarization and capture the submission ID
         echo "Submitting for notarization..."
