@@ -39,6 +39,10 @@ jobs:
       uses: ./.github/actions/macos-pkg
       with:
         version: ${{ matrix.version }}
+        mac_application_certificate: ${{ secrets.MAC_APPLICATION_CERTIFICATE_BASE64 }}
+        mac_certificate_password: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+        keychain_password: ${{ secrets.KEYCHAIN_PASSWORD }}
+        repository_name: ${{ github.event.repository.name }}
 
     - name: Package Windows
       if: matrix.os == 'windows-latest'

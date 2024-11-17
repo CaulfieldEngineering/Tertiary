@@ -4,8 +4,20 @@ description: 'Create and sign macOS packages'
 
 inputs:
   version:
-    description: 'Version type (Full/Demo)'
     required: true
+    type: string
+  mac_application_certificate:
+    required: true
+    type: string
+  mac_certificate_password:
+    required: true
+    type: string
+  keychain_password:
+    required: true
+    type: string
+  repository_name:
+    required: true
+    type: string
 
 runs:
   using: composite
@@ -16,10 +28,11 @@ runs:
     - name: Sign Mac Binaries
       if: matrix.os == 'macos-latest'
       env:
-        APPLICATION_CERTIFICATE_BASE64: ${{ secrets.MAC_APPLICATION_CERTIFICATE_BASE64 }}
-        CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
-        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        APPLICATION_CERTIFICATE_BASE64: ${{ inputs.mac_application_certificate }}
+        CERTIFICATE_PASSWORD: ${{ inputs.mac_certificate_password }}
+        KEYCHAIN_PASSWORD: ${{ inputs.keychain_password }}
+        REPOSITORY_NAME: ${{ inputs.repository_name }}
+        
       run: |
         # Check for required secrets
         if [ -z "$APPLICATION_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
