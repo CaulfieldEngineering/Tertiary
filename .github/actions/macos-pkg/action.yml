@@ -322,8 +322,6 @@ runs:
 
         echo "Package signing process completed successfully."
 
-      shell: bash
-
     # Package: Distribution (Mac)
     # ==========================================================================================
     - name: Create Distribution Package (Mac Only)
