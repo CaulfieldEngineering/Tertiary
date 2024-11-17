@@ -1,13 +1,14 @@
 # ssh_backup.yml
-name: Backup to Server
+name: 'Backup to Server'
+description: 'Backup artifacts to remote server'
 
 inputs:
   os:
+    description: 'Operating system'
     required: true
-    type: string
   version:
+    description: 'Version type (Full/Demo)'
     required: true
-    type: string
 
 runs:
   using: composite

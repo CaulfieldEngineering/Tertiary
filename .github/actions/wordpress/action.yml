@@ -1,13 +1,14 @@
 # wordpress.yml
-name: Update WordPress
+name: 'Update WordPress'
+description: 'Upload installers to WordPress and update WooCommerce'
 
 inputs:
   os:
+    description: 'Operating system'
     required: true
-    type: string
   version:
+    description: 'Version type (Full/Demo)'
     required: true
-    type: string
 
 runs:
   using: composite

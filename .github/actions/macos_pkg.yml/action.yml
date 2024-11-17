@@ -1,10 +1,11 @@
 # macos_pkg.yml
-name: Package macOS
+name: 'Package macOS'
+description: 'Create and sign macOS packages'
 
 inputs:
   version:
+    description: 'Version type (Full/Demo)'
     required: true
-    type: string
 
 runs:
   using: composite

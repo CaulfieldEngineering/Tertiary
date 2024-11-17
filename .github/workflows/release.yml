@@ -1,5 +1,5 @@
-# cmake.yml
-name: Production Release
+# File: .github/workflows/cmake.yml
+name: Build and Upload
 
 on:
   push:
@@ -23,49 +23,37 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-
-    # 
-    # ==========================================================================================
+      
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # 
-    # ==========================================================================================
     - name: Build Project
-      uses: ./.github/workflows/source/build.yml
+      uses: ./.github/actions/build
       with:
         cmake_arch: ${{ matrix.cmake_arch }}
         build_type: ${{ matrix.build_type }}
         version: ${{ matrix.version }}
 
-    # 
-    # ==========================================================================================
     - name: Package macOS
       if: matrix.os == 'macos-latest'
-      uses: ./.github/workflows/source/macos_pkg.yml
+      uses: ./.github/actions/macos-pkg
       with:
         version: ${{ matrix.version }}
 
-    # 
-    # ==========================================================================================
     - name: Package Windows
       if: matrix.os == 'windows-latest'
-      uses: ./.github/workflows/source/windows_pkg.yml
+      uses: ./.github/actions/windows-pkg
       with:
         version: ${{ matrix.version }}
 
-    # 
-    # ==========================================================================================
     - name: Backup to Server
-      uses: ./.github/workflows/source/ssh_backup.yml
+      uses: ./.github/actions/ssh-backup
       with:
         os: ${{ matrix.os }}
         version: ${{ matrix.version }}
 
-    # 
-    # ==========================================================================================
     - name: Update WordPress
-      uses: ./.github/workflows/source/wordpress.yml
+      uses: ./.github/actions/wordpress
       with:
         os: ${{ matrix.os }}
         version: ${{ matrix.version }}
