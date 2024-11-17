@@ -28,11 +28,33 @@ runs:
 
     # Setup SSH
     # ==========================================================================================
+    # - name: Setup SSH
+    #   shell: bash
+    #   uses: webfactory/ssh-agent@v0.5.3
+    #   with:
+    #     ssh-private-key: ${{ inputs.ssh-private-key }}
+    
+    # Setup SSH
+    # ==========================================================================================
     - name: Setup SSH
       shell: bash
-      uses: webfactory/ssh-agent@v0.5.3
-      with:
-        ssh-private-key: ${{ inputs.ssh-private-key }}
+      run: |
+        # Create SSH directory with correct permissions
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        
+        # Start SSH agent
+        eval $(ssh-agent -s)
+        
+        # Add the private key with specific naming
+        echo "${{ inputs.ssh-private-key }}" | tr -d '\r' > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        
+        # Add the key to SSH agent
+        ssh-add ~/.ssh/id_rsa
+        
+        # Verify the key was added
+        ssh-add -l
 
     # Add Host Key (Windows)
     # ==========================================================================================
