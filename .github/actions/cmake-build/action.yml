@@ -23,6 +23,7 @@ runs:
         echo "Current directory: $(pwd)"
         echo "Workspace directory: ${GITHUB_WORKSPACE}"
         ls -R
+      shell: bash
 
     # 
     # ==========================================================================================
