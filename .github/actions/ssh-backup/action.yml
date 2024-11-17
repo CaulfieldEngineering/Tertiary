@@ -24,7 +24,7 @@ runs:
       shell: pwsh
       run: |
         Write-Host "Listing all files and directories in the build/plugin directory:"
-        Get-ChildItem -Path "${GITHUB_WORKSPACE}/build/" -Recurse
+        Get-ChildItem -Path "${{github.workspace}}\build\" -Recurse
 
     # Setup SSH
     # ==========================================================================================

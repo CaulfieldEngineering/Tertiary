@@ -59,7 +59,7 @@ jobs:
       with:
         os: ${{ matrix.os }}
         version: ${{ matrix.version }}
-        ssh_id: ${{ secrets.ID_GITHUB }} # Rename secret to SSH Private Key, something more apparent
+        ssh-private-key: ${{ secrets.ID_GITHUB }} # Rename secret to SSH Private Key, something more apparent
 
     - name: Update WordPress
       uses: ./.github/actions/wordpress
