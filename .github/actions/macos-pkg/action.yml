@@ -36,39 +36,6 @@ runs:
   using: composite
   steps:
 
-    # Create Temporary Keychain
-    # ==========================================================================================
-    - name: Create Temporary Keychain
-      shell: bash
-      run: |
-        echo "Creating temporary keychain..."
-        export KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-
-        # Create the keychain
-        security create-keychain -p "${{ inputs.keychain_password }}" "$KEYCHAIN_PATH"
-        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-        security unlock-keychain -p "${{ inputs.keychain_password }}" "$KEYCHAIN_PATH"
-
-        # Import the application certificate
-        echo -n "${{ inputs.mac_application_certificate }}" | base64 --decode > "$RUNNER_TEMP/app_cert.p12"
-        security import "$RUNNER_TEMP/app_cert.p12" -P "${{ inputs.mac_certificate_password }}" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-
-        # Import the installer certificate
-        echo -n "${{ inputs.mac_installer_certificate }}" | base64 --decode > "$RUNNER_TEMP/installer_cert.p12"
-        security import "$RUNNER_TEMP/installer_cert.p12" -P "${{ inputs.mac_certificate_password }}" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-
-        # Set the keychain as default
-        security list-keychains -d user -s "$KEYCHAIN_PATH"
-        security default-keychain -s "$KEYCHAIN_PATH"
-
-        # Add certificates to partition list
-        security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: -s -k "${{ inputs.keychain_password }}" "$KEYCHAIN_PATH"
-
-        # Verify imported identities
-        echo "Available signing identities:"
-        security find-identity -v -p basic
-
-        echo "Temporary keychain created and configured successfully."
 
     # Sign Payload (Mac) - 2024.10.25.
     # ==========================================================================================
@@ -89,23 +56,23 @@ runs:
 
         echo "Starting the signing process for macOS binaries..."
 
-          # # Create temporary keychain
-          # # ====================================
-          # KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-          # security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          # security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          # security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        # Create temporary keychain
+        # ====================================
+        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # # Import certificate to keychain
-          # # ====================================
-          # echo -n "$APPLICATION_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          # security import "$RUNNER_TEMP/cert.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          # security list-keychains -d user -s "$KEYCHAIN_PATH"
-          # security default-keychain -s "$KEYCHAIN_PATH"
-          
-          # # Add certificate to partition list
-          # # ====================================
-          # security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        # Import certificate to keychain
+        # ====================================
+        echo -n "$APPLICATION_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+        security import "$RUNNER_TEMP/cert.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        security list-keychains -d user -s "$KEYCHAIN_PATH"
+        security default-keychain -s "$KEYCHAIN_PATH"
+        
+        # Add certificate to partition list
+        # ====================================
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
         echo "Signing VST3 bundle..."
         # ====================================
@@ -137,11 +104,11 @@ runs:
         # Only verify code signature, skip notarization check
         codesign --display --verbose=2 "$APP_PATH"
 
-          # # Clean up
-          # # ====================================
-          # security default-keychain -s login.keychain
-          # security delete-keychain "$KEYCHAIN_PATH"
-          # rm "$RUNNER_TEMP/cert.p12"
+        # Clean up
+        # ====================================
+        security default-keychain -s login.keychain
+        security delete-keychain "$KEYCHAIN_PATH"
+        rm "$RUNNER_TEMP/cert.p12"
 
         echo "Signing process completed successfully."
 
@@ -297,23 +264,23 @@ runs:
 
         echo "Starting the package signing process..."
 
-          # # Create temporary keychain
-          # # ====================================
-          # KEYCHAIN_PATH=$RUNNER_TEMP/pkg-signing.keychain-db
-          # security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          # security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          # security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        # Create temporary keychain
+        # ====================================
+        KEYCHAIN_PATH=$RUNNER_TEMP/pkg-signing.keychain-db
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # # Import certificate to keychain
-          # # ====================================
-          # echo -n "$INSTALLER_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          # security import "$RUNNER_TEMP/cert.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          # security list-keychains -d user -s "$KEYCHAIN_PATH"
-          # security default-keychain -s "$KEYCHAIN_PATH"
-          
-          # # Add certificate to partition list
-          # # ====================================
-          # security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        # Import certificate to keychain
+        # ====================================
+        echo -n "$INSTALLER_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+        security import "$RUNNER_TEMP/cert.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        security list-keychains -d user -s "$KEYCHAIN_PATH"
+        security default-keychain -s "$KEYCHAIN_PATH"
+        
+        # Add certificate to partition list
+        # ====================================
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
         # Determine the suffix based on the version
         SUFFIX=""
@@ -348,11 +315,11 @@ runs:
         mv "${STANDALONE_PKG%.pkg}_signed.pkg" "$STANDALONE_PKG"
         mv "${VST3_PKG%.pkg}_signed.pkg" "$VST3_PKG"
 
-          # # Clean up
-          # # ====================================
-          # security default-keychain -s login.keychain
-          # security delete-keychain "$KEYCHAIN_PATH"
-          # rm "$RUNNER_TEMP/cert.p12"
+        # Clean up
+        # ====================================
+        security default-keychain -s login.keychain
+        security delete-keychain "$KEYCHAIN_PATH"
+        rm "$RUNNER_TEMP/cert.p12"
 
         echo "Package signing process completed successfully."
 
@@ -430,23 +397,23 @@ runs:
 
         echo "Starting the distribution package signing process..."
 
-          # # Create temporary keychain
-          # # ====================================
-          # KEYCHAIN_PATH=$RUNNER_TEMP/dist-signing.keychain-db
-          # security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          # security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          # security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        # Create temporary keychain
+        # ====================================
+        KEYCHAIN_PATH=$RUNNER_TEMP/dist-signing.keychain-db
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # # Import certificate to keychain
-          # # ====================================
-          # echo -n "$INSTALLER_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          # security import "$RUNNER_TEMP/cert.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          # security list-keychains -d user -s "$KEYCHAIN_PATH"
-          # security default-keychain -s "$KEYCHAIN_PATH"
-          
-          # # Add certificate to partition list
-          # # ====================================
-          # security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        # Import certificate to keychain
+        # ====================================
+        echo -n "$INSTALLER_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+        security import "$RUNNER_TEMP/cert.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        security list-keychains -d user -s "$KEYCHAIN_PATH"
+        security default-keychain -s "$KEYCHAIN_PATH"
+        
+        # Add certificate to partition list
+        # ====================================
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
         # Determine the suffix based on the version
         SUFFIX=""
@@ -595,23 +562,3 @@ runs:
         spctl --assess --type install "$INSTALLER_PATH"
     
         echo "Stapling process completed successfully."
-
-    # Clean up
-    # ====================================
-    - name: Clean Up Keychain
-      shell: bash
-      run: |
-        echo "Cleaning up temporary keychain..."
-        export KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-
-        # Reset default keychain to login
-        security default-keychain -s login.keychain
-
-        # Delete the temporary keychain
-        security delete-keychain "$KEYCHAIN_PATH"
-
-        # Remove temporary certificate files
-        rm -f "$RUNNER_TEMP/app_cert.p12"
-        rm -f "$RUNNER_TEMP/installer_cert.p12"
-
-        echo "Temporary keychain and files cleaned up successfully."
