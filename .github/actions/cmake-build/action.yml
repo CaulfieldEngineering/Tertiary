@@ -1,5 +1,6 @@
 # build.yml
 name: Build Project
+description: 'Configure and build via CMake'
 
 inputs:
   cmake_arch:
