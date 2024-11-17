@@ -1,4 +1,4 @@
-# File: .github/workflows/cmake.yml
+# File: .github/workflows/release.yml
 name: Build and Upload
 
 on:
