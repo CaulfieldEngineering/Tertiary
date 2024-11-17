@@ -127,16 +127,6 @@ jobs:
       shell: pwsh
 
 
-
-
-
-
-
-
-
-
-
-
     # Check for required signing secrets
     # ==========================================================================================
     - name: Check Required Secrets
@@ -170,30 +160,6 @@ jobs:
         file-digest: SHA256
         timestamp-rfc3161: http://timestamp.acs.microsoft.com
         timestamp-digest: SHA256
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
     # MAC INSTALLER ###############################################################################################################
