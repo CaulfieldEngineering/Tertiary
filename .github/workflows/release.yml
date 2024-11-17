@@ -40,9 +40,15 @@ jobs:
       with:
         version: ${{ matrix.version }}
         mac_application_certificate: ${{ secrets.MAC_APPLICATION_CERTIFICATE_BASE64 }}
+        mac_installer_certificate: ${{ secrets.MAC_INSTALLER_CERTIFICATE_BASE64 }}
         mac_certificate_password: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
         keychain_password: ${{ secrets.KEYCHAIN_PASSWORD }}
         repository_name: ${{ github.event.repository.name }}
+        apple_id: ${{ secrets.APPLE_ID }}
+        apple_team_id: ${{ secrets.APPLE_TEAM_ID }}
+        apple_app_specific_password: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+
+
 
     - name: Package Windows
       if: matrix.os == 'windows-latest'
