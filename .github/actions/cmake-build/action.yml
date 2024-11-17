@@ -18,12 +18,20 @@ runs:
 
     # 
     # ==========================================================================================
+    - name: Debug Current Directory
+      run: |
+        echo "Current directory: $(pwd)"
+        echo "Workspace directory: ${GITHUB_WORKSPACE}"
+        ls -R
+
+    # 
+    # ==========================================================================================
     - name: Configure CMake
       run: |
         if [ "${{ inputs.version }}" == "Demo" ]; then
-          cmake -S "${{github.workspace}}" -B "${{github.workspace}}/build" -DBUILD_DEMO=ON ${{ inputs.cmake_arch }} -DCMAKE_BUILD_TYPE=${{ inputs.build_type }}
+          cmake -S "${GITHUB_WORKSPACE}" -B "${GITHUB_WORKSPACE}/build" -DBUILD_DEMO=ON ${{ inputs.cmake_arch }} -DCMAKE_BUILD_TYPE=${{ inputs.build_type }}
         elif [ "${{ inputs.version }}" == "Full" ]; then
-          cmake -S "${{github.workspace}}" -B "${{github.workspace}}/build" -DBUILD_DEMO=OFF ${{ inputs.cmake_arch }} -DCMAKE_BUILD_TYPE=${{ inputs.build_type }}
+          cmake -S "${GITHUB_WORKSPACE}" -B "${GITHUB_WORKSPACE}/build" -DBUILD_DEMO=OFF ${{ inputs.cmake_arch }} -DCMAKE_BUILD_TYPE=${{ inputs.build_type }}
         else
           echo "Unexpected version: ${{ inputs.version }}"
           exit 1
@@ -33,7 +41,7 @@ runs:
     # 
     # ==========================================================================================
     - name: Build
-      run: cmake --build ${{github.workspace}}/build --config ${{ inputs.build_type }}
+      run: cmake --build "${GITHUB_WORKSPACE}/build" --config ${{ inputs.build_type }}
       shell: bash
 
     # 
