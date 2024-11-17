@@ -91,6 +91,9 @@ runs:
           DIST_FILE="distribution-demo.xml"
         fi
 
+        # Create output directory
+        mkdir -p ${GITHUB_WORKSPACE}/build/output
+
         SOURCE_FILE="${GITHUB_WORKSPACE}/build/$DIST_FILE"
         TARGET_FILE="${GITHUB_WORKSPACE}/build/output/distribution.xml"
 
