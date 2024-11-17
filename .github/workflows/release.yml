@@ -48,8 +48,6 @@ jobs:
         apple_team_id: ${{ secrets.APPLE_TEAM_ID }}
         apple_app_specific_password: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
 
-
-
     - name: Package Windows
       if: matrix.os == 'windows-latest'
       uses: ./.github/actions/windows-pkg
@@ -61,6 +59,7 @@ jobs:
       with:
         os: ${{ matrix.os }}
         version: ${{ matrix.version }}
+        ssh_id: ${{ secrets.ID_GITHUB }} # Rename secret to SSH Private Key, something more apparent
 
     - name: Update WordPress
       uses: ./.github/actions/wordpress
