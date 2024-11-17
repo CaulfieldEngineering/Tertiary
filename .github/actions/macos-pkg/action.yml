@@ -253,13 +253,13 @@ runs:
     - name: Sign Individual Packages
       if: matrix.os == 'macos-latest'
       env:
-        APPLICATION_CERTIFICATE_BASE64: ${{ inputs.mac_installer_certificate }}
+        INSTALLER_CERTIFICATE_BASE64: ${{ inputs.mac_installer_certificate }}
         CERTIFICATE_PASSWORD: ${{ inputs.mac_certificate_password }}
         KEYCHAIN_PASSWORD: ${{ inputs.keychain_password }}
         REPOSITORY_NAME: ${{ inputs.repository_name }}
       run: |
         # Check for required secrets
-        if [ -z "$INSTALLER_CERTIFICATE_BASE64:" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
+        if [ -z "$INSTALLER_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
           echo "Required secrets for installer signing are not set. Skipping installer signing step."
           exit 0
         fi
@@ -275,7 +275,7 @@ runs:
 
         # Import certificate to keychain
         # ====================================
-        echo -n "$INSTALLER_CERTIFICATE_BASE64:" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+        echo -n "$INSTALLER_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
         security import "$RUNNER_TEMP/cert.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
         security list-keychains -d user -s "$KEYCHAIN_PATH"
         security default-keychain -s "$KEYCHAIN_PATH"
@@ -293,7 +293,6 @@ runs:
         echo "Signing standalone package..."
         # ====================================
         STANDALONE_PKG="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg"
-        echo "Standalone Package Path: $STANDALONE_PKG"
         productsign --sign "Developer ID Installer" \
           "$STANDALONE_PKG" \
           "${STANDALONE_PKG%.pkg}_signed.pkg"
@@ -305,7 +304,6 @@ runs:
         echo "Signing VST3 package..."
         # ====================================
         VST3_PKG="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg"
-        echo "VST3 Package Path: $VST3_PKG"
         productsign --sign "Developer ID Installer" \
           "$VST3_PKG" \
           "${VST3_PKG%.pkg}_signed.pkg"
