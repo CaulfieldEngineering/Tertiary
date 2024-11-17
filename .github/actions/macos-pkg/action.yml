@@ -18,6 +18,16 @@ inputs:
   repository_name:
     required: true
     type: string
+  apple_id:
+    required: true
+    type: string
+  apple_team_id:
+    required: true
+    type: string
+  apple_app_specific_password:
+    required: true
+    type: string
+
 
 runs:
   using: composite
@@ -32,7 +42,6 @@ runs:
         CERTIFICATE_PASSWORD: ${{ inputs.mac_certificate_password }}
         KEYCHAIN_PASSWORD: ${{ inputs.keychain_password }}
         REPOSITORY_NAME: ${{ inputs.repository_name }}
-        
       run: |
         # Check for required secrets
         if [ -z "$APPLICATION_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
@@ -98,12 +107,14 @@ runs:
 
         echo "Signing process completed successfully."
 
+      shell: bash
+
     # Package: Standalone (Mac)
     # ==========================================================================================
     - name: Create Standalone Package (Mac Only)
       if: matrix.os == 'macos-latest'
       env:
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        REPOSITORY_NAME: ${{ inputs.repository_name }}
       run: |
         # Create output directory
         mkdir -p ${GITHUB_WORKSPACE}/build/output
@@ -162,13 +173,15 @@ runs:
           echo "ERROR: PackageInfo not found in the expanded package"
           exit 1
         fi
+        
+      shell: bash
 
     # Package: VST3 (Mac)
     # ==========================================================================================
     - name: Create VST3 Package (Mac Only)
       if: matrix.os == 'macos-latest'
       env:
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        REPOSITORY_NAME: ${{ inputs.repository_name }}
       run: |
         # Create output directory
         mkdir -p ${GITHUB_WORKSPACE}/build/output
@@ -227,19 +240,21 @@ runs:
           echo "ERROR: PackageInfo not found in the expanded package"
           exit 1
         fi
+        
+      shell: bash
 
     # Sign Individual Packages (Mac) - 2024.10.25 CLAUDE
     # ==========================================================================================
     - name: Sign Individual Packages
       if: matrix.os == 'macos-latest'
       env:
-        INSTALLER_CERTIFICATE_BASE64: ${{ secrets.MAC_INSTALLER_CERTIFICATE_BASE64 }}
-        CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
-        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        APPLICATION_CERTIFICATE_BASE64: ${{ inputs.mac_application_certificate }}
+        CERTIFICATE_PASSWORD: ${{ inputs.mac_certificate_password }}
+        KEYCHAIN_PASSWORD: ${{ inputs.keychain_password }}
+        REPOSITORY_NAME: ${{ inputs.repository_name }}
       run: |
         # Check for required secrets
-        if [ -z "$INSTALLER_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
+        if [ -z "$APPLICATION_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
           echo "Required secrets for installer signing are not set. Skipping installer signing step."
           exit 0
         fi
@@ -255,7 +270,7 @@ runs:
 
         # Import certificate to keychain
         # ====================================
-        echo -n "$INSTALLER_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+        echo -n "$APPLICATION_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
         security import "$RUNNER_TEMP/cert.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
         security list-keychains -d user -s "$KEYCHAIN_PATH"
         security default-keychain -s "$KEYCHAIN_PATH"
@@ -305,12 +320,14 @@ runs:
 
         echo "Package signing process completed successfully."
 
+      shell: bash
+
     # Package: Distribution (Mac)
     # ==========================================================================================
     - name: Create Distribution Package (Mac Only)
       if: matrix.os == 'macos-latest'
       env:
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        REPOSITORY_NAME: ${{ inputs.repository_name }}
       run: |
         mkdir -p ${GITHUB_WORKSPACE}/build/output
 
@@ -365,13 +382,13 @@ runs:
     - name: Sign Distribution Package
       if: matrix.os == 'macos-latest'
       env:
-        INSTALLER_CERTIFICATE_BASE64: ${{ secrets.MAC_INSTALLER_CERTIFICATE_BASE64 }}
-        CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
-        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        APPLICATION_CERTIFICATE_BASE64: ${{ inputs.mac_application_certificate }}
+        CERTIFICATE_PASSWORD: ${{ inputs.mac_certificate_password }}
+        KEYCHAIN_PASSWORD: ${{ inputs.keychain_password }}
+        REPOSITORY_NAME: ${{ inputs.repository_name }}
       run: |
         # Check for required secrets
-        if [ -z "$INSTALLER_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
+        if [ -z "$APPLICATION_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
           echo "Required secrets for installer signing are not set. Skipping installer signing step."
           exit 0
         fi
@@ -387,7 +404,7 @@ runs:
 
         # Import certificate to keychain
         # ====================================
-        echo -n "$INSTALLER_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+        echo -n "$APPLICATION_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
         security import "$RUNNER_TEMP/cert.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
         security list-keychains -d user -s "$KEYCHAIN_PATH"
         security default-keychain -s "$KEYCHAIN_PATH"
@@ -424,16 +441,18 @@ runs:
         rm "$RUNNER_TEMP/cert.p12"
 
         echo "Distribution package signing completed successfully."
+        
+      shell: bash
 
     # Notarize the Distribution Package (Mac) - 2024.10.25 CLAUDE
     # ==========================================================================================
     - name: Notarize Mac Distribution Package
       if: matrix.os == 'macos-latest'
       env:
-        APPLE_ID: ${{ secrets.APPLE_ID }}
-        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        APPLE_ID: ${{ inputs.apple_id }}
+        APPLE_TEAM_ID: ${{ inputs.apple_team_id }}
+        APPLE_APP_SPECIFIC_PASSWORD: ${{ inputs.apple_app_specific_password }}
+        REPOSITORY_NAME: ${{ inputs.repository_name }}
       run: |
         # Check for required secrets
         if [ -z "$APPLE_ID" ] || [ -z "$APPLE_TEAM_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
@@ -506,13 +525,15 @@ runs:
         # Show notarization history for debugging
         xcrun notarytool history --keychain-profile "notarytool-profile"
         
+      shell: bash
+        
     # Staple the Notarization Ticket to Distribution Package (Mac) - 2024.10.25 CLAUDE
     # ==========================================================================================
     - name: Staple Notarization Ticket
       if: matrix.os == 'macos-latest'
       env:
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
-        APPLE_ID: ${{ secrets.APPLE_ID }}  # Used to check if notarization was run
+        REPOSITORY_NAME: ${{ inputs.repository_name }}
+        APPLE_ID: ${{ inputs.apple_id }}
       run: |
         # Check if notarization was meant to run
         if [ -z "$APPLE_ID" ]; then
@@ -539,3 +560,5 @@ runs:
         spctl --assess --type install "$INSTALLER_PATH"
     
         echo "Stapling process completed successfully."
+        
+      shell: bash
