@@ -1111,10 +1111,15 @@ jobs:
           exit 1
         fi
 
-        # Get the default group ID dynamically
+        # Fetch and debug group response
         echo "Fetching default group ID..."
-        DEFAULT_GROUP=$(curl -s -X GET "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/group" \
-          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" | jq -r '.[0].id')
+        GROUP_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/group" \
+          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
+
+        echo "Raw group response: $GROUP_RESPONSE"
+
+        # Extract default group ID based on response type
+        DEFAULT_GROUP=$(echo "$GROUP_RESPONSE" | jq -r '.[0].id' 2>/dev/null || echo "$GROUP_RESPONSE" | jq -r 'to_entries[0].value.id')
 
         if [ -z "$DEFAULT_GROUP" ]; then
           echo "Error: Failed to retrieve default group ID."
