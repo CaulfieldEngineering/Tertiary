@@ -1102,83 +1102,102 @@ jobs:
       shell: bash
       run: |
         set -e  # Exit immediately if any command exits with a non-zero status
-
         echo "Starting update of demo redirect URLs in WordPress..."
-
+        
         # Validate required variables
         if [ -z "$WORDPRESS_USERNAME" ] || [ -z "$WORDPRESS_APPLICATION_PASSWORD" ] || [ -z "$WORDPRESS_SITE_URL" ]; then
           echo "Error: Missing WordPress credentials or site URL."
           exit 1
         fi
-
+        
         # Fetch and debug group response
         echo "Fetching default group ID..."
         GROUP_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/group" \
           -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
-
+        echo "Raw group response: $GROUP_RESPONSE"
+        
+        # Extract default group ID based on response structure
         DEFAULT_GROUP=$(echo "$GROUP_RESPONSE" | jq -r '.items[0].id')
         if [ -z "$DEFAULT_GROUP" ]; then
           echo "Error: Failed to retrieve default group ID."
           exit 1
         fi
         echo "Default group ID: $DEFAULT_GROUP"
-
-        # Construct URLs and enforce lowercase
-        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+        
+        # Construct URLs based on uploaded file paths (in lowercase)
+        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}' | tr '[:upper:]' '[:lower:]')
         DEMO_FILE_URL_MAC="${URL_ROOT_PATH}/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
         DEMO_FILE_URL_WIN="${URL_ROOT_PATH}/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
-
-        SOURCE_URL_MAC=$(echo "/${REPO_NAME}-demo-mac" | tr '[:upper:]' '[:lower:]')
-        SOURCE_URL_WIN=$(echo "/${REPO_NAME}-demo-windows" | tr '[:upper:]' '[:lower:]')
-
-        # Function to update or create a redirect
-        update_or_create_redirect() {
-          local SOURCE_URL=$1
-          local DEST_URL=$2
-
-          # Check if the redirect already exists
-          echo "Checking if redirect exists for ${SOURCE_URL}..."
-          REDIRECT_ID=$(curl -s -X GET "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/redirect?url=${SOURCE_URL}" \
-            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" | jq -r '.[0].id')
-
-          if [ "$REDIRECT_ID" != "null" ] && [ -n "$REDIRECT_ID" ]; then
-            echo "Redirect exists. Updating redirect ID ${REDIRECT_ID}..."
-            curl -s -X PUT "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/redirect/${REDIRECT_ID}" \
+        
+        # Construct Source URLs (in lowercase)
+        SOURCE_URL_MAC="/${REPO_NAME}-demo-mac"
+        SOURCE_URL_WIN="/${REPO_NAME}-demo-windows"
+        
+        # Function to update or create redirect
+        update_redirect() {
+          local source_url=$1
+          local target_url=$2
+          
+          # Convert URLs to lowercase
+          source_url=$(echo "$source_url" | tr '[:upper:]' '[:lower:]')
+          
+          echo "Processing redirect for ${source_url}"
+          
+          # First, try to find existing redirect
+          echo "Checking for existing redirect..."
+          EXISTING_REDIRECT=$(curl -s -X GET "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/redirect?search=${source_url}" \
+            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
+          
+          # Extract redirect ID if it exists
+          REDIRECT_ID=$(echo "$EXISTING_REDIRECT" | jq -r '.items[] | select(.url=="'"${source_url}"'") | .id')
+          
+          if [ ! -z "$REDIRECT_ID" ]; then
+            echo "Found existing redirect (ID: ${REDIRECT_ID}). Updating..."
+            RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/redirect/${REDIRECT_ID}" \
               -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
               -H "Content-Type: application/json" \
               -d '{
-                "url": "'"${SOURCE_URL}"'",
-                "action_data": "'"${DEST_URL}"'",
+                "url": "'"${source_url}"'",
+                "action_data": {
+                  "url": "'"${target_url}"'"
+                },
                 "match_type": "url",
                 "action_type": "url",
                 "regex": false,
                 "status": "enabled",
-                "group_id": "'"${DEFAULT_GROUP}"'"
-              }'
+                "group_id": '"${DEFAULT_GROUP}"'
+              }')
           else
-            echo "Redirect does not exist. Creating a new redirect..."
-            curl -s -X POST "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/redirect" \
+            echo "No existing redirect found. Creating new one..."
+            RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/redirect" \
               -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
               -H "Content-Type: application/json" \
               -d '{
-                "url": "'"${SOURCE_URL}"'",
-                "action_data": "'"${DEST_URL}"'",
+                "url": "'"${source_url}"'",
+                "action_data": {
+                  "url": "'"${target_url}"'"
+                },
                 "match_type": "url",
                 "action_type": "url",
                 "regex": false,
                 "status": "enabled",
-                "group_id": "'"${DEFAULT_GROUP}"'"
-              }'
+                "group_id": '"${DEFAULT_GROUP}"'
+              }')
           fi
+          
+          # Check for errors in response
+          if echo "$RESPONSE" | jq -e 'has("code")' > /dev/null; then
+            echo "Error in API response: $RESPONSE"
+            return 1
+          fi
+          
+          echo "Successfully processed redirect for ${source_url}"
         }
-
-        # Update or create redirects
-        echo "Updating macOS demo redirect..."
-        update_or_create_redirect "$SOURCE_URL_MAC" "$DEMO_FILE_URL_MAC"
-
-        echo "Updating Windows demo redirect..."
-        update_or_create_redirect "$SOURCE_URL_WIN" "$DEMO_FILE_URL_WIN"
-
+        
+        # Update redirections
+        update_redirect "$SOURCE_URL_MAC" "$DEMO_FILE_URL_MAC"
+        update_redirect "$SOURCE_URL_WIN" "$DEMO_FILE_URL_WIN"
+        
         echo "Redirect URLs updated successfully."
 
 
