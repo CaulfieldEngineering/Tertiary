@@ -1118,8 +1118,8 @@ jobs:
 
         echo "Raw group response: $GROUP_RESPONSE"
 
-        # Extract default group ID based on response type
-        DEFAULT_GROUP=$(echo "$GROUP_RESPONSE" | jq -r '.[0].id' 2>/dev/null || echo "$GROUP_RESPONSE" | jq -r 'to_entries[0].value.id')
+        # Extract default group ID based on response structure
+        DEFAULT_GROUP=$(echo "$GROUP_RESPONSE" | jq -r '.items[0].id')
 
         if [ -z "$DEFAULT_GROUP" ]; then
           echo "Error: Failed to retrieve default group ID."
@@ -1169,6 +1169,5 @@ jobs:
 
         echo "Redirect URLs updated successfully."
 
-    
     # UPDATE WORDPRESS ############################################################################################################
     # endregion
