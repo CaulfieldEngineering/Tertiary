@@ -1102,7 +1102,7 @@ jobs:
       shell: bash
       run: |
         set -e  # Exit immediately if any command exits with a non-zero status
-        
+
         echo "Starting update of demo redirect URLs in WordPress..."
 
         # Validate required variables
@@ -1116,13 +1116,17 @@ jobs:
         DEMO_FILE_URL_MAC="${URL_ROOT_PATH}/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
         DEMO_FILE_URL_WIN="${URL_ROOT_PATH}/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
 
+        # Construct Source URLs
+        SOURCE_URL_MAC="/${REPO_NAME}-demo-mac"
+        SOURCE_URL_WIN="/${REPO_NAME}-demo-windows"
+
         # Update redirection for macOS
         echo "Updating redirection for macOS demo..."
         curl -s -X POST "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/redirect" \
           -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
           -H "Content-Type: application/json" \
           -d '{
-            "url": "/tertiary-demo-mac",
+            "url": "'"${SOURCE_URL_MAC}"'",
             "action_data": "'"${DEMO_FILE_URL_MAC}"'",
             "match_type": "url",
             "action_type": "url",
@@ -1136,7 +1140,7 @@ jobs:
           -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
           -H "Content-Type: application/json" \
           -d '{
-            "url": "/tertiary-demo-windows",
+            "url": "'"${SOURCE_URL_WIN}"'",
             "action_data": "'"${DEMO_FILE_URL_WIN}"'",
             "match_type": "url",
             "action_type": "url",
@@ -1145,6 +1149,7 @@ jobs:
           }'
 
         echo "Redirect URLs updated successfully."
+
     
     # UPDATE WORDPRESS ############################################################################################################
     # endregion
