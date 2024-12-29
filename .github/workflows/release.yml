@@ -1111,6 +1111,18 @@ jobs:
           exit 1
         fi
 
+        # Get the default group ID dynamically
+        echo "Fetching default group ID..."
+        DEFAULT_GROUP=$(curl -s -X GET "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/group" \
+          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" | jq -r '.[0].id')
+
+        if [ -z "$DEFAULT_GROUP" ]; then
+          echo "Error: Failed to retrieve default group ID."
+          exit 1
+        fi
+
+        echo "Default group ID: $DEFAULT_GROUP"
+
         # Construct URLs based on uploaded file paths
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
         DEMO_FILE_URL_MAC="${URL_ROOT_PATH}/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
@@ -1131,7 +1143,8 @@ jobs:
             "match_type": "url",
             "action_type": "url",
             "regex": false,
-            "status": "enabled"
+            "status": "enabled",
+            "group_id": "'"${DEFAULT_GROUP}"'"
           }'
 
         # Update redirection for Windows
@@ -1145,7 +1158,8 @@ jobs:
             "match_type": "url",
             "action_type": "url",
             "regex": false,
-            "status": "enabled"
+            "status": "enabled",
+            "group_id": "'"${DEFAULT_GROUP}"'"
           }'
 
         echo "Redirect URLs updated successfully."
