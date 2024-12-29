@@ -1124,22 +1124,22 @@ jobs:
         fi
         echo "Default group ID: $DEFAULT_GROUP"
         
-        # Construct URLs based on uploaded file paths (in lowercase)
-        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}' | tr '[:upper:]' '[:lower:]')
+        # Get repository name in both cases
+        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+        REPO_NAME_LOWER=$(echo $REPO_NAME | tr '[:upper:]' '[:lower:]')
+        
+        # Construct destination URLs (keeping original case for file names)
         DEMO_FILE_URL_MAC="${URL_ROOT_PATH}/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
         DEMO_FILE_URL_WIN="${URL_ROOT_PATH}/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
         
         # Construct Source URLs (in lowercase)
-        SOURCE_URL_MAC="/${REPO_NAME}-demo-mac"
-        SOURCE_URL_WIN="/${REPO_NAME}-demo-windows"
+        SOURCE_URL_MAC="/${REPO_NAME_LOWER}-demo-mac"
+        SOURCE_URL_WIN="/${REPO_NAME_LOWER}-demo-windows"
         
         # Function to update or create redirect
         update_redirect() {
           local source_url=$1
           local target_url=$2
-          
-          # Convert URLs to lowercase
-          source_url=$(echo "$source_url" | tr '[:upper:]' '[:lower:]')
           
           echo "Processing redirect for ${source_url}"
           
