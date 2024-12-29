@@ -1116,58 +1116,71 @@ jobs:
         GROUP_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/group" \
           -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
 
-        echo "Raw group response: $GROUP_RESPONSE"
-
-        # Extract default group ID based on response structure
         DEFAULT_GROUP=$(echo "$GROUP_RESPONSE" | jq -r '.items[0].id')
-
         if [ -z "$DEFAULT_GROUP" ]; then
           echo "Error: Failed to retrieve default group ID."
           exit 1
         fi
-
         echo "Default group ID: $DEFAULT_GROUP"
 
-        # Construct URLs based on uploaded file paths
+        # Construct URLs and enforce lowercase
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
         DEMO_FILE_URL_MAC="${URL_ROOT_PATH}/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
         DEMO_FILE_URL_WIN="${URL_ROOT_PATH}/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
 
-        # Construct Source URLs
-        SOURCE_URL_MAC="/${REPO_NAME}-demo-mac"
-        SOURCE_URL_WIN="/${REPO_NAME}-demo-windows"
+        SOURCE_URL_MAC=$(echo "/${REPO_NAME}-demo-mac" | tr '[:upper:]' '[:lower:]')
+        SOURCE_URL_WIN=$(echo "/${REPO_NAME}-demo-windows" | tr '[:upper:]' '[:lower:]')
 
-        # Update redirection for macOS
-        echo "Updating redirection for macOS demo..."
-        curl -s -X POST "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/redirect" \
-          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "url": "'"${SOURCE_URL_MAC}"'",
-            "action_data": "'"${DEMO_FILE_URL_MAC}"'",
-            "match_type": "url",
-            "action_type": "url",
-            "regex": false,
-            "status": "enabled",
-            "group_id": "'"${DEFAULT_GROUP}"'"
-          }'
+        # Function to update or create a redirect
+        update_or_create_redirect() {
+          local SOURCE_URL=$1
+          local DEST_URL=$2
 
-        # Update redirection for Windows
-        echo "Updating redirection for Windows demo..."
-        curl -s -X POST "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/redirect" \
-          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "url": "'"${SOURCE_URL_WIN}"'",
-            "action_data": "'"${DEMO_FILE_URL_WIN}"'",
-            "match_type": "url",
-            "action_type": "url",
-            "regex": false,
-            "status": "enabled",
-            "group_id": "'"${DEFAULT_GROUP}"'"
-          }'
+          # Check if the redirect already exists
+          echo "Checking if redirect exists for ${SOURCE_URL}..."
+          REDIRECT_ID=$(curl -s -X GET "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/redirect?url=${SOURCE_URL}" \
+            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" | jq -r '.[0].id')
+
+          if [ "$REDIRECT_ID" != "null" ] && [ -n "$REDIRECT_ID" ]; then
+            echo "Redirect exists. Updating redirect ID ${REDIRECT_ID}..."
+            curl -s -X PUT "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/redirect/${REDIRECT_ID}" \
+              -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "url": "'"${SOURCE_URL}"'",
+                "action_data": "'"${DEST_URL}"'",
+                "match_type": "url",
+                "action_type": "url",
+                "regex": false,
+                "status": "enabled",
+                "group_id": "'"${DEFAULT_GROUP}"'"
+              }'
+          else
+            echo "Redirect does not exist. Creating a new redirect..."
+            curl -s -X POST "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/redirect" \
+              -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "url": "'"${SOURCE_URL}"'",
+                "action_data": "'"${DEST_URL}"'",
+                "match_type": "url",
+                "action_type": "url",
+                "regex": false,
+                "status": "enabled",
+                "group_id": "'"${DEFAULT_GROUP}"'"
+              }'
+          fi
+        }
+
+        # Update or create redirects
+        echo "Updating macOS demo redirect..."
+        update_or_create_redirect "$SOURCE_URL_MAC" "$DEMO_FILE_URL_MAC"
+
+        echo "Updating Windows demo redirect..."
+        update_or_create_redirect "$SOURCE_URL_WIN" "$DEMO_FILE_URL_WIN"
 
         echo "Redirect URLs updated successfully."
+
 
     # UPDATE WORDPRESS ############################################################################################################
     # endregion
