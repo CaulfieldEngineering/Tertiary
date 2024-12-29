@@ -1159,7 +1159,8 @@ jobs:
               -d '{
                 "url": "'"${source_url}"'",
                 "action_data": {
-                  "url": "'"${target_url}"'"
+                  "url": "'"${target_url}"'",
+                  "code": 301
                 },
                 "match_type": "url",
                 "action_type": "url",
@@ -1175,7 +1176,8 @@ jobs:
               -d '{
                 "url": "'"${source_url}"'",
                 "action_data": {
-                  "url": "'"${target_url}"'"
+                  "url": "'"${target_url}"'",
+                  "code": 301
                 },
                 "match_type": "url",
                 "action_type": "url",
@@ -1199,7 +1201,6 @@ jobs:
         update_redirect "$SOURCE_URL_WIN" "$DEMO_FILE_URL_WIN"
         
         echo "Redirect URLs updated successfully."
-
 
     # UPDATE WORDPRESS ############################################################################################################
     # endregion
