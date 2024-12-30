@@ -23,6 +23,17 @@ juce_add_plugin( ${PROJECT_NAME}
     PRODUCT_NAME "${wPLUGIN_NAME}"
 )
 
+# Configure static runtime linking for MSVC specifically for ${PROJECT_NAME}
+# =====================================================================
+if (MSVC)
+    target_compile_options(${PROJECT_NAME} PRIVATE
+        $<$<CONFIG:Debug>:/MTd>       # Use static runtime in Debug (/MTd)
+        $<$<CONFIG:Release>:/MT>      # Use static runtime in Release (/MT)
+        $<$<CONFIG:RelWithDebInfo>:/MT>  # Use static runtime in RelWithDebInfo (/MT)
+        $<$<CONFIG:MinSizeRel>:/MT>   # Use static runtime in MinSizeRel (/MT)
+    )
+endif()
+
 # Pre-Processor Directive for Demo vs. Full Version
 # =====================================================================
 if (BUILD_DEMO)
