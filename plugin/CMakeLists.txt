@@ -23,15 +23,31 @@ juce_add_plugin( ${PROJECT_NAME}
     PRODUCT_NAME "${wPLUGIN_NAME}"
 )
 
-# Configure static runtime linking for MSVC specifically for ${PROJECT_NAME}
+# Force the use of the static runtime (/MT or /MTd) for MSVC
 # =====================================================================
+# This ensures that all parts of the project, including JUCE modules,
+# use the static runtime instead of the dynamic runtime.
 if (MSVC)
-    target_compile_options(${PROJECT_NAME} PRIVATE
-        $<$<CONFIG:Debug>:/MTd>       # Use static runtime in Debug (/MTd)
-        $<$<CONFIG:Release>:/MT>      # Use static runtime in Release (/MT)
-        $<$<CONFIG:RelWithDebInfo>:/MT>  # Use static runtime in RelWithDebInfo (/MT)
-        $<$<CONFIG:MinSizeRel>:/MT>   # Use static runtime in MinSizeRel (/MT)
+    # Replace all occurrences of /MD (dynamic runtime) with /MT (static runtime)
+    # in the global CMake flags. These flags control how the compiler and linker
+    # treat runtime libraries across different build configurations.
+    foreach (flag_var
+        CMAKE_C_FLAGS                   # Flags for C compilation
+        CMAKE_C_FLAGS_DEBUG             # Flags for Debug configuration
+        CMAKE_C_FLAGS_RELEASE           # Flags for Release configuration
+        CMAKE_C_FLAGS_MINSIZEREL        # Flags for MinSizeRel configuration
+        CMAKE_C_FLAGS_RELWITHDEBINFO    # Flags for RelWithDebInfo configuration
+        CMAKE_CXX_FLAGS                 # Flags for C++ compilation
+        CMAKE_CXX_FLAGS_DEBUG           # Flags for Debug configuration
+        CMAKE_CXX_FLAGS_RELEASE         # Flags for Release configuration
+        CMAKE_CXX_FLAGS_MINSIZEREL      # Flags for MinSizeRel configuration
+        CMAKE_CXX_FLAGS_RELWITHDEBINFO  # Flags for RelWithDebInfo configuration
     )
+        # Replace dynamic runtime (/MD) with static runtime (/MT) for Release builds
+        string(REPLACE "/MD" "/MT" ${flag_var} "${${flag_var}}")
+        # Replace dynamic runtime with debugging symbols (/MDd) with static runtime with debug symbols (/MTd)
+        string(REPLACE "/MDd" "/MTd" ${flag_var} "${${flag_var}}")
+    endforeach()
 endif()
 
 # Pre-Processor Directive for Demo vs. Full Version
