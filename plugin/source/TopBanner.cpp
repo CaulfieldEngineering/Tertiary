@@ -1,47 +1,64 @@
 /*
   ==============================================================================
-
     TopBanner.cpp
     Created: 29 Jan 2023 1:32:49pm
     Author:  Joe Caulfield
-
   ==============================================================================
 */
 
 #include "TopBanner.h"
 
-
-#if JUCE_INTEL
- #define USE_SSE 1
-#endif
+//#if JUCE_INTEL
+// #define USE_SSE 1
+//#endif
 
 TopBanner::TopBanner()
 {
+    // Load source images
     imageCompanyTitle = juce::ImageCache::getFromMemory(BinaryData::CompanyTitle_png, BinaryData::CompanyTitle_pngSize);
     imagePluginTitle = juce::ImageCache::getFromMemory(BinaryData::PluginTitle_png, BinaryData::PluginTitle_pngSize);
+    
+    // Store original aspect ratios
+    companyTitleOriginalAspect = imageCompanyTitle.getWidth() / (float)imageCompanyTitle.getHeight();
+    pluginTitleOriginalAspect = imagePluginTitle.getWidth() / (float)imagePluginTitle.getHeight();
 }
 
 TopBanner::~TopBanner()
 {
-    
 }
 
 void TopBanner::resized()
 {
-    // Any layout code can go here, if needed
+    // Clear cached images to force redraw at new size
+    scaledCompanyTitle = juce::Image();
+    scaledPluginTitle = juce::Image();
 }
 
 void TopBanner::paint(juce::Graphics& g)
 {
-    g.setImageResamplingQuality(juce::Graphics::highResamplingQuality); // Ensure high-quality resampling
-
     auto bounds = getLocalBounds().toFloat();
     auto boundsHeight = bounds.getHeight();
+    
+    // Use Windows DPI scale
+    float scale = getWindowsDPIScale(this);
 
-    // Draw the plugin title centered in the bounds
-    if (!imagePluginTitle.isNull()) {
-        float aspectRatio = imagePluginTitle.getWidth() / (float)imagePluginTitle.getHeight();
-        float newWidth = boundsHeight * aspectRatio;
+    DBG("Windows DPI Scale: " + juce::String(scale));
+    g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
+
+    // Plugin Title
+	// ==========================================================
+    if (!imagePluginTitle.isNull())
+    {
+        float newHeight = boundsHeight;
+        float newWidth = newHeight * (imagePluginTitle.getWidth() / (float)imagePluginTitle.getHeight());
+        
+        if (std::abs(lastPluginTitleScale - scale) > 0.01f || scaledPluginTitle.isNull())
+        {
+            scaledPluginTitle = applyResize(imagePluginTitle, 
+                                          juce::roundToInt(newWidth * scale), 
+                                          juce::roundToInt(newHeight * scale));
+            lastPluginTitleScale = scale;
+        }
 
         auto pluginTitleBounds = juce::Rectangle<float>(
             bounds.getCentreX() - (newWidth / 2.0f),
@@ -50,49 +67,43 @@ void TopBanner::paint(juce::Graphics& g)
             boundsHeight
         );
 
-        // Draw the image with the new scaled dimensions
-        g.drawImage(imagePluginTitle, pluginTitleBounds,
-                    juce::RectanglePlacement::centred);
+        g.drawImage(scaledPluginTitle,
+                   pluginTitleBounds,
+                   juce::RectanglePlacement::centred);
     }
-    
-    // Draw the company title image with resizing
+
+    // Company Title
+	// ==========================================================
     if (!imageCompanyTitle.isNull())
     {
-        float aspectRatio = imageCompanyTitle.getWidth() / (float)imageCompanyTitle.getHeight();
-        float companyHeight = boundsHeight * 0.55f; // 75% of the bounds height
-        int newWidth = juce::roundToInt(companyHeight * aspectRatio);
-        int newHeight = juce::roundToInt(companyHeight);
-
-        // Call applyResize directly to get the resized image
-        juce::Image resizedImage = applyResize(imageCompanyTitle, newWidth, newHeight);
-
-        if (!resizedImage.isNull())
+        float companyHeight = boundsHeight * 0.55f;
+        float companyWidth = companyHeight * (imageCompanyTitle.getWidth() / (float)imageCompanyTitle.getHeight());
+        
+        if (std::abs(lastCompanyTitleScale - scale) > 0.01f || scaledCompanyTitle.isNull())
         {
-            // Calculate where to position the image
-            auto xPos = juce::roundToInt(bounds.getRight() - newWidth);
-            auto yPos = juce::roundToInt(bounds.getCentreY() - (newHeight / 2.0f));
+            scaledCompanyTitle = applyResize(imageCompanyTitle, 
+                                           juce::roundToInt(companyWidth * scale), 
+                                           juce::roundToInt(companyHeight * scale));
+            lastCompanyTitleScale = scale;
+        }
 
-            // Draw the resized image at the calculated position
-            g.drawImageAt(resizedImage, xPos, yPos);
-        }
-        else
-        {
-            DBG("Resized image is invalid.");
-        }
+        g.drawImage(scaledCompanyTitle,
+                   bounds.getRight() - companyWidth,
+                   bounds.getCentreY() - (companyHeight / 2.0f),
+                   companyWidth,
+                   companyHeight,
+                   0, 0,
+                   scaledCompanyTitle.getWidth(),
+                   scaledCompanyTitle.getHeight());
     }
 
-	// Label Demo Version as needed
-	#ifdef DEMO_VERSION
-		auto demoBounds = getLocalBounds().withTrimmedRight(getWidth() * 0.60f);
-
-		// Use a system font by name
-		juce::Font systemFont ("Helvetica", 36.0f, juce::Font::bold); // Replace "Arial" with your desired font name
-
-		g.setFont(systemFont);
-
-		// Set the color to a dimmed grey
-		g.setColour(juce::Colours::lightgrey.withAlpha(0.5f)); // Adjust the alpha for dimming
-
-		g.drawFittedText("DEMO VERSION", demoBounds, juce::Justification::centredLeft, 1);
-	#endif
+	// Demo Declaration
+	// ==========================================================
+    #ifdef DEMO_VERSION
+        auto demoBounds = getLocalBounds().withTrimmedRight(getWidth() * 0.60f);
+        g.setFont(juce::Font("Helvetica", 36.0f * scale, juce::Font::bold));
+        g.setColour(juce::Colours::lightgrey.withAlpha(0.5f));
+        g.drawFittedText("DEMO VERSION", demoBounds, juce::Justification::centredLeft, 1);
+    #endif
 }
+
