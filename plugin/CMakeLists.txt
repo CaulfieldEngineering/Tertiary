@@ -21,6 +21,7 @@ juce_add_plugin( ${PROJECT_NAME}
     PLUGIN_CODE ${wPLUGIN_CODE}
     FORMATS ${wFORMATS}
     PRODUCT_NAME "${wPLUGIN_NAME}"
+    COPY_PLUGIN_AFTER_BUILD TRUE
 )
 
 # Force the use of the static runtime (/MT or /MTd) for MSVC
