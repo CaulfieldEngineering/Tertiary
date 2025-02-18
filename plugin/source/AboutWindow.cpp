@@ -47,48 +47,68 @@ void AboutWindow::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colours::black);
     auto bounds = getLocalBounds();
+    float scale = getWindowsDPIScale(this);
+    
+    g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
 
     // Draw Company Title (Wonderland Audio logo)
+	// ==========================================================
     float companyTitleWidth = bounds.getWidth() * 0.75f;
     float aspectRatio = static_cast<float>(targetCompanyHeight) / static_cast<float>(targetCompanyWidth);
     float companyTitleHeight = companyTitleWidth * aspectRatio;
+    
+    if (std::abs(lastCompanyTitleScale - scale) > 0.01f || scaledCompanyTitle.isNull())
+    {
+        scaledCompanyTitle = applyResize(imageCompanyTitle, 
+                                       juce::roundToInt(companyTitleWidth * scale), 
+                                       juce::roundToInt(companyTitleHeight * scale));
+        lastCompanyTitleScale = scale;
+    }
+
     juce::Rectangle<float> companyBounds{
         bounds.getCentreX() - companyTitleWidth / 2,
         25,
         companyTitleWidth,
         companyTitleHeight
     };
-    juce::Image resizedCompanyImage = applyResize(imageCompanyTitle, 
-                                                  static_cast<int>(companyTitleWidth), 
-                                                  static_cast<int>(companyTitleHeight));
-    if (!resizedCompanyImage.isNull())
+    
+    if (!scaledCompanyTitle.isNull())
     {
-        g.drawImage(resizedCompanyImage, companyBounds);
+        g.drawImage(scaledCompanyTitle, companyBounds);
     }
 
     // Draw Plugin Title (TERTIARY)
+	// ==========================================================
     juce::Rectangle<float> titleBounds{
         bounds.getCentreX() - targetTitleWidth / 2,
         companyBounds.getBottom() + 5,
         static_cast<float>(targetTitleWidth),
         static_cast<float>(targetTitleHeight)
     };
-    juce::Image resizedTitleImage = applyResize(imagePluginTitle, targetTitleWidth, targetTitleHeight);
-    if (!resizedTitleImage.isNull())
+
+    if (std::abs(lastPluginTitleScale - scale) > 0.01f || scaledPluginTitle.isNull())
     {
-        g.drawImage(resizedTitleImage, titleBounds);
+        scaledPluginTitle = applyResize(imagePluginTitle, 
+                                      juce::roundToInt(targetTitleWidth * scale), 
+                                      juce::roundToInt(targetTitleHeight * scale));
+        lastPluginTitleScale = scale;
     }
 
-    // Set up text drawing
+    if (!scaledPluginTitle.isNull())
+    {
+        g.drawImage(scaledPluginTitle, titleBounds);
+    }
+
+    // Set up text drawing with DPI scaling
     float fontSize = 20.0f;
     g.setFont(fontSize);
 
     // Draw Version and Release info
+	// ==========================================================
     g.setColour(juce::Colours::white);
-
     #ifdef DEBUG
         g.setColour(juce::Colours::red);
-    #endif // DEBUG
+    #endif
 
     juce::Rectangle<int> versionBounds = bounds.removeFromTop(static_cast<int>(titleBounds.getBottom()) + 60)
                                                .removeFromBottom(60);
@@ -96,21 +116,24 @@ void AboutWindow::paint(juce::Graphics& g)
     #ifdef DEMO_VERSION
         versionNumber += ".D";
     #endif
+    
     juce::String releaseDate = formatBuildDateTime();
     g.drawFittedText("Version: " + versionNumber, versionBounds.removeFromTop(30), juce::Justification::centred, 1);
     g.drawFittedText("Release: " + releaseDate, versionBounds, juce::Justification::centred, 1);
 
     // Draw Demo Version Disclaimer
-	#ifdef DEMO_VERSION
-		g.setFont(fontSize * 0.8f);
-		g.setColour(juce::Colours::lightgrey);
-		juce::Rectangle<int> disclaimerBounds = bounds.removeFromTop(60);
+	// ==========================================================
+    #ifdef DEMO_VERSION
+        g.setFont(fontSize * 0.8f);  // Scale this font too
+        g.setColour(juce::Colours::lightgrey);
+        juce::Rectangle<int> disclaimerBounds = bounds.removeFromTop(60);
         disclaimerBounds = disclaimerBounds.reduced(5, 0);
-		g.drawFittedText("Demo Version: Effect is disabled once every\n50 seconds, for 10 seconds.",
-						 disclaimerBounds, juce::Justification::centred, 2);
-	#endif
+        g.drawFittedText("Demo Version: Effect is disabled once every\n50 seconds, for 10 seconds.",
+                         disclaimerBounds, juce::Justification::centred, 2);
+    #endif
 
     // Draw Window Border
+	// ==========================================================
     paintBorder(g, juce::Colours::grey, getLocalBounds().toFloat());
 }
 

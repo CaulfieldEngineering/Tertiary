@@ -7,12 +7,30 @@ namespace audio_plugin {
         AudioPluginAudioProcessor& p)
         : AudioProcessorEditor(&p), audioProcessor(p) {
 
+		// Debug: DPI Awareness
+		#if defined(JUCE_WIN_PER_MONITOR_DPI_AWARE)
+			DBG("JUCE_WIN_PER_MONITOR_DPI_AWARE is defined");
+		#else
+			DBG("JUCE_WIN_PER_MONITOR_DPI_AWARE is NOT defined!");
+		#endif
+
+		// Force DPI Awareness
+		#if JUCE_WINDOWS
+			if (auto* peer = getPeer())
+			{
+				if (auto* hwnd = (HWND)peer->getNativeHandle())
+				{
+					::SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+				}
+			}
+		#endif
+
 		/* Used for Hi-Res Screen Capture... for grpahics*/
 		fullScreenScope = false;
 
       /* Container class for top banner */
-    if (!fullScreenScope)
-      addAndMakeVisible(topBanner);
+      if (!fullScreenScope)
+          addAndMakeVisible(topBanner);
 
       topBanner.addMouseListener(this, true);
 
@@ -103,6 +121,7 @@ namespace audio_plugin {
       //const float aspectRatio = 750.f / 515.f;  // Width / Height
         
 		  
+	  DBG("Updated DPI Scale Factor: " + juce::String(Desktop::getInstance().getGlobalScaleFactor()));
 
       /* Enforce Aspect Ratio */
       //auto availableArea = getLocalBounds();

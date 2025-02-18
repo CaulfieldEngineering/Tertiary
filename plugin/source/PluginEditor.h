@@ -9,6 +9,12 @@
 #include "UtilityFunctions.h"
 #include "AboutWindow.h"
 
+// For DPI Awareness...
+#if JUCE_WINDOWS
+    #include <Windows.h>
+    #include <ShellScalingApi.h>
+#endif
+
 namespace audio_plugin {
 
 class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,

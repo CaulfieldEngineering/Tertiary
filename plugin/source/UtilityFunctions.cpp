@@ -10,6 +10,11 @@
 
 #include "UtilityFunctions.h"
 
+#if JUCE_WINDOWS
+    #include <Windows.h>
+    #include <ShellScalingApi.h>
+#endif
+
 /* Paints a shaded border around specified object.*/
 // ==================================================================
 void paintBorder(juce::Graphics& g, juce::Colour baseColor, juce::Rectangle<float> bounds)
@@ -106,4 +111,20 @@ juce::Image applyResize(const juce::Image& src, int width, int height)
                (size_t)(dst.getWidth() * channels));
 
     return dst;
+}
+
+
+float getWindowsDPIScale(juce::Component* component)
+{
+    #if JUCE_WINDOWS
+    if (auto* peer = component->getPeer())
+    {
+        if (auto* hwnd = (HWND)peer->getNativeHandle())
+        {
+            UINT dpi = GetDpiForWindow(hwnd);
+            return static_cast<float>(dpi) / 96.0f;
+        }
+    }
+    #endif
+    return 1.0f;
 }

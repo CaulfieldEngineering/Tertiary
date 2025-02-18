@@ -17,7 +17,6 @@
     #include "avir_float4_sse.h"
 #endif
 
-
 void paintBorder(juce::Graphics& g, juce::Colour baseColor, juce::Rectangle<float> bounds);
 
 void buildLabelFont(    juce::Label& label,
@@ -30,3 +29,5 @@ void buildLabelFont(    juce::Label& label,
 
 
 juce::Image applyResize(const juce::Image& src, int width, int height);
+
+float getWindowsDPIScale(juce::Component* component);

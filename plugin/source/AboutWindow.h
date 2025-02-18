@@ -40,6 +40,18 @@ private:
     float targetCompanyWidth{ 400.f };
     float targetCompanyHeight{ 50.f };
 
+	// Cached scaled images
+    juce::Image scaledCompanyTitle;
+    juce::Image scaledPluginTitle;
+    
+    // Scale tracking
+    float lastPluginTitleScale = 0.0f;
+    float lastCompanyTitleScale = 0.0f;
+    
+    // Cached aspect ratios
+    float pluginTitleOriginalAspect = 1.0f;
+    float companyTitleOriginalAspect = 1.0f;
+
     juce::HyperlinkButton mButtonWebsiteLink;
 
 };

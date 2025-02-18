@@ -120,6 +120,7 @@ target_compile_definitions(${PROJECT_NAME}
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
         JUCE_DISPLAY_SPLASH_SCREEN=0
+	JUCE_WIN_PER_MONITOR_DPI_AWARE=1
 )
 
 # Enables all warnings and treats warnings as errors.
@@ -134,6 +135,7 @@ target_compile_definitions(${PROJECT_NAME}
 #else()
 #    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 #endif()
+
 
 # Define and create source groups for JUCE files
 # =====================================================================
