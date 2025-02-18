@@ -146,6 +146,10 @@ void AboutWindow::resized()
     mButtonWebsiteLink.setBounds(bounds.getX(), bounds.getBottom() - 50, bounds.getWidth(), 30);
 }
 
+#include <map>
+#include <ctime>
+#include <juce_core/juce_core.h>
+
 juce::String AboutWindow::formatBuildDateTime()
 {
     // Map month abbreviations to numbers
@@ -168,10 +172,38 @@ juce::String AboutWindow::formatBuildDateTime()
     // Parse the time string
     int hour = time.substring(0, 2).getIntValue();
     int minute = time.substring(3, 5).getIntValue();
+    int second = time.substring(6, 8).getIntValue();
 
-    // Format the date and time as "YYYY.MM.DD HH:MM"
-    return juce::String::formatted("%04d.%02d.%02d %02d:%02d", year, month, day, hour, minute);
+    // Convert to UTC (Assumes build system is in local time)
+    struct tm buildTime = {};
+    buildTime.tm_year = year - 1900;
+    buildTime.tm_mon = month - 1;
+    buildTime.tm_mday = day;
+    buildTime.tm_hour = hour;
+    buildTime.tm_min = minute;
+    buildTime.tm_sec = second;
+
+    time_t buildTimestamp = mktime(&buildTime); // Converts to system's local time
+    if (buildTimestamp == -1)
+        return "Invalid time";
+
+    // Convert to UTC
+    struct tm *utcTime = gmtime(&buildTimestamp);
+
+    // Convert UTC to EST (UTC-5) or EDT (UTC-4)
+    int estOffset = -5; // EST is UTC-5, EDT is UTC-4
+    struct tm estTime = *utcTime;
+    estTime.tm_hour += estOffset;
+
+    // Normalize time (handles underflows or overflows in hour field)
+    mktime(&estTime);
+
+    // Format the date and time as "YYYY.MM.DD HH:MM EST"
+    return juce::String::formatted("%04d.%02d.%02d %02d:%02d EST",
+                                   estTime.tm_year + 1900, estTime.tm_mon + 1, estTime.tm_mday,
+                                   estTime.tm_hour, estTime.tm_min);
 }
+
 
 void AboutWindow::buttonClicked(juce::Button* button)
 {
