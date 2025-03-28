@@ -39,7 +39,7 @@ namespace Params    // Mapping between Parameter Names and Unique ID's
 
 		Wave_Low_LFO,
 		Depth_Low_LFO,
-		Symmetry_Low_LFO,
+		Skew_Low_LFO,
 		Invert_Low_LFO,
 		Sync_Low_LFO,
 		Rate_Low_LFO,
@@ -48,7 +48,7 @@ namespace Params    // Mapping between Parameter Names and Unique ID's
 
 		Wave_Mid_LFO,
 		Depth_Mid_LFO,
-		Symmetry_Mid_LFO,
+		Skew_Mid_LFO,
 		Invert_Mid_LFO,
 		Sync_Mid_LFO,
 		Rate_Mid_LFO,
@@ -57,7 +57,7 @@ namespace Params    // Mapping between Parameter Names and Unique ID's
 
 		Wave_High_LFO,
 		Depth_High_LFO,
-		Symmetry_High_LFO,
+		Skew_High_LFO,
 		Invert_High_LFO,
 		Sync_High_LFO,
 		Rate_High_LFO,
@@ -108,7 +108,7 @@ namespace Params    // Mapping between Parameter Names and Unique ID's
 
 			{Wave_Low_LFO,              "Waveshape Low Band"},
 			{Depth_Low_LFO,             "Depth Low Band"},
-			{Symmetry_Low_LFO,          "Symmetry Low Band"},
+			{Skew_Low_LFO,				"Skew Low Band"},
 			{Invert_Low_LFO,            "Invert Low Band"},
 			{Sync_Low_LFO,              "Sync to Host Low Band"},
 			{Rate_Low_LFO,              "Rate Low Band"},
@@ -117,7 +117,7 @@ namespace Params    // Mapping between Parameter Names and Unique ID's
 
 			{Wave_Mid_LFO,              "Waveshape Mid Band"},
 			{Depth_Mid_LFO,             "Depth Mid Band"},
-			{Symmetry_Mid_LFO,          "Symmetry Mid Band"},
+			{Skew_Mid_LFO,				"Skew Mid Band"},
 			{Invert_Mid_LFO,            "Invert Mid Band"},
 			{Sync_Mid_LFO,              "Sync to Host Mid Band"},
 			{Rate_Mid_LFO,              "Rate Mid Band"},
@@ -126,7 +126,7 @@ namespace Params    // Mapping between Parameter Names and Unique ID's
 
 			{Wave_High_LFO,             "Waveshape High Band"},
 			{Depth_High_LFO,            "Depth High Band"},
-			{Symmetry_High_LFO,         "Symmetry High Band"},
+			{Skew_High_LFO,				"Skew High Band"},
 			{Invert_High_LFO,           "Invert High Band"},
 			{Sync_High_LFO,             "Sync to Host High Band"},
 			{Rate_High_LFO,             "Rate High Band"},

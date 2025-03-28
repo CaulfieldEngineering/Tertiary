@@ -94,7 +94,7 @@ namespace audio_plugin {
         boolHelper(lowBandTrem.muteParam, Names::Mute_Low_Band);
         boolHelper(lowBandTrem.soloParam, Names::Solo_Low_Band);
         floatHelper(lowBandTrem.bandGainParam, Names::Gain_Low_Band);
-        floatHelper(lowLFO.symmetryParam, Names::Symmetry_Low_LFO);
+        floatHelper(lowLFO.symmetryParam, Names::Skew_Low_LFO);
         floatHelper(lowLFO.depthParam, Names::Depth_Low_LFO);
         choiceHelper(lowLFO.waveshapeParam, Names::Wave_Low_LFO);
         boolHelper(lowLFO.invertParam, Names::Invert_Low_LFO);
@@ -109,7 +109,7 @@ namespace audio_plugin {
         boolHelper(midBandTrem.soloParam, Names::Solo_Mid_Band);
         floatHelper(midBandTrem.bandGainParam, Names::Gain_Mid_Band);
 
-        floatHelper(midLFO.symmetryParam, Names::Symmetry_Mid_LFO);
+        floatHelper(midLFO.symmetryParam, Names::Skew_Mid_LFO);
         floatHelper(midLFO.depthParam, Names::Depth_Mid_LFO);
         choiceHelper(midLFO.waveshapeParam, Names::Wave_Mid_LFO);
         boolHelper(midLFO.invertParam, Names::Invert_Mid_LFO);
@@ -124,7 +124,7 @@ namespace audio_plugin {
         boolHelper(highBandTrem.soloParam, Names::Solo_High_Band);
         floatHelper(highBandTrem.bandGainParam, Names::Gain_High_Band);
 
-        floatHelper(highLFO.symmetryParam, Names::Symmetry_High_LFO);
+        floatHelper(highLFO.symmetryParam, Names::Skew_High_LFO);
         floatHelper(highLFO.depthParam, Names::Depth_High_LFO);
         choiceHelper(highLFO.waveshapeParam, Names::Wave_High_LFO);
         boolHelper(highLFO.invertParam, Names::Invert_High_LFO);
@@ -170,7 +170,7 @@ namespace audio_plugin {
         apvts.addParameterListener(params.at(Names::Gain_High_Band), this);
         apvts.addParameterListener(params.at(Names::Wave_Low_LFO), this);
         apvts.addParameterListener(params.at(Names::Depth_Low_LFO), this);
-        apvts.addParameterListener(params.at(Names::Symmetry_Low_LFO), this);
+        apvts.addParameterListener(params.at(Names::Skew_Low_LFO), this);
         apvts.addParameterListener(params.at(Names::Invert_Low_LFO), this);
         apvts.addParameterListener(params.at(Names::Sync_Low_LFO), this);
         apvts.addParameterListener(params.at(Names::Rate_Low_LFO), this);
@@ -178,7 +178,7 @@ namespace audio_plugin {
         apvts.addParameterListener(params.at(Names::Relative_Phase_Low_LFO), this);
         apvts.addParameterListener(params.at(Names::Wave_Mid_LFO), this);
         apvts.addParameterListener(params.at(Names::Depth_Mid_LFO), this);
-        apvts.addParameterListener(params.at(Names::Symmetry_Mid_LFO), this);
+        apvts.addParameterListener(params.at(Names::Skew_Mid_LFO), this);
         apvts.addParameterListener(params.at(Names::Invert_Mid_LFO), this);
         apvts.addParameterListener(params.at(Names::Sync_Mid_LFO), this);
         apvts.addParameterListener(params.at(Names::Rate_Mid_LFO), this);
@@ -186,7 +186,7 @@ namespace audio_plugin {
         apvts.addParameterListener(params.at(Names::Relative_Phase_Mid_LFO), this);
         apvts.addParameterListener(params.at(Names::Wave_High_LFO), this);
         apvts.addParameterListener(params.at(Names::Depth_High_LFO), this);
-        apvts.addParameterListener(params.at(Names::Symmetry_High_LFO), this);
+        apvts.addParameterListener(params.at(Names::Skew_High_LFO), this);
         apvts.addParameterListener(params.at(Names::Invert_High_LFO), this);
         apvts.addParameterListener(params.at(Names::Sync_High_LFO), this);
         apvts.addParameterListener(params.at(Names::Rate_High_LFO), this);
@@ -316,32 +316,32 @@ namespace audio_plugin {
             depthRange,                                        // Range
             75));                                              // Default Value
 
-        /* LFO Symmetry */
+        /* LFO Skew */
         // ===================================================================================================================
-        auto symmetryRange = NormalisableRange<float>(12.5,  // Start
+        auto skewRange = NormalisableRange<float>(12.5,  // Start
                                                     87.5,  // Stop
                                                     0.5f,  // Step Size
                                                     1.f);  // Skew
 
         layout.add(std::make_unique<AudioParameterFloat>(
-            ParameterID{params.at(Names::Symmetry_Low_LFO),
+            ParameterID{params.at(Names::Skew_Low_LFO),
                         1},                      // Parameter ID, Version Hint
-            params.at(Names::Symmetry_Low_LFO),  // Parameter Name
-            symmetryRange,                       // Range
+            params.at(Names::Skew_Low_LFO),  // Parameter Name
+            skewRange,                       // Range
             50));                                // Default Value
 
         layout.add(std::make_unique<AudioParameterFloat>(
-            ParameterID{params.at(Names::Symmetry_Mid_LFO),
+            ParameterID{params.at(Names::Skew_Mid_LFO),
                         1},                      // Parameter ID & Hint
-            params.at(Names::Symmetry_Mid_LFO),  // Parameter Name
-            symmetryRange,                       // Range
+            params.at(Names::Skew_Mid_LFO),  // Parameter Name
+            skewRange,                       // Range
             50));                                // Default Value
 
         layout.add(std::make_unique<AudioParameterFloat>(
-            ParameterID{params.at(Names::Symmetry_High_LFO),
+            ParameterID{params.at(Names::Skew_High_LFO),
                         1},                       // Parameter ID & Hint
-            params.at(Names::Symmetry_High_LFO),  // Parameter Name
-            symmetryRange,                        // Range
+            params.at(Names::Skew_High_LFO),  // Parameter Name
+            skewRange,                        // Range
             50));                                 // Default Value
 
         /* LFO Invert */
@@ -1247,7 +1247,7 @@ namespace audio_plugin {
 
       // Flag for updates to Low LFO
       if (parameterID == params.at(Wave_Low_LFO) ||
-          parameterID == params.at(Symmetry_Low_LFO) ||
+          parameterID == params.at(Skew_Low_LFO) ||
           parameterID == params.at(Depth_Low_LFO) ||
           parameterID == params.at(Rate_Low_LFO) ||
           parameterID == params.at(Multiplier_Low_LFO) ||
@@ -1258,7 +1258,7 @@ namespace audio_plugin {
 
       // Flag for updates to Mid LFO
       if (parameterID == params.at(Wave_Mid_LFO) ||
-          parameterID == params.at(Symmetry_Mid_LFO) ||
+          parameterID == params.at(Skew_Mid_LFO) ||
           parameterID == params.at(Depth_Mid_LFO) ||
           parameterID == params.at(Rate_Mid_LFO) ||
           parameterID == params.at(Multiplier_Mid_LFO) ||
@@ -1269,7 +1269,7 @@ namespace audio_plugin {
 
       // Flag for updates to High LFO
       if (parameterID == params.at(Wave_High_LFO) ||
-          parameterID == params.at(Symmetry_High_LFO) ||
+          parameterID == params.at(Skew_High_LFO) ||
           parameterID == params.at(Depth_High_LFO) ||
           parameterID == params.at(Rate_High_LFO) ||
           parameterID == params.at(Multiplier_High_LFO) ||

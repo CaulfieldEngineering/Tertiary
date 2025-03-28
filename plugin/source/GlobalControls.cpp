@@ -604,17 +604,17 @@ void GlobalControls::makeWaveControlAttachments()
     // SYMMETRY AKA SKEW ===================
     symmetryLowAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
                             apvts,
-                            params.at(Names::Symmetry_Low_LFO),
+                            params.at(Names::Skew_Low_LFO),
                             lowBandControls.mSliderSkew.slider);
 
     symmetryMidAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
                             apvts,
-                            params.at(Names::Symmetry_Mid_LFO),
+                            params.at(Names::Skew_Mid_LFO),
                             midBandControls.mSliderSkew.slider);
 
     symmetryHighAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
                             apvts,
-                            params.at(Names::Symmetry_High_LFO),
+                            params.at(Names::Skew_High_LFO),
                             highBandControls.mSliderSkew.slider);
 
     // INVERT ===================
