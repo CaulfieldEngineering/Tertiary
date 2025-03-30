@@ -11,6 +11,13 @@ cmake_minimum_required(VERSION 3.22)
 include(${CMAKE_CURRENT_SOURCE_DIR}/config.cmake)
 
 
+# Allow environment variable to override the default version from config.cmake (e.g., GitHub tag)
+# =====================================================================
+if(NOT DEFINED wPROJECT_VERSION AND DEFINED ENV{wPROJECT_VERSION})
+  set(wPROJECT_VERSION "$ENV{wPROJECT_VERSION}")
+endif()
+
+
 # Use the variables defined in config.cmake
 # =====================================================================
 message(STATUS "CMakeLists.txt: Setting configuration variables.")
@@ -37,6 +44,7 @@ endif()
 
 
 # Configure the Windows Installation package files
+# This substitues all $w variables with those defined in config.cmake
 # =====================================================================
 message(STATUS "CMakeLists.txt: Configuring Windows Installation Files.")
 configure_file(
@@ -47,6 +55,7 @@ configure_file(
 
 
 # Configure the Windows Installation package files
+# This substitues all $w variables with those defined in config.cmake
 # =====================================================================
 message(STATUS "CMakeLists.txt: Configuring Windows Installation Files.")
 configure_file(
@@ -56,6 +65,7 @@ configure_file(
 )
 
 # Configure the macOS Distribution package file - Full
+# This substitues all $w variables with those defined in config.cmake
 # =====================================================================
 message(STATUS "CMakeLists.txt: Configuring macOS Distribution XML (Full).")
 configure_file(
@@ -65,6 +75,7 @@ configure_file(
 )
 
 # Configure the macOS Distribution package file - Demo
+# This substitues all $w variables with those defined in config.cmake
 # =====================================================================
 message(STATUS "CMakeLists.txt: Configuring macOS Distribution XML (Demo).")
 configure_file(
