@@ -683,14 +683,14 @@ jobs:
 
     # UPLOAD ARTIFACTS
     # ==========================================================================================
-    - name: Upload Installer Artifact
+    - name: Upload Final Installer Artifact
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.os }}-installer
         path: |
-          build/output/*.pkg
-          build/*.exe
-
+          build/*Installer_*.pkg
+          build/*Installer_*.exe
+  
 
 
 
