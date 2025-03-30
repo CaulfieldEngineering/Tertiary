@@ -57,10 +57,11 @@ jobs:
     #     key: libs
 
 
-    # Configure Projects
+    # Pull Tag Version back into CMake
     # ==========================================================================================
     - name: Inject Version from Tag
       if: startsWith(github.ref, 'refs/tags/v')
+      shell: bash
       run: |
         VERSION=${GITHUB_REF#refs/tags/v}
         echo "wPROJECT_VERSION=$VERSION" >> $GITHUB_ENV
