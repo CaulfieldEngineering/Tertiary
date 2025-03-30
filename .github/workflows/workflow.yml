@@ -1,5 +1,4 @@
-# CUSTOMER-FACING UPDATES!!
-# ==========================================================================================
+# Staging & Production Pipeline
 # ==========================================================================================
 
 
@@ -55,7 +54,6 @@ jobs:
 
 
 
-
     # Configure Projects - All Cases
     # ==========================================================================================
     - name: Configure CMake
@@ -69,12 +67,6 @@ jobs:
           exit 1
         fi
       shell: bash
-
-
-    # Compile Executables - All Cases
-    # ==========================================================================================
-    - name: Build
-      run: cmake --build ${{github.workspace}}/build --config ${{ matrix.build_type }}
 
 
     # Gather project variables from config.cmake - All Cases
@@ -137,7 +129,13 @@ jobs:
         fi
     
         echo "✓ New version is greater than all previous tags"
-      
+  
+
+    # Compile Executables - All Cases
+    # ==========================================================================================
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config ${{ matrix.build_type }}
+
 
     # Production Testing
     # ==========================================================================================
@@ -1092,3 +1090,41 @@ jobs:
         update_redirect "$SOURCE_URL_WIN" "$DEMO_FILE_URL_WIN"
         
         echo "Redirect URLs updated successfully."
+
+
+    # Install GitHub CLI
+    # ==========================================================================================
+    - name: Install GitHub CLI
+      if: failure() && startsWith(github.ref, 'refs/tags/v')
+      run: |
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          choco install gh -y
+        else
+          sudo apt update && sudo apt install gh -y
+        fi
+
+    # Delete Failed Release & Tag if unsuccessful
+    # ==========================================================================================
+    - name: Remove GitHub Tag and Release on Failure
+      if: failure() && startsWith(github.ref, 'refs/tags/v')
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        TAG_NAME="${GITHUB_REF#refs/tags/}"
+        echo "Cleaning up failed release and tag: $TAG_NAME"
+
+        # Delete GitHub release (if exists)
+        RELEASE_ID=$(gh api repos/${GITHUB_REPOSITORY}/releases \
+          --jq ".[] | select(.tag_name==\"$TAG_NAME\") | .id")
+        
+        if [ -n "$RELEASE_ID" ]; then
+          echo "Deleting release ID: $RELEASE_ID"
+          gh api -X DELETE repos/${GITHUB_REPOSITORY}/releases/$RELEASE_ID
+        else
+          echo "No matching release found for tag: $TAG_NAME"
+        fi
+
+        # Delete the tag itself
+        echo "Deleting tag: $TAG_NAME"
+        gh api -X DELETE repos/${GITHUB_REPOSITORY}/git/refs/tags/$TAG_NAME
+
