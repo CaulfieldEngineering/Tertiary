@@ -39,6 +39,12 @@ namespace audio_plugin {
         juce::String mNameSpace{"PluginProcessor"};
         bool setDebug{true};
 
+		/* Used by GUI to determine activation state */
+		bool getDemoState() { return mIsDemoVersion; }
+
+		/* Used by GUI and self to update the state, upon Key Checking or GUI Activation */
+        void setDemoState(bool newDemoState);
+
         //==============================================================================
         void prepareToPlay(double sampleRate, int samplesPerBlock) override;
         void releaseResources() override;
@@ -95,9 +101,9 @@ namespace audio_plugin {
         juce::AudioParameterBool* getShowFftParam() { return showFftParam; }
         juce::AudioParameterChoice* getFftPickofIdParam() { return fftPickoffParam; }
 
-        #ifdef DEMO_VERSION
-		   bool getIsDemoModeEnabled() { return effectEnabled; }
-        #endif
+        //#ifdef DEMO_VERSION
+		bool getIsDemoModeEnabled() { return effectEnabled; }
+        //#endif
         
         
         /* Input & Output Meters */
@@ -126,6 +132,9 @@ namespace audio_plugin {
         int fifoIndex = 0;
 
     private:
+
+		void checkActivationStatusOnStartup();
+
         bool parameterChangedLfoLow{true};
         bool parameterChangedLfoMid{true};
         bool parameterChangedLfoHigh{true};
@@ -141,15 +150,19 @@ namespace audio_plugin {
         
 		/* Demo Version */
         // =========================================================================
-        bool effectEnabled = true;
-        
-		#ifdef DEMO_VERSION
+		/* Stores the state of the Serial Key Activation */
+		std::unique_ptr<juce::PropertiesFile> propertiesFile;
+        bool mIsDemoVersion { true };
+
+		bool effectEnabled = true;
+
+		//#ifdef DEMO_VERSION
         int demoActiveTimeLimit{50};
         int demoBypassTimeLimit{10};
 		int64_t sampleCounter = 0;
 		int64_t samplesUntilDisable;
 		int64_t samplesUntilEnable;
-		#endif
+		//#endif
 
         /* Parameter Change Detection Flags */
         // =========================================================================

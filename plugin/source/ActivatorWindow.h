@@ -31,7 +31,14 @@ public:
     bool isOkToClose() {return mOkToClose; }
     void resetOkToClose() {mOkToClose = false; }
         
+	/* Tells this class whether or not the app is in Demo Version */
+	void setDemoState(bool demoState) {mIsDemoVersion = demoState;}
+
 private:
+
+	bool mIsDemoVersion {true};
+
+
     juce::TextEditor mTextCode;
     juce::HyperlinkButton mButtonPurchase;
     

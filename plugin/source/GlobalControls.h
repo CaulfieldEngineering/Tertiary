@@ -50,6 +50,9 @@ struct GlobalControls : juce::Component,
 
     void sendBroadcast(juce::String parameterName, juce::String parameterValue);
 
+	/* Tells this class whether or not the app is in Demo Version */
+	void setDemoState(bool demoState) {mIsDemoVersion = demoState;}
+
 private:
 
     BandControl lowBandControls{ apvts };
@@ -57,6 +60,8 @@ private:
     BandControl highBandControls{ apvts };
 
     bool setDebug{ false };
+
+	bool mIsDemoVersion {true};
 
     juce::String mNameSpace{ "GlobalControls" };
 

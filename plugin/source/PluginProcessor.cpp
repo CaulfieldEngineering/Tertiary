@@ -41,10 +41,15 @@ namespace audio_plugin {
         HP2.setType(juce::dsp::LinkwitzRileyFilterType::highpass);
 
 		// Demo Version
-		#ifdef DEMO_VERSION
+		//#ifdef DEMO_VERSION
+
+		checkActivationStatusOnStartup();
+
+		if (mIsDemoVersion) {
           samplesUntilDisable = demoActiveTimeLimit * getSampleRate();
           samplesUntilEnable = demoBypassTimeLimit * getSampleRate();
-        #endif
+        }
+        //#endif
     }
 
     //==============================================================================
@@ -144,6 +149,42 @@ namespace audio_plugin {
         boolHelper(showFftParam, Names::Show_FFT);
         choiceHelper(fftPickoffParam, Names::FFT_Pickoff);
     }
+
+
+	/* Checking the Activation Status */
+    //==============================================================================
+    void AudioPluginAudioProcessor::checkActivationStatusOnStartup() {
+      juce::PropertiesFile::Options options;
+		options.applicationName = "Tertiary";
+		options.filenameSuffix = "settings";
+		options.osxLibrarySubFolder = "Application Support";
+
+		propertiesFile = std::make_unique<juce::PropertiesFile>(options);
+
+		auto savedKey = propertiesFile->getValue("licenseKey", "");
+		auto savedEmail = propertiesFile->getValue("licenseEmail", "");
+
+		if (savedKey.isNotEmpty() && savedEmail.isNotEmpty())
+		{
+			// Mark plugin as activated (i.e., not demo)
+			mIsDemoVersion = false;
+		}
+		else
+		{
+			mIsDemoVersion = true;
+		}
+
+	}
+
+	void AudioPluginAudioProcessor::setDemoState(bool demoState) {
+		mIsDemoVersion = demoState;
+
+		if (mIsDemoVersion) {
+          samplesUntilDisable = demoActiveTimeLimit * getSampleRate();
+          samplesUntilEnable = demoBypassTimeLimit * getSampleRate();
+        }
+
+	}
 
     /* Registers AudioProcessor as a listener to all parameters */
     //==============================================================================
@@ -624,10 +665,14 @@ namespace audio_plugin {
       }
 
 		// Demo Version
-		#ifdef DEMO_VERSION
+		//#ifdef DEMO_VERSION
+	  if (mIsDemoVersion)
+		{
 			samplesUntilDisable = demoActiveTimeLimit * getSampleRate();
 			samplesUntilEnable = demoBypassTimeLimit * getSampleRate();
-		#endif
+		}
+
+		//#endif
 
       /* Used to reduce audio artifacts by smoothing the gain changes */
       inputGain.setRampDurationSeconds(0.05);
@@ -743,28 +788,26 @@ namespace audio_plugin {
 
 
 	  /* Demo Version Counter */
-	  #ifdef DEMO_VERSION
-         int numSamples = buffer.getNumSamples();
-         sampleCounter += numSamples;
+	  //#ifdef DEMO_VERSION
+      if (mIsDemoVersion) {
+        int numSamples = buffer.getNumSamples();
+        sampleCounter += numSamples;
 
-		if (effectEnabled) // If effect is enabled, how long until disable?
-		{
-			if (sampleCounter >= samplesUntilDisable)
-			{
-				effectEnabled = false;
-				sampleCounter = 0;
-			}
-		}
-		else // If effect is disabled, how long until enable?
-		{
-			if (sampleCounter >= samplesUntilEnable)
-			{
-				effectEnabled = true;
-				sampleCounter = 0;
-			}
-		}
-
-	   #endif
+        if (effectEnabled)  // If effect is enabled, how long until disable?
+        {
+          if (sampleCounter >= samplesUntilDisable) {
+            effectEnabled = false;
+            sampleCounter = 0;
+          }
+        } else  // If effect is disabled, how long until enable?
+        {
+          if (sampleCounter >= samplesUntilEnable) {
+            effectEnabled = true;
+            sampleCounter = 0;
+          }
+        }
+      }
+	   //#endif
 
 
 
@@ -1235,6 +1278,10 @@ namespace audio_plugin {
     juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() {
       return new AudioPluginAudioProcessor();
     }
+
+
+
+
 
     /* Parameter Changed Callback */
     //==============================================================================

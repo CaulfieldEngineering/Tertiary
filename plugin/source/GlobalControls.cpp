@@ -59,9 +59,9 @@ GlobalControls::GlobalControls(audio_plugin::AudioPluginAudioProcessor& p)
     //makeLabel(mLabelSkew, "Skew");
     //makeLabel(mLabelBandGain, "Gain");
     
-	#ifdef DEMO_VERSION
-		startTimerHz(30);
-    #endif  // DEBUG
+	//#ifdef DEMO_VERSION
+	startTimerHz(30);
+    //#endif  // DEBUG
 
 
 
@@ -69,7 +69,9 @@ GlobalControls::GlobalControls(audio_plugin::AudioPluginAudioProcessor& p)
 
 void GlobalControls::timerCallback()
 {
-    #ifdef DEMO_VERSION
+    //#ifdef DEMO_VERSION
+	if (mIsDemoVersion)
+	{
         auto isEnabled = audioProcessor.getIsDemoModeEnabled();
 
         if (!isEnabled)
@@ -84,7 +86,8 @@ void GlobalControls::timerCallback()
               midBandControls.setEnabled(true);
               highBandControls.setEnabled(true);
         }
-    #endif
+    }
+    //#endif
 }
 
 void GlobalControls::paint(juce::Graphics& g)

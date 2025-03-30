@@ -20,6 +20,12 @@ public:
     void paint(juce::Graphics& g) override;
     void resized() override;
 
+	/* Tells this class whether or not the app is in Demo Version */
+	void setDemoState(bool demoState) {mIsDemoVersion = demoState;}
+
+    void mouseEnter(const juce::MouseEvent&) override;
+    void mouseExit(const juce::MouseEvent&) override;
+
 private:
     // Original source images
     juce::Image imageTopBanner;
@@ -41,4 +47,8 @@ private:
     // Your existing dimensions
     float targetTitleWidth{ 750.f };
     float targetTitleHeight{ 50.f };
+
+	bool mIsDemoVersion {true};
+
+	bool mIsMouseOver { false };
 };

@@ -10,12 +10,13 @@
 
 
 #include "AboutWindow.h"
+#include "PluginEditor.h"
 
 
 
 
-
-AboutWindow::AboutWindow()
+AboutWindow::AboutWindow(audio_plugin::AudioPluginAudioProcessor& p, audio_plugin::AudioPluginAudioProcessorEditor& e)
+    : audioProcessor(p), pluginEditor(e)
 {
     setAlpha(0.95f);
 
@@ -35,6 +36,13 @@ AboutWindow::AboutWindow()
     mButtonWebsiteLink.setURL(juce::URL("http://www.wonderlandaudio.com"));
     mButtonWebsiteLink.setColour(juce::HyperlinkButton::textColourId, juce::Colours::oldlace);
     addAndMakeVisible(mButtonWebsiteLink);
+
+	mIsDemoVersion = audioProcessor.getDemoState();
+
+	setUpSerialKeyEditor();
+    setUpEmailEditor();
+    setUpActionButton();
+    setUpStatusLabel();
 
 }
 
@@ -113,9 +121,6 @@ void AboutWindow::paint(juce::Graphics& g)
     juce::Rectangle<int> versionBounds = bounds.removeFromTop(static_cast<int>(titleBounds.getBottom()) + 60)
                                                .removeFromBottom(60);
     juce::String versionNumber = JucePlugin_VersionString;
-    #ifdef DEMO_VERSION
-        versionNumber += ".D";
-    #endif
     
     juce::String releaseDate = formatBuildDateTime();
     g.drawFittedText("Version: " + versionNumber, versionBounds.removeFromTop(30), juce::Justification::centred, 1);
@@ -123,14 +128,24 @@ void AboutWindow::paint(juce::Graphics& g)
 
     // Draw Demo Version Disclaimer
 	// ==========================================================
-    #ifdef DEMO_VERSION
-        g.setFont(fontSize * 0.8f);  // Scale this font too
-        g.setColour(juce::Colours::lightgrey);
-        juce::Rectangle<int> disclaimerBounds = bounds.removeFromTop(60);
-        disclaimerBounds = disclaimerBounds.reduced(5, 0);
-        g.drawFittedText("Demo Version: Effect is disabled once every\n50 seconds, for 10 seconds.",
-                         disclaimerBounds, juce::Justification::centred, 2);
-    #endif
+	if (mIsDemoVersion)
+	{
+		g.setFont(fontSize * 0.8f);
+		g.setColour(juce::Colours::lightgrey);
+		juce::Rectangle<int> disclaimerBounds = bounds.removeFromTop(60).reduced(5, 0);
+		g.drawFittedText("Demo Version: Effect is disabled once every\n50 seconds, for 10 seconds.",
+						 disclaimerBounds, juce::Justification::centred, 2);
+	}
+	else
+	{
+		g.setFont(fontSize * 0.8f);
+		g.setColour(juce::Colour(0xff409963)); // 0xff indicates full opacity
+		juce::Rectangle<int> thanksBounds = bounds.removeFromTop(60).reduced(5, 0);
+		g.drawFittedText("Full Version Activated\nThank you for your purchase!",
+						 thanksBounds, juce::Justification::centred, 1);
+
+
+	}
 
     // Draw Window Border
 	// ==========================================================
@@ -141,14 +156,180 @@ void AboutWindow::resized()
 {
     auto bounds = getLocalBounds();
 
+    // Position the Close ("X") button in the top-right corner
     mButtonClose.setBounds(bounds.getRight() - 30, 5, 25, 25);
 
+    // Position the website link button at the bottom center
     mButtonWebsiteLink.setBounds(bounds.getX(), bounds.getBottom() - 50, bounds.getWidth(), 30);
+
+	// ===============================
+	// Position Activation UI Elements
+	// ===============================
+
+	auto editorArea = bounds.withTrimmedTop(bounds.getHeight() * 0.575f).reduced(40, 0);
+
+	// Email Address Field
+	mTextEditorEmailAddress.setBounds(editorArea.removeFromTop(30));
+
+	// Serial Key Field
+	editorArea.removeFromTop(10); // spacing
+	mTextEditorSerialKey.setBounds(editorArea.removeFromTop(30));
+
+	// Action Button
+	auto buttonArea = editorArea.removeFromTop(30).translated(0, 10);
+	mActionButton.setBounds(buttonArea);
+
+	// Status Label
+	auto statusArea = buttonArea.translated(0, 35);
+	statusArea.setHeight(20);
+	mLabelStatus.setBounds(statusArea);
 }
 
-#include <map>
-#include <ctime>
-#include <juce_core/juce_core.h>
+
+void AboutWindow::setUpSerialKeyEditor()
+{
+    addAndMakeVisible(mTextEditorSerialKey);
+
+    mTextEditorSerialKey.setMultiLine(false);
+    mTextEditorSerialKey.setTextToShowWhenEmpty("Enter Serial Key...", juce::Colours::darkgrey);
+    mTextEditorSerialKey.setFont(juce::Font(16.0f));
+    mTextEditorSerialKey.setColour(juce::TextEditor::backgroundColourId, juce::Colours::black.withAlpha(0.3f));
+    mTextEditorSerialKey.setColour(juce::TextEditor::textColourId, juce::Colours::white);
+    mTextEditorSerialKey.setColour(juce::TextEditor::outlineColourId, juce::Colours::grey.withAlpha(0.6f));
+    mTextEditorSerialKey.setJustification(juce::Justification::centred);
+
+    // Load key from disk
+    juce::PropertiesFile::Options options;
+    options.applicationName = "Tertiary";
+    options.filenameSuffix = "settings";
+    options.osxLibrarySubFolder = "Application Support";
+    juce::PropertiesFile props(options);
+
+
+
+    if (mIsDemoVersion)
+    {
+        mTextEditorSerialKey.setReadOnly(false);
+        mTextEditorSerialKey.setText("");
+    }
+    else
+    {
+        mTextEditorSerialKey.setReadOnly(true);
+
+		juce::String savedKey = props.getValue("licenseKey", "");
+		if (savedKey.isNotEmpty())
+			savedKey = "Key: " + savedKey;
+
+        mTextEditorSerialKey.setText(savedKey);
+    }
+}
+
+void AboutWindow::setUpEmailEditor()
+{
+    addAndMakeVisible(mTextEditorEmailAddress);
+
+    mTextEditorEmailAddress.setMultiLine(false);
+    mTextEditorEmailAddress.setTextToShowWhenEmpty("Enter Email Address...", juce::Colours::darkgrey);
+    mTextEditorEmailAddress.setFont(juce::Font(16.0f));
+    mTextEditorEmailAddress.setColour(juce::TextEditor::backgroundColourId, juce::Colours::black.withAlpha(0.3f));
+    mTextEditorEmailAddress.setColour(juce::TextEditor::textColourId, juce::Colours::white);
+    mTextEditorEmailAddress.setColour(juce::TextEditor::outlineColourId, juce::Colours::grey.withAlpha(0.6f));
+    mTextEditorEmailAddress.setJustification(juce::Justification::centred);
+
+    // Load email from disk
+    juce::PropertiesFile::Options options;
+    options.applicationName = "Tertiary";
+    options.filenameSuffix = "settings";
+    options.osxLibrarySubFolder = "Application Support";
+    juce::PropertiesFile props(options);
+
+
+
+    if (mIsDemoVersion)
+    {
+        mTextEditorEmailAddress.setReadOnly(false);
+        mTextEditorEmailAddress.setText("");
+    }
+    else
+    {
+
+		mTextEditorEmailAddress.setReadOnly(true);
+
+		juce::String savedEmail = props.getValue("licenseEmail", "");
+		if (savedEmail.isNotEmpty())
+			savedEmail = "Email: " + savedEmail;
+
+        mTextEditorEmailAddress.setText(savedEmail);
+    }
+}
+
+
+
+void AboutWindow::setUpActionButton()
+{
+    addAndMakeVisible(mActionButton);
+
+    // Custom green: #409963 = RGB(64, 153, 99)
+    juce::Colour customGreen(0xff409963);
+    juce::Colour grey = juce::Colours::darkgrey;
+
+    if (mIsDemoVersion)
+    {
+        mActionButton.setEnabled(true);
+        mActionButton.setButtonText("Activate Serial Key");
+
+        mActionButton.setColour(juce::TextButton::buttonColourId, customGreen);
+        mActionButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+        mActionButton.setColour(juce::TextButton::textColourOnId, juce::Colours::lightgrey);
+
+        mActionButton.onClick = [this]()
+        {
+            juce::String enteredKey = mTextEditorSerialKey.getText().trim();
+
+            if (enteredKey.isNotEmpty())
+            {
+                DBG("Attempting to activate serial key: " + enteredKey);
+                attemptSerialKeyValidation();
+            }
+            else
+            {
+                DBG("No serial key entered.");
+                mLabelStatus.setText("Enter a serial key.", juce::dontSendNotification);
+            }
+        };
+    }
+    else
+    {
+        mActionButton.setEnabled(true);
+        mActionButton.setButtonText("Deactivate Key");
+
+        mActionButton.setColour(juce::TextButton::buttonColourId, grey);
+        mActionButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+        mActionButton.setColour(juce::TextButton::textColourOnId, juce::Colours::lightgrey);
+
+        mActionButton.onClick = [this]()
+        {
+            DBG("Attempting to deactivate serial key");
+            attemptSerialKeyDeactivation();
+        };
+    }
+}
+
+
+
+
+
+
+void AboutWindow::setUpStatusLabel()
+{
+    addAndMakeVisible(mLabelStatus);
+
+    mLabelStatus.setText("", juce::dontSendNotification);
+    mLabelStatus.setJustificationType(juce::Justification::centred);
+    mLabelStatus.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    mLabelStatus.setFont(juce::Font(14.0f, juce::Font::italic));
+}
+
 
 juce::String AboutWindow::formatBuildDateTime()
 {
@@ -216,11 +397,283 @@ void AboutWindow::buttonClicked(juce::Button* button)
 
 void AboutWindow::mouseExit(const juce::MouseEvent& event)
 {
-    if (!isMouseOver())
-    {
-        if (!mButtonClose.isMouseOver() && !mButtonWebsiteLink.isMouseOver())
-            setVisible(false);
-    }
+    //if (!isMouseOver())
+    //{
+    //    if (!mButtonClose.isMouseOver() && !mButtonWebsiteLink.isMouseOver())
+    //        setVisible(false);
+    //}
 
 }
+
+
+
+
+
+void AboutWindow::attemptSerialKeyValidation()
+{
+    auto serialKey = mTextEditorSerialKey.getText().trim();
+    auto email = mTextEditorEmailAddress.getText().trim();
+
+    if (serialKey.isEmpty())
+    {
+        mLabelStatus.setText("Enter a serial key.", juce::dontSendNotification);
+        return;
+    }
+
+    mLabelStatus.setText("Validating...", juce::dontSendNotification);
+
+    juce::Thread::launch([this, serialKey, email]()
+    {
+        juce::URL apiURL("https://wonderlandaudio.com/wp-json/wcsn/validate");
+        apiURL = apiURL.withParameter("product_id", "45")
+                       .withParameter("serial_key", serialKey)
+                       .withParameter("request", "validate");
+
+        if (email.isNotEmpty())
+            apiURL = apiURL.withParameter("email", email);
+
+        juce::URL::InputStreamOptions options(juce::URL::ParameterHandling::inAddress);
+        options.withConnectionTimeoutMs(5000);
+
+        std::unique_ptr<juce::InputStream> stream(apiURL.createInputStream(options));
+
+        if (stream != nullptr)
+        {
+            auto responseStr = stream->readEntireStreamAsString();
+
+            auto json = juce::JSON::parse(responseStr);
+            if (auto* obj = json.getDynamicObject())
+            {
+                auto code = obj->getProperty("code").toString();
+                auto message = obj->getProperty("message").toString();
+
+                juce::MessageManager::callAsync([this, code, message, obj]()
+                {
+					// Key is confirmed to be valid
+                    if (code == "key_valid")
+                    {
+                        mLabelStatus.setText("Serial key valid!", juce::dontSendNotification);
+
+                        attemptSerialKeyActivation();
+                    }
+                    else
+                    {
+                        mLabelStatus.setText("Error: " + message, juce::dontSendNotification);
+                        DBG("API Error: " + code + " - " + message);
+                    }
+                });
+            }
+            else
+            {
+                juce::MessageManager::callAsync([this]()
+                {
+                    mLabelStatus.setText("Invalid JSON from server.", juce::dontSendNotification);
+                });
+            }
+        }
+        else
+        {
+            juce::MessageManager::callAsync([this]()
+            {
+                mLabelStatus.setText("Connection to server failed.", juce::dontSendNotification);
+            });
+        }
+    });
+}
+
+
+
+void AboutWindow::attemptSerialKeyActivation()
+{
+    auto serialKey = mTextEditorSerialKey.getText().trim();
+    auto email = mTextEditorEmailAddress.getText().trim();
+    juce::String instance = juce::SystemStats::getDeviceDescription();
+    juce::String platform = juce::SystemStats::getOperatingSystemName();
+
+    mLabelStatus.setText("Activating...", juce::dontSendNotification);
+
+    juce::Thread::launch([this, serialKey, email, instance, platform]()
+    {
+        juce::URL activateURL("https://wonderlandaudio.com/wp-json/wcsn/activate");
+        activateURL = activateURL.withParameter("product_id", "45")
+                                 .withParameter("serial_key", serialKey)
+                                 .withParameter("instance", instance)
+                                 .withParameter("platform", platform);
+
+        if (email.isNotEmpty())
+            activateURL = activateURL.withParameter("email", email);
+
+        auto stream = activateURL.createInputStream(
+            juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
+                .withConnectionTimeoutMs(5000));
+
+        if (stream)
+        {
+            auto responseStr = stream->readEntireStreamAsString();
+            auto json = juce::JSON::parse(responseStr);
+
+            if (auto* obj = json.getDynamicObject())
+            {
+                auto code = obj->getProperty("code").toString();
+                auto message = obj->getProperty("message").toString();
+
+				juce::MessageManager::callAsync([this, code, message]()
+				{
+					if (code == "key_activated" || code == "instance_already_activated")
+					{
+						if (code == "instance_already_activated")
+							mLabelStatus.setText("Instance was already activated.  Reactivation successful!", juce::dontSendNotification);
+						else
+							mLabelStatus.setText("Activation successful!", juce::dontSendNotification);
+
+						updateAppOnActivationChange(true);
+					}
+					else
+					{
+						mLabelStatus.setText("Activation error: " + message, juce::dontSendNotification);
+						DBG("API Error: " + code + " - " + message);
+					}
+				});
+            }
+            else
+            {
+                juce::MessageManager::callAsync([this]()
+                {
+                    mLabelStatus.setText("Invalid activation response.", juce::dontSendNotification);
+                });
+            }
+        }
+        else
+        {
+            juce::MessageManager::callAsync([this]()
+            {
+                mLabelStatus.setText("Activation connection failed.", juce::dontSendNotification);
+            });
+        }
+    });
+}
+
+void AboutWindow::attemptSerialKeyDeactivation()
+{
+	auto serialKey = mTextEditorSerialKey.getText().fromFirstOccurrenceOf("Key: ", false, true).trim();
+	auto email = mTextEditorEmailAddress.getText().fromFirstOccurrenceOf("Email: ", false, true).trim();
+
+    juce::String instance = juce::SystemStats::getDeviceDescription();
+    juce::String platform = juce::SystemStats::getOperatingSystemName();
+
+    mLabelStatus.setText("Deactivating...", juce::dontSendNotification);
+
+    juce::Thread::launch([this, serialKey, email, instance, platform]()
+    {
+        juce::URL deactivateURL("https://wonderlandaudio.com/wp-json/wcsn/deactivate");
+        deactivateURL = deactivateURL.withParameter("product_id", "45")
+                                     .withParameter("serial_key", serialKey)
+                                     .withParameter("instance", instance)
+                                     .withParameter("platform", platform);
+
+        if (email.isNotEmpty())
+            deactivateURL = deactivateURL.withParameter("email", email);
+
+        auto stream = deactivateURL.createInputStream(
+            juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
+                .withConnectionTimeoutMs(5000));
+
+        if (stream)
+        {
+            auto responseStr = stream->readEntireStreamAsString();
+            auto json = juce::JSON::parse(responseStr);
+
+            if (auto* obj = json.getDynamicObject())
+            {
+                auto code = obj->getProperty("code").toString();
+                auto message = obj->getProperty("message").toString();
+
+                juce::MessageManager::callAsync([this, code, message]()
+                {
+                    if (code == "key_deactivated" || code == "instance_deactivated")
+                    {
+                        mLabelStatus.setText("Deactivation successful.", juce::dontSendNotification);
+
+                        // Optionally clear local props or revert UI to demo mode
+                        updateAppOnActivationChange(false);
+                    }
+                    else
+                    {
+                        mLabelStatus.setText("Deactivation error: " + message, juce::dontSendNotification);
+                        DBG("API Error: " + code + " - " + message);
+                    }
+                });
+            }
+            else
+            {
+                juce::MessageManager::callAsync([this]()
+                {
+                    mLabelStatus.setText("Invalid deactivation response.", juce::dontSendNotification);
+                });
+            }
+        }
+        else
+        {
+            juce::MessageManager::callAsync([this]()
+            {
+                mLabelStatus.setText("Deactivation connection failed.", juce::dontSendNotification);
+            });
+        }
+    });
+}
+
+
+
+void AboutWindow::updateAppOnActivationChange(bool isActivating)
+{
+
+// Store Local Key
+	if (isActivating)
+         updateLocalKeyData(true);
+	else
+	     updateLocalKeyData(false);
+
+
+	// Notify Processor of Change
+	audioProcessor.setDemoState(!isActivating);
+  
+	// Notify GUI of Change, which will propagate changes downward
+	pluginEditor.updateDemoState(!isActivating);
+
+
+	// Reload local changes
+	setUpSerialKeyEditor();
+	setUpEmailEditor();
+	setUpActionButton();
+
+	repaint();
+
+}
+
+
+void AboutWindow::updateLocalKeyData(bool isActivating)
+{
+    juce::PropertiesFile::Options options;
+    options.applicationName = "Tertiary"; // or whatever your plugin name is
+    options.filenameSuffix = "settings";
+    options.osxLibrarySubFolder = "Application Support"; // macOS-specific
+    options.storageFormat = juce::PropertiesFile::StorageFormat::storeAsXML; // Easier to read
+
+    juce::PropertiesFile props(options);
+
+	juce::String email = mTextEditorEmailAddress.getText().trim();
+
+	juce::String serialKey = "";
+
+	if (isActivating)
+      serialKey = mTextEditorSerialKey.getText().trim();
+
+    props.setValue("licenseKey", serialKey);
+    props.setValue("licenseEmail", email);
+    props.saveIfNeeded();
+
+    juce::File file = props.getFile();
+    DBG("Stored license data at: " + file.getFullPathName());
+}
+
 

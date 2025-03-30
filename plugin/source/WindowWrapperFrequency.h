@@ -13,6 +13,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "FrequencyResponse.h"
 #include "OptionsMenu.h"
+#include "PluginProcessor.h"
 
 struct WindowWrapperFrequency : juce::Component, 
                                 juce::Timer,
@@ -30,10 +31,10 @@ struct WindowWrapperFrequency : juce::Component,
     void paintFFT(juce::Graphics& g, juce::Rectangle<float> bounds);
 
     FrequencyResponse& getFrequencyResponse() { return frequencyResponse; };
-
+	
 private:
     /* Reference to the Audio Processor & DSP Parameters */
-
+	
     juce::String mNameSpace{ "WindowWrapperFrequency" };
     bool setDebug{ true };
 

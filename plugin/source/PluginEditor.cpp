@@ -3,14 +3,13 @@
 
 namespace audio_plugin {
 
-    AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(
-        AudioPluginAudioProcessor& p)
-        : AudioProcessorEditor(&p), audioProcessor(p) {
+AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudioProcessor& p)
+    : AudioProcessorEditor(&p),
+      audioProcessor(p),
+      aboutWindow(audioProcessor, *this)  // <-- added here explicitly
+{
+    checkForSerialKeyOnStartup();
 
-		// Force DPI Awareness
-		//#if JUCE_WINDOWS
-  //         SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-		//#endif
 
 		/* Used for Hi-Res Screen Capture... for graphics*/
 		fullScreenScope = false;
@@ -87,12 +86,41 @@ namespace audio_plugin {
 	  if (!fullScreenScope) {
             addAndMakeVisible(aboutWindow);
             aboutWindow.setVisible(false);
-          }
+      }
+
+
     }
+
+
 
     //==============================================================================
     AudioPluginAudioProcessorEditor::~AudioPluginAudioProcessorEditor() {}
 
+	//==============================================================================
+	void AudioPluginAudioProcessorEditor::checkForSerialKeyOnStartup()
+	{
+    	// [1] Get state from Processor
+        bool mIsDemoVersion = audioProcessor.getDemoState();
+
+		// Propagate state to rest of GUI
+		updateDemoState(mIsDemoVersion);
+		
+	}
+
+	//==============================================================================
+	void AudioPluginAudioProcessorEditor::updateDemoState(bool newDemoState)
+	{
+		// [1] Pass state to Top Banner
+        topBanner.setDemoState(newDemoState);
+
+		// [2] Pass state to Global Controls
+        globalControls.setDemoState(newDemoState);
+
+		// [3] Pass state to About Window
+        aboutWindow.setDemoState(newDemoState);
+		
+		repaint();
+	}
 
     //==============================================================================
     void AudioPluginAudioProcessorEditor::paint(juce::Graphics& g) {
@@ -108,7 +136,7 @@ namespace audio_plugin {
 
       //const float aspectRatio = 750.f / 515.f;  // Width / Height
 		  
-	  DBG("Updated DPI Scale Factor: " + juce::String(Desktop::getInstance().getGlobalScaleFactor()));
+	  //DBG("Updated DPI Scale Factor: " + juce::String(Desktop::getInstance().getGlobalScaleFactor()));
 
 
       /* Enforce Aspect Ratio */
@@ -131,12 +159,12 @@ namespace audio_plugin {
       auto bounds = getLocalBounds();
 
       auto aboutWidth = 400;
-      auto aboutHeight = 300;
+      auto aboutHeight = 450;
       auto aboutX = bounds.getCentreX() - aboutWidth / 2;
       auto aboutY = bounds.getCentreY() - aboutHeight / 2;
 
       aboutWindow.setBounds(aboutX, aboutY, aboutWidth, aboutHeight);
-      // aboutWindow.toFront(false);
+      aboutWindow.toFront(false);
     }
 
     /* Builds the UI layout */
@@ -193,9 +221,6 @@ namespace audio_plugin {
           aboutWindow.setVisible(false);
       }
     }
-
-
-
 
 
 

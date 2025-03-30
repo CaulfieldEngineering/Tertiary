@@ -31,12 +31,22 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         void buttonClicked(juce::Button* button) override{};
         void mouseDoubleClick(const juce::MouseEvent& event) override;
 
+		/* Used by GUI and self to update the state, upon Key Checking or GUI Activation */
+        void updateDemoState(bool newDemoState);
+
     private:
         juce::String mNameSpace{"PluginEditor"};
         bool setDebug{true};
         bool openDebug{false};
 
 		bool fullScreenScope{true};
+
+		/* License Key Establishment */
+        bool mIsDemoVersion {true};
+        void checkForSerialKeyOnStartup();
+
+
+
 
         /* Reference to the Audio Processor & DSP Parameters */
         AudioPluginAudioProcessor& audioProcessor;

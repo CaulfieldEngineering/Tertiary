@@ -39,6 +39,15 @@ void TopBanner::paint(juce::Graphics& g)
     auto bounds = getLocalBounds().toFloat();
     auto boundsHeight = bounds.getHeight();
     
+	if (mIsMouseOver)
+	{
+		juce::Graphics::ScopedSaveState state(g); // Optional safety
+		g.reduceClipRegion(getLocalBounds());     // Ensure no overpaint
+		g.setColour(juce::Colours::purple.withAlpha(0.2f));
+		g.fillRect(getLocalBounds());             // Flat and predictable
+	}
+
+
     // Use Windows DPI scale
     float scale = getWindowsDPIScale(this);
 
@@ -99,11 +108,34 @@ void TopBanner::paint(juce::Graphics& g)
 
 	// Demo Declaration
 	// ==========================================================
-    #ifdef DEMO_VERSION
-        auto demoBounds = getLocalBounds().withTrimmedRight(getWidth() * 0.60f);
-        g.setFont(juce::Font("Helvetica", 36.0f * scale, juce::Font::bold));
-        g.setColour(juce::Colours::lightgrey.withAlpha(0.5f));
-        g.drawFittedText("DEMO VERSION", demoBounds, juce::Justification::centredLeft, 1);
-    #endif
+	if (mIsDemoVersion)
+	{
+		auto area = getLocalBounds().withTrimmedRight(getWidth() * 0.60f).withLeft(25);
+
+		// "DEMO VERSION" - large text
+		g.setFont(juce::Font("Helvetica", 30.0f * scale, juce::Font::bold));
+		g.setColour(juce::Colours::lightgrey.withAlpha(0.5f));
+		auto demoTextBounds = area.removeFromTop(35);
+		g.drawText("DEMO VERSION", demoTextBounds, juce::Justification::left, false);
+
+		// "DOUBLE-CLICK TO ACTIVATE" - smaller text below
+		g.setFont(juce::Font("Helvetica", 16.0f * scale, juce::Font::bold));
+		g.setColour(juce::Colours::lightgrey.withAlpha(0.4f));
+		auto activateTextBounds = demoTextBounds.translated(0, 25); // vertical offset below first line
+		g.drawText("DOUBLE-CLICK TO ACTIVATE", activateTextBounds, juce::Justification::left, false);
+	}
+
 }
 
+
+void TopBanner::mouseEnter(const juce::MouseEvent&)
+{
+	mIsMouseOver = true;
+  repaint();
+}
+
+void TopBanner::mouseExit(const juce::MouseEvent&)
+{
+	mIsMouseOver = false;
+  repaint();
+}
