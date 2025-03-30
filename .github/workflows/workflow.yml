@@ -82,6 +82,20 @@ jobs:
       shell: bash
       
 
+    # Confirm Tag is of Production Branch, and not Staging - Tag Only
+    # ==========================================================================================
+    - name: Ensure Tag is on Production Branch
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        git fetch origin production
+        TAG_COMMIT=$(git rev-parse HEAD)
+        if git merge-base --is-ancestor $TAG_COMMIT origin/production; then
+          echo "✓ Tag commit is part of production branch history."
+        else
+          echo "::error::Tag commit is NOT based on production branch. Aborting."
+          exit 1
+        fi
+
     # Confirm GitHub Tag Matches config.cmake tag - Tags Only
     # ==========================================================================================
     - name: Verify Tag Version Matches Config Version
@@ -1092,7 +1106,7 @@ jobs:
         echo "Redirect URLs updated successfully."
 
 
-    # Install GitHub CLI
+    # Install GitHub CLI - Tag Only
     # ==========================================================================================
     - name: Install GitHub CLI
       if: failure() && startsWith(github.ref, 'refs/tags/v')
@@ -1100,31 +1114,31 @@ jobs:
         if [[ "$RUNNER_OS" == "Windows" ]]; then
           choco install gh -y
         else
-          sudo apt update && sudo apt install gh -y
+          brew install gh || (which apt && sudo apt update && sudo apt install gh -y)
         fi
+      shell: bash
 
-    # Delete Failed Release & Tag if unsuccessful
+    # Delete Failed Release & Tag if unsuccessful - Tag Only
     # ==========================================================================================
     - name: Remove GitHub Tag and Release on Failure
       if: failure() && startsWith(github.ref, 'refs/tags/v')
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      shell: bash
       run: |
+        echo "$GH_TOKEN" | gh auth login --with-token
         TAG_NAME="${GITHUB_REF#refs/tags/}"
         echo "Cleaning up failed release and tag: $TAG_NAME"
 
-        # Delete GitHub release (if exists)
-        RELEASE_ID=$(gh api repos/${GITHUB_REPOSITORY}/releases \
-          --jq ".[] | select(.tag_name==\"$TAG_NAME\") | .id")
+        # Try to get the release ID
+        RELEASE_ID=$(gh release view "v$TAG_NAME" --json id -q ".id" 2>/dev/null || true)
         
         if [ -n "$RELEASE_ID" ]; then
-          echo "Deleting release ID: $RELEASE_ID"
-          gh api -X DELETE repos/${GITHUB_REPOSITORY}/releases/$RELEASE_ID
+          echo "✓ Deleting release ID: $RELEASE_ID"
+          gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/$RELEASE_ID"
         else
-          echo "No matching release found for tag: $TAG_NAME"
+          echo "✗ No matching release found for tag: $TAG_NAME"
         fi
 
-        # Delete the tag itself
-        echo "Deleting tag: $TAG_NAME"
-        gh api -X DELETE repos/${GITHUB_REPOSITORY}/git/refs/tags/$TAG_NAME
-
+        echo "✓ Deleting tag: $TAG_NAME"
+        gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/$TAG_NAME"
