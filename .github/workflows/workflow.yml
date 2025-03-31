@@ -55,7 +55,6 @@ jobs:
     #     key: libs
 
 
-
     # Configure Projects - All Cases
     # ==========================================================================================
     - name: Configure CMake
@@ -97,6 +96,7 @@ jobs:
           echo "::error::Tag commit is NOT based on production branch. Aborting."
           exit 1
         fi
+
 
     # Confirm GitHub Tag Matches config.cmake tag - Tags Only
     # ==========================================================================================
@@ -181,6 +181,7 @@ jobs:
       if: matrix.os == 'windows-latest'
       run: choco install innosetup --yes
 
+
     # Compile Inno Setup script (Windows Only) - All Cases
     # ==========================================================================================
     - name: Compile Inno Setup script (Windows Only)
@@ -188,6 +189,7 @@ jobs:
       run: |
         & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' "${{github.workspace}}\build\installer_win.iss"
       shell: pwsh
+
 
     # Check for required signing secrets - All Cases
     # ==========================================================================================
@@ -201,6 +203,7 @@ jobs:
         else
           echo "proceed=true" >> $GITHUB_OUTPUT
         fi
+
 
     # Sign the Windows Installer Executable using Azure Trusted Signing - All Cases
     # ==========================================================================================
@@ -687,6 +690,7 @@ jobs:
         # Show notarization history for debugging
         xcrun notarytool history --keychain-profile "notarytool-profile"
         
+
     # Staple the Notarization Ticket to Distribution Package (Mac) - 2024.10.25 CLAUDE - All Cases
     # ==========================================================================================
     - name: Staple Notarization Ticket
@@ -768,35 +772,18 @@ jobs:
           exit 0
         fi
 
-        # Extract repository name and set version-specific variables
+        # Extract repository name
         REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
         
-        # Correctly evaluate matrix.version
-        if [ "${{ matrix.version }}" == "Demo" ]; then
-          IS_DEMO=true
-          SUFFIX=".D"
-        else
-          IS_DEMO=false
-          SUFFIX=""
-        fi
-
-        # Set file paths and titles based on OS and version
+        # Set file paths and titles based on OS
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
-          FILE_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
-          if [ "$IS_DEMO" == true ]; then
-            FILE_TITLE="Tertiary Demo Installer v${wPROJECT_VERSION}${SUFFIX} for Mac"
-          else
-            FILE_TITLE="Tertiary Installer v${wPROJECT_VERSION}${SUFFIX} for Mac"
-          fi
-          FILE_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
+          FILE_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+          FILE_TITLE="Tertiary Installer v${wPROJECT_VERSION} for Mac"
+          FILE_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
         elif [ "${{ matrix.os }}" == "windows-latest" ]; then
-          FILE_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}${SUFFIX}.exe"
-          if [ "$IS_DEMO" == true ]; then
-            FILE_TITLE="Tertiary Demo Installer v${wPROJECT_VERSION}${SUFFIX} for Windows"
-          else
-            FILE_TITLE="Tertiary Installer v${wPROJECT_VERSION}${SUFFIX} for Windows"
-          fi
-          FILE_NAME="${REPO_NAME}WinInstaller_${wPROJECT_VERSION}${SUFFIX}.exe"
+          FILE_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+          FILE_TITLE="Tertiary Installer v${wPROJECT_VERSION} for Windows"
+          FILE_NAME="${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
         else
           echo "Unsupported OS for WordPress upload"
           exit 1
@@ -808,86 +795,47 @@ jobs:
           exit 1
         fi
 
-        # Upload process differs for Demo and Full versions
-        if [ "$IS_DEMO" == true ]; then
-          echo "Uploading Demo Version to WordPress Media Library"
-          
-          # Search for existing file
-          ENCODED_TITLE=$(urlencode "$FILE_TITLE")
-          echo "Searching for existing file with title: $FILE_TITLE"
-          EXISTING_FILE_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE}/wp-json/wp/v2/media?search=${ENCODED_TITLE}" \
+        # Search for existing file
+        ENCODED_TITLE=$(urlencode "$FILE_TITLE")
+        echo "Searching for existing file with title: $FILE_TITLE"
+        EXISTING_FILE_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE}/wp-json/wp/v2/media?search=${ENCODED_TITLE}" \
+          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
+        EXISTING_FILE_ID=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[] | select(.title.rendered == "'"$FILE_TITLE"'") | .id')
+
+        # Delete existing file if found
+        if [ -n "$EXISTING_FILE_ID" ]; then
+          echo "Existing file found with ID: $EXISTING_FILE_ID. Deleting..."
+          DELETE_RESPONSE=$(curl -s -X DELETE "${WORDPRESS_SITE}/wp-json/wp/v2/media/${EXISTING_FILE_ID}?force=true" \
             -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
-          EXISTING_FILE_ID=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[] | select(.title.rendered == "'"$FILE_TITLE"'") | .id')
-
-          # Delete existing file if found
-          if [ -n "$EXISTING_FILE_ID" ]; then
-            echo "Existing file found with ID: $EXISTING_FILE_ID. Deleting..."
-            DELETE_RESPONSE=$(curl -s -X DELETE "${WORDPRESS_SITE}/wp-json/wp/v2/media/${EXISTING_FILE_ID}?force=true" \
-              -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
-            
-            if echo "$DELETE_RESPONSE" | jq -e '.deleted == true' > /dev/null; then
-              echo "Existing file successfully deleted."
-            else
-              echo "Failed to delete existing file. Response: $DELETE_RESPONSE"
-              exit 1
-            fi
-          else
-            echo "No existing file found with the exact title."
-          fi
-
-          # Upload new file
-          echo "Uploading new file to WordPress..."
-          UPLOAD_RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE}/wp-json/wp/v2/media" \
-            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
-            -H "Content-Disposition: attachment; filename=$(basename "$FILE_PATH")" \
-            -F "file=@${FILE_PATH}" \
-            -F "title=${FILE_TITLE}" \
-            -F "alt_text=${REPO_NAME} Installer" \
-            -F "caption=Installer for ${REPO_NAME} v${wPROJECT_VERSION}${SUFFIX}" \
-            -F "description=${FILE_TITLE}")
-
-        else
-          echo "Uploading Full Version to WooCommerce Folder"
           
-          # Attempt to delete existing file
-          echo "Attempting to delete existing file before upload..."
-          DELETE_RESPONSE=$(curl -s -X DELETE "${WORDPRESS_SITE}/wp-json/custom/v1/upload-file-to-woo" \
-            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
-            -H "Content-Type: application/json" \
-            -d "{\"filename\":\"$FILE_NAME\"}")
-
-          if echo "$DELETE_RESPONSE" | grep -q "File deleted successfully"; then
-            echo "Existing file deleted successfully."
-          elif echo "$DELETE_RESPONSE" | grep -q "File not found"; then
-            echo "No existing file found. Proceeding with upload."
+          if echo "$DELETE_RESPONSE" | jq -e '.deleted == true' > /dev/null; then
+            echo "Existing file successfully deleted."
           else
-            echo "Unexpected response during delete attempt: $DELETE_RESPONSE"
+            echo "Failed to delete existing file. Response: $DELETE_RESPONSE"
+            exit 1
           fi
-
-          # Upload new file
-          echo "Uploading full version file to WordPress using custom endpoint..."
-          UPLOAD_RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE}/wp-json/custom/v1/upload-file-to-woo" \
-            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
-            -F "file=@${FILE_PATH}")
+        else
+          echo "No existing file found with the exact title."
         fi
 
+        # Upload new file to WordPress Media Library
+        echo "Uploading new file to WordPress Media Library..."
+        UPLOAD_RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE}/wp-json/wp/v2/media" \
+          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
+          -H "Content-Disposition: attachment; filename=$(basename "$FILE_PATH")" \
+          -F "file=@${FILE_PATH}" \
+          -F "title=${FILE_TITLE}" \
+          -F "alt_text=${REPO_NAME} Installer" \
+          -F "caption=Installer for ${REPO_NAME} v${wPROJECT_VERSION}" \
+          -F "description=${FILE_TITLE}")
+
         # Check upload response and extract URL
-        if [ "$IS_DEMO" == true ]; then
-          if echo "$UPLOAD_RESPONSE" | jq -e '.id' > /dev/null; then
-            echo "PASS: Demo version file successfully uploaded."
-            FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
-          else
-            echo "FAIL: Upload failed. Response: $UPLOAD_RESPONSE"
-            exit 1
-          fi
+        if echo "$UPLOAD_RESPONSE" | jq -e '.id' > /dev/null; then
+          echo "PASS: File successfully uploaded to WordPress Media Library."
+          FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
         else
-          if echo "$UPLOAD_RESPONSE" | grep -q "File uploaded successfully"; then
-            echo "PASS: Full version file successfully uploaded."
-            FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.url')
-          else
-            echo "FAIL: Upload failed. Response: $UPLOAD_RESPONSE"
-            exit 1
-          fi
+          echo "FAIL: Upload failed. Response: $UPLOAD_RESPONSE"
+          exit 1
         fi
 
         echo "Uploaded file URL: $FILE_URL"
@@ -896,109 +844,12 @@ jobs:
         URL_ROOT_PATH=$(dirname "$FILE_URL")
         echo "URL root path: $URL_ROOT_PATH"
         echo "URL_ROOT_PATH=$URL_ROOT_PATH" >> $GITHUB_ENV
+        
 
-
-    # Update WooCommerce Fields - Tag Only
+    # Update the Download Redirect URLs - Tag Only
+    # Interfaces with the WordPress "Redirection" Plugin
     # ==========================================================================================
-    - name: Update WooCommerce Downloadable Files
-      if: startsWith(github.ref, 'refs/tags/v')
-      env:
-        WOOCOMMERCE_CONSUMER_KEY: ${{ secrets.WOO_CK }}
-        WOOCOMMERCE_CONSUMER_SECRET: ${{ secrets.WOO_CS }}
-        WORDPRESS_SITE_URL: ${{ secrets.WORDPRESS_SITE }}
-        WORDPRESS_PRODUCT_ID: ${{ secrets.WORDPRESS_PRODUCT_ID }}
-      shell: bash
-      run: |
-        set -e
-        
-        echo "Starting WooCommerce update step..."
-        
-        # Debug: Print all environment variables used
-        echo "WOOCOMMERCE_CONSUMER_KEY: ${WOOCOMMERCE_CONSUMER_KEY:0:4}**** (masked for security)"
-        echo "WOOCOMMERCE_CONSUMER_SECRET: ${WOOCOMMERCE_CONSUMER_SECRET:0:4}**** (masked for security)"
-        echo "WORDPRESS SITE URL: $WORDPRESS_SITE_URL"
-        echo "WORDPRESS_PRODUCT_ID: $WORDPRESS_PRODUCT_ID"
-        
-        # Check if all required environment variables are set
-        if [ -z "$WOOCOMMERCE_CONSUMER_KEY" ] || [ -z "$WOOCOMMERCE_CONSUMER_SECRET" ] || [ -z "$WORDPRESS_SITE_URL" ] || [ -z "$WORDPRESS_PRODUCT_ID" ]; then
-          echo "Error: Required WooCommerce credentials or Product ID not set. Skipping WooCommerce update step."
-          exit 0
-        fi
-    
-        # Fetch existing product details to get current download IDs
-        API_ENDPOINT="${WORDPRESS_SITE_URL}/wp-json/wc/v3/products/${WORDPRESS_PRODUCT_ID}"
-        AUTH="${WOOCOMMERCE_CONSUMER_KEY}:${WOOCOMMERCE_CONSUMER_SECRET}"
-        EXISTING_PRODUCT=$(curl -s -X GET "${API_ENDPOINT}" -u "$AUTH" -H "Content-Type: application/json")
-        
-        # Extract existing download details for both macOS and Windows files
-        DOWNLOAD_ID_WIN=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)win")) | .id')
-        FILE_NAME_WIN=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)win")) | .name')
-        FILE_URL_WIN=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)win")) | .file')
-        
-        DOWNLOAD_ID_MAC=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)mac")) | .id')
-        FILE_NAME_MAC=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)mac")) | .name')
-        FILE_URL_MAC=$(echo "$EXISTING_PRODUCT" | jq -r '.downloads[] | select(.name | test("(?i)mac")) | .file')
-        
-        # Extract the repository name from the GitHub repository environment variable
-        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
-        echo "REPO_NAME set to: $REPO_NAME"
-
-        # Update the file URLs and names dynamically based on the root path
-        FILE_URL_WIN="${URL_ROOT_PATH}/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
-        FILE_NAME_WIN="${REPO_NAME} v${wPROJECT_VERSION} for Windows"
-
-        FILE_URL_MAC="${URL_ROOT_PATH}/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
-        FILE_NAME_MAC="${REPO_NAME} v${wPROJECT_VERSION} for Mac"
-
-        # Output the dynamic URLs and names for debugging
-        echo "Windows file URL: $FILE_URL_WIN"
-        echo "Windows file name: $FILE_NAME_WIN"
-        echo "Mac file URL: $FILE_URL_MAC"
-        echo "Mac file name: $FILE_NAME_MAC"
-        
-        echo "Using file: $FILE_NAME_WIN with URL: $FILE_URL_WIN"
-        echo "Using file: $FILE_NAME_MAC with URL: $FILE_URL_MAC"
-        
-        # Prepare JSON payload to update both downloadable files
-        PAYLOAD=$(jq -n --arg name_win "$FILE_NAME_WIN" --arg url_win "$FILE_URL_WIN" --arg id_win "$DOWNLOAD_ID_WIN" \
-                              --arg name_mac "$FILE_NAME_MAC" --arg url_mac "$FILE_URL_MAC" --arg id_mac "$DOWNLOAD_ID_MAC" \
-                              '{
-                                "downloads": [
-                                    {
-                                        "id": $id_win,
-                                        "name": $name_win,
-                                        "file": $url_win
-                                    },
-                                    {
-                                        "id": $id_mac,
-                                        "name": $name_mac,
-                                        "file": $url_mac
-                                    }
-                                ]
-                              }')
-        
-        echo "JSON Payload: $PAYLOAD"
-        
-        # Make API request to update the product's downloadable files
-        RESPONSE=$(curl -s -X PUT "${API_ENDPOINT}" \
-          -u "$AUTH" \
-          -H "Content-Type: application/json" \
-          -d "$PAYLOAD")
-        
-        echo "API Response: $RESPONSE"
-        
-        # Check if the update was successful
-        if echo "$RESPONSE" | jq -e '.id' > /dev/null; then
-          echo "Product downloads updated successfully."
-        else
-          echo "Error: Failed to update product downloads. Response: $RESPONSE"
-          exit 1
-        fi
-
-        
-    # Update the Demo Download Redirect URLs - Tag Only
-    # ==========================================================================================
-    - name: Update Demo Redirect URLs
+    - name: Update Download Redirect URLs
       if: startsWith(github.ref, 'refs/tags/v')
       env:
         WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
@@ -1007,7 +858,7 @@ jobs:
       shell: bash
       run: |
         set -e  # Exit immediately if any command exits with a non-zero status
-        echo "Starting update of demo redirect URLs in WordPress..."
+        echo "Starting update of download redirect URLs in WordPress..."
         
         # Validate required variables
         if [ -z "$WORDPRESS_USERNAME" ] || [ -z "$WORDPRESS_APPLICATION_PASSWORD" ] || [ -z "$WORDPRESS_SITE_URL" ]; then
@@ -1034,12 +885,12 @@ jobs:
         REPO_NAME_LOWER=$(echo $REPO_NAME | tr '[:upper:]' '[:lower:]')
         
         # Construct destination URLs (keeping original case for file names)
-        DEMO_FILE_URL_MAC="${URL_ROOT_PATH}/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
-        DEMO_FILE_URL_WIN="${URL_ROOT_PATH}/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
+        FILE_URL_MAC="${URL_ROOT_PATH}/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+        FILE_URL_WIN="${URL_ROOT_PATH}/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
         
         # Construct Source URLs (in lowercase)
-        SOURCE_URL_MAC="/${REPO_NAME_LOWER}-demo-mac"
-        SOURCE_URL_WIN="/${REPO_NAME_LOWER}-demo-windows"
+        SOURCE_URL_MAC="/${REPO_NAME_LOWER}-download-mac"
+        SOURCE_URL_WIN="/${REPO_NAME_LOWER}-download-windows"
         
         # Function to update or create redirect
         update_redirect() {
@@ -1102,8 +953,8 @@ jobs:
         }
         
         # Update redirections
-        update_redirect "$SOURCE_URL_MAC" "$DEMO_FILE_URL_MAC"
-        update_redirect "$SOURCE_URL_WIN" "$DEMO_FILE_URL_WIN"
+        update_redirect "$SOURCE_URL_MAC" "$FILE_URL_MAC"
+        update_redirect "$SOURCE_URL_WIN" "$FILE_URL_WIN"
         
         echo "Redirect URLs updated successfully."
 
@@ -1119,6 +970,7 @@ jobs:
           brew install gh || (which apt && sudo apt update && sudo apt install gh -y)
         fi
       shell: bash
+
 
     # Delete Failed Release & Tag if unsuccessful - Tag Only
     # ==========================================================================================
