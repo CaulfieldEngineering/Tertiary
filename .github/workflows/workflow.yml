@@ -87,6 +87,7 @@ jobs:
     # ==========================================================================================
     - name: Ensure Tag is on Production Branch
       if: startsWith(github.ref, 'refs/tags/v')
+      shell: bash
       run: |
         git fetch origin production
         TAG_COMMIT=$(git rev-parse HEAD)
@@ -986,12 +987,13 @@ jobs:
     # ==========================================================================================
     - name: Remove GitHub Tag and Release on Failure
       if: failure() && startsWith(github.ref, 'refs/tags/v')
+      shell: bash  # Explicitly specify bash shell
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         TAG_NAME="${GITHUB_REF#refs/tags/}"
         echo "Cleaning up failed release and tag: $TAG_NAME"
-    
+        
         # Delete GitHub release (if exists)
         RELEASE_ID=$(gh api repos/${GITHUB_REPOSITORY}/releases \
           --jq ".[] | select(.tag_name==\"$TAG_NAME\") | .id")
@@ -1002,7 +1004,7 @@ jobs:
         else
           echo "No matching release found for tag: $TAG_NAME"
         fi
-    
+        
         # Delete the tag itself
         echo "Deleting tag: $TAG_NAME"
         gh api -X DELETE repos/${GITHUB_REPOSITORY}/git/refs/tags/$TAG_NAME
