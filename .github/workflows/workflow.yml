@@ -840,7 +840,9 @@ jobs:
         echo "URL root path: $URL_ROOT_PATH"
         echo "URL_ROOT_PATH=$URL_ROOT_PATH" >> $GITHUB_ENV
         
+
     # Update the Download Redirect URLs - Tag Only
+    # Interfaces with the WordPress "Redirection" Plugin
     # ==========================================================================================
     - name: Update Download Redirect URLs
       env:
@@ -877,12 +879,12 @@ jobs:
         REPO_NAME_LOWER=$(echo $REPO_NAME | tr '[:upper:]' '[:lower:]')
         
         # Construct destination URLs (keeping original case for file names)
-        DEMO_FILE_URL_MAC="${URL_ROOT_PATH}/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.D.pkg"
-        DEMO_FILE_URL_WIN="${URL_ROOT_PATH}/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.D.exe"
+        FILE_URL_MAC="${URL_ROOT_PATH}/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+        FILE_URL_WIN="${URL_ROOT_PATH}/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
         
         # Construct Source URLs (in lowercase)
-        SOURCE_URL_MAC="/${REPO_NAME_LOWER}-demo-mac"
-        SOURCE_URL_WIN="/${REPO_NAME_LOWER}-demo-windows"
+        SOURCE_URL_MAC="/${REPO_NAME_LOWER}-download-mac"
+        SOURCE_URL_WIN="/${REPO_NAME_LOWER}-download-windows"
         
         # Function to update or create redirect
         update_redirect() {
@@ -945,8 +947,8 @@ jobs:
         }
         
         # Update redirections
-        update_redirect "$SOURCE_URL_MAC" "$DEMO_FILE_URL_MAC"
-        update_redirect "$SOURCE_URL_WIN" "$DEMO_FILE_URL_WIN"
+        update_redirect "$SOURCE_URL_MAC" "$FILE_URL_MAC"
+        update_redirect "$SOURCE_URL_WIN" "$FILE_URL_WIN"
         
         echo "Redirect URLs updated successfully."
 
