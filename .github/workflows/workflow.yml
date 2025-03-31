@@ -18,6 +18,8 @@ jobs:
   # Job: Build
   # ==========================================================================================
   build:
+    permissions:
+      contents: write
 
     strategy:
       matrix:
