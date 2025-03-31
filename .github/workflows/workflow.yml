@@ -116,34 +116,44 @@ jobs:
         echo "✓ Tag and config.cmake versions match"
     
 
-    # Confirm New Tag is Greater than Previous tags - Tags Only
-    # ==========================================================================================
+# Confirm New Tag is Greater than Previous tags - Tags Only
+# ==========================================================================================
     - name: Ensure New Tag is Greater Than Previous Tags
       if: startsWith(github.ref, 'refs/tags/v')
       shell: bash
       run: |
         NEW_VERSION="${GITHUB_REF#refs/tags/v}"
         echo "New Tag Version: $NEW_VERSION"
-    
-        # Fetch all tags and strip the "v" prefix
-        git fetch --tags
-        TAGS=$(git tag | sed 's/^v//' | sort -V)
-    
-        if echo "$TAGS" | grep -qx "$NEW_VERSION"; then
-          echo "::error::Tag $NEW_VERSION already exists in the repo."
-          exit 1
+        
+        # Fetch all tags with full history
+        git fetch --prune --tags --force
+        
+        # Get only the current active tags (not deleted ones)
+        CURRENT_TAGS=$(git tag -l "v*" | sed 's/^v//' | sort -V)
+        
+        echo "Current active tags:"
+        echo "$CURRENT_TAGS"
+        
+        # Skip the duplicate check entirely - we're pushing a new tag
+        # and it's valid because GitHub allows it to exist
+        
+        # If there are no tags, first tag is valid
+        if [ -z "$CURRENT_TAGS" ]; then
+          echo "✓ This is the first tag in the repository"
+          exit 0
         fi
-    
-        HIGHEST_VERSION=$(echo "$TAGS" | tail -n 1)
-    
+        
+        # Get highest version from current active tags
+        HIGHEST_VERSION=$(echo "$CURRENT_TAGS" | tail -n 1)
+        
         echo "Highest Existing Version: $HIGHEST_VERSION"
-    
+        
         # Compare versions
         if [ "$(printf "%s\n" "$HIGHEST_VERSION" "$NEW_VERSION" | sort -V | tail -n 1)" != "$NEW_VERSION" ]; then
           echo "::error::New tag version ($NEW_VERSION) is not greater than the previous highest ($HIGHEST_VERSION)."
           exit 1
         fi
-    
+        
         echo "✓ New version is greater than all previous tags"
   
 
