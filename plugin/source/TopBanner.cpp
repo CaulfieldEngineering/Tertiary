@@ -49,7 +49,8 @@ void TopBanner::paint(juce::Graphics& g)
 
 
     // Use Windows DPI scale
-    float scale = getWindowsDPIScale(this);
+    //float scale = getWindowsDPIScale(this);
+	float scale = (float) getDesktopScaleFactor();
 
     DBG("Windows DPI Scale: " + juce::String(scale));
     g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
