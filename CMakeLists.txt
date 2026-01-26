@@ -5,6 +5,14 @@
 # =====================================================================
 cmake_minimum_required(VERSION 3.22)
 
+# Force 64-bit architecture on Windows to prevent 32-bit builds
+# This is critical for VST3 plugins as modern DAWs (like Cubase) no longer support 32-bit plugins
+# =====================================================================
+if(WIN32 AND NOT CMAKE_GENERATOR_PLATFORM)
+    set(CMAKE_GENERATOR_PLATFORM "x64" CACHE STRING "Platform architecture" FORCE)
+    message(STATUS "CMakeLists.txt: Forcing x64 architecture on Windows")
+endif()
+
 
 # Include the configuration file
 # =====================================================================
@@ -99,8 +107,7 @@ include(cmake/cpm.cmake)
 # =====================================================================
 CPMAddPackage(
     NAME JUCE
-    GIT_TAG 7.0.9
-    VERSION 7.0.9
+    GIT_TAG 8.0.8  # ← Updated to latest stable release
     GITHUB_REPOSITORY juce-framework/JUCE
     SOURCE_DIR ${LIB_DIR}/juce
 )
