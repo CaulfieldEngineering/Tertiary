@@ -5,6 +5,14 @@
 # =====================================================================
 cmake_minimum_required(VERSION 3.22)
 
+# Force 64-bit architecture on Windows to prevent 32-bit builds
+# This is critical for VST3 plugins as modern DAWs (like Cubase) no longer support 32-bit plugins
+# =====================================================================
+if(WIN32 AND NOT CMAKE_GENERATOR_PLATFORM)
+    set(CMAKE_GENERATOR_PLATFORM "x64" CACHE STRING "Platform architecture" FORCE)
+    message(STATUS "CMakeLists.txt: Forcing x64 architecture on Windows")
+endif()
+
 
 # Include the configuration file
 # =====================================================================

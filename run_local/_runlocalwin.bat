@@ -97,7 +97,7 @@ REM Configure the project
 REM ================================================================================================
 echo Configuring project.
 
-cmake -S .. -B . -DCMAKE_BUILD_TYPE=%BUILD_TYPE% %DEMO_OPTION%
+cmake -S .. -B . -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -A x64 %DEMO_OPTION%
 
 if %errorlevel% neq 0 (
     echo Configuration failed.
