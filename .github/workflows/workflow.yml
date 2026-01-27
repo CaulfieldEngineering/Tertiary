@@ -1000,6 +1000,7 @@ jobs:
     # ==========================================================================================
     - name: Add Host Key
       if: steps.check_ssh.outputs.ssh_available == 'true'
+      shell: bash
       run: |
         mkdir -p ~/.ssh
         ssh-keyscan -p 7822 CaulfieldEngineering.com >> ~/.ssh/known_hosts
