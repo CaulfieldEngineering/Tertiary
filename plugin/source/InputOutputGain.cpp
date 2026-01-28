@@ -173,7 +173,8 @@ void InputOutputGain::getLevels()
 	leftLevelPixel = bounds.getHeight() * juce::jmap(leftLevel, -60.f, 0.f, 0.f, 1.f);
 	rightLevelPixel = bounds.getHeight() * juce::jmap(rightLevel, -60.f, 0.f, 0.f, 1.f);
 
-	for (int i = ledThresholds.size()-1; i >= 0; i--)
+	// Quantize levels to discrete LED steps safely (avoid out-of-bounds reads).
+	for (int i = ledThresholds.size()-1; i >= 1; i--)
 	{
 		if (leftLevelPixel < ledThresholds[i] && leftLevelPixel > ledThresholds[i - 1])
 			leftLevelPixel = ledThresholds[i - 1];
@@ -205,26 +206,24 @@ void InputOutputGain::buildGrill(juce::Rectangle<float> bounds)
 
 	ledThresholds.clear();
 
-	grill = Image(Image::PixelFormat::ARGB, bounds.getWidth(), bounds.getHeight(), true);
-	Graphics g(grill);
+	grill = Image(Image::PixelFormat::ARGB, (int) bounds.getWidth(), (int) bounds.getHeight(), true);
 
-	g.setColour(juce::Colours::black); // Migrate to AllColors
-	g.fillRect(bounds);
+	// Fill the image using a Graphics context, then destroy the context before we
+	// punch transparent "holes" into the image (some renderers/drivers don't like
+	// modifying the Image pixels while a Graphics context is active on that Image).
+	{
+		Graphics g(grill);
+		g.setColour(juce::Colours::black); // Migrate to AllColors
+		g.fillRect(bounds);
+	}
 
 	for (int x = 0; x < 2; x++)	// Iterate Loop Twice for Left/Right Grills
 	{
-
-		float xPos;
-
-		if (x == 0) xPos = -0.25f;	// Left-LED Positioning
-		if (x == 1) xPos = 0.25f;	// Right-LED Positioning
+		const float xPos = (x == 0 ? -0.25f : 0.25f);	// Left/Right LED positioning
 
 		for (int y = 0; y < 2; y++)	// Iterate Loop Twice.  Begin LED's at center and move Up, Down
 		{
-			float dir;
-
-			if (y == 0) dir = 1;  // Draw Downward
-			if (y == 1) dir = -1; // Draw Upward
+			const float dir = (y == 0 ? 1.0f : -1.0f);  // Down/up
 
 			for (int z = 0; z < bounds.getCentreY() - margin; z += spacing)
 			{
@@ -247,11 +246,13 @@ void InputOutputGain::buildGrill(juce::Rectangle<float> bounds)
 	// Sort LED Y values in Ascending Fashion
 	ledThresholds.sort();
 
-	// Remove Duplicates
-	for (int i = 0; i < ledThresholds.size(); i++)
+	// Remove duplicates safely (avoid out-of-bounds reads).
+	for (int i = 0; i + 1 < ledThresholds.size();)
 	{
 		if (ledThresholds[i] == ledThresholds[i + 1])
 			ledThresholds.remove(i + 1);
+		else
+			++i;
 	}
 }
 

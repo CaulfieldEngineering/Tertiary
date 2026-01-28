@@ -31,6 +31,23 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         void buttonClicked(juce::Button* button) override{};
         void mouseDoubleClick(const juce::MouseEvent& event) override;
 
+        //==============================================================================
+        // Rendering backend selection (Windows-only)
+        //
+        // JUCE 8 on Windows supports multiple rendering engines (typically Direct2D and
+        // the Software Renderer). Some older Intel iGPU/driver combos can exhibit
+        // missing fills / paint corruption with Direct2D, especially with complex
+        // path fills and alpha compositing.
+        //
+        // This hook fires when the component is attached/detached from a native
+        // parent/peer. Once we have a peer, we can force the Software Renderer.
+        //
+        // If you later decide you want a user toggle, you can gate this call on a
+        // persisted setting.
+        #if JUCE_WINDOWS
+        void parentHierarchyChanged() override;
+        #endif
+
 		/* Used by GUI and self to update the state, upon Key Checking or GUI Activation */
         void updateDemoState(bool newDemoState);
 

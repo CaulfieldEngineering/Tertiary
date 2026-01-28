@@ -123,6 +123,18 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
 	}
 
     //==============================================================================
+    #if JUCE_WINDOWS
+    void AudioPluginAudioProcessorEditor::parentHierarchyChanged()
+    {
+        // Force JUCE's Software Renderer on Windows.
+        // This is primarily a compatibility workaround for older Intel iGPU/driver
+        // combinations where Direct2D can produce missing fills / corruption.
+        if (auto* peer = getPeer())
+            peer->setCurrentRenderingEngine(0); // 0 = "Software Renderer"
+    }
+    #endif
+
+    //==============================================================================
     void AudioPluginAudioProcessorEditor::paint(juce::Graphics& g) {
       /* Set the Gradient */
       g.setGradientFill(AllColors::PluginEditorColors::BACKGROUND_GRADIENT(

@@ -970,6 +970,126 @@ jobs:
         echo "Redirect URLs updated successfully."
 
 
+
+
+
+    # Check SSH Credentials Available
+    # ==========================================================================================
+    - name: Check SSH Credentials
+      id: check_ssh
+      shell: bash
+      run: |
+        if [ -z "${{ secrets.SSH_ID }}" ] || [ "${{ secrets.SSH_ID }}" = "SKIP" ]; then
+          echo "ssh_available=false" >> $GITHUB_OUTPUT
+          echo "SSH credentials not set or set to SKIP. Skipping SSH-related steps."
+        else
+          echo "ssh_available=true" >> $GITHUB_OUTPUT
+        fi
+
+
+    # Setup SSH for Server Upload
+    # ==========================================================================================
+    - name: Setup SSH
+      if: steps.check_ssh.outputs.ssh_available == 'true'
+      uses: webfactory/ssh-agent@v0.5.3
+      with:
+        ssh-private-key: ${{ secrets.SSH_ID }}
+
+
+    # Add Host Key
+    # ==========================================================================================
+    - name: Add Host Key
+      if: steps.check_ssh.outputs.ssh_available == 'true'
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -p 7822 CaulfieldEngineering.com >> ~/.ssh/known_hosts
+
+
+    # Create SSH Config
+    # ==========================================================================================
+    - name: Create SSH Config
+      if: steps.check_ssh.outputs.ssh_available == 'true'
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        echo "Host CaulfieldEngineering.com
+          HostName CaulfieldEngineering.com
+          User caulfiel
+          Port 7822
+          MACs hmac-sha2-256
+          StrictHostKeyChecking no" > ~/.ssh/config
+
+
+    # Upload Installer to Server (SCP)
+    # ==========================================================================================
+    - name: Upload Installer to Server (SCP)
+      if: steps.check_ssh.outputs.ssh_available == 'true'
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+      shell: bash
+      run: |
+        set -e  # Exit immediately if any command exits with a non-zero status
+
+        echo "SSH credentials available. Starting installer upload..."
+
+        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
+        echo "REPO_NAME set to: $REPO_NAME"
+
+        # Set destination path (root of plugin directory, alongside uploads/)
+        DEST_PATH="/home/caulfiel/public_html/plug-ins/${REPO_NAME}/"
+        SERVER="CaulfieldEngineering.com"
+
+        echo "Checking if destination directory exists on the server..."
+        if ssh $SERVER "test -d $DEST_PATH"; then
+          echo "Directory exists: $DEST_PATH"
+        else
+          echo "Directory does not exist, creating directory: $DEST_PATH"
+          if ssh $SERVER "mkdir -p $DEST_PATH"; then
+            echo "Directory created successfully"
+          else
+            echo "Failed to create directory: $DEST_PATH"
+            exit 1
+          fi
+        fi
+
+        # Upload installer for current OS
+        if [ "${{ matrix.os }}" == "windows-latest" ]; then
+          INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+          INSTALLER_NAME="${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+        elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+          INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+          INSTALLER_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+        else
+          echo "Unsupported OS for installer upload"
+          INSTALLER_PATH=""
+        fi
+
+        if [ -n "$INSTALLER_PATH" ] && [ -f "$INSTALLER_PATH" ]; then
+          echo "✓ Found installer: $INSTALLER_NAME"
+          echo "Uploading installer to: $SERVER:$DEST_PATH"
+          
+          if scp "$INSTALLER_PATH" "$SERVER:$DEST_PATH$INSTALLER_NAME"; then
+            echo "✓ Installer uploaded successfully: $INSTALLER_NAME"
+          else
+            echo "ERROR: Installer upload failed with exit code $?"
+            exit 1
+          fi
+        else
+          echo "ERROR: Installer not found at: $INSTALLER_PATH"
+          exit 1
+        fi
+
+        echo "Installer deployed to: https://caulfieldengineering.com/plug-ins/${REPO_NAME}/${INSTALLER_NAME}"
+
+
+
+
+
+
+
+
+
     # Install GitHub CLI - Tag Only
     # ==========================================================================================
     - name: Install GitHub CLI

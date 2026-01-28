@@ -749,6 +749,9 @@ namespace audio_plugin {
           return rmsLevelOutputRight.getCurrentValue();
         return 0;
       }
+
+      // Defensive fallback for unexpected pick-off points.
+      return 0.0f;
     }
 
     //==============================================================================

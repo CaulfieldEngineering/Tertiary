@@ -4,6 +4,20 @@ cmake_minimum_required(VERSION 3.22)
 # =====================================================================
 project(${wPLUGIN_NAME} VERSION ${wPROJECT_VERSION})
 
+# Force the use of the static runtime (/MT or /MTd) for MSVC
+# =====================================================================
+# This MUST be set BEFORE juce_add_plugin() to ensure JUCE targets also use
+# static runtime. Using CMAKE_MSVC_RUNTIME_LIBRARY is the modern CMake way
+# (3.15+) and is more reliable than string replacement.
+# Static runtime means the plugin won't need VC++ Redistributable installed
+# on the user's machine - everything needed is bundled into the .exe/.dll
+if (MSVC)
+    # Set static runtime library for all targets created after this point
+    # MultiThreaded = /MT (Release), MultiThreadedDebug = /MTd (Debug)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    message(STATUS "MSVC: Using static runtime library (/MT) for all targets")
+endif()
+
 # Adding a directory with the library/application name as a subfolder of the
 # include folder is a good practice. It helps avoid name clashes later on.
 # =====================================================================
@@ -25,31 +39,12 @@ juce_add_plugin( ${PROJECT_NAME}
     COPY_PLUGIN_AFTER_BUILD TRUE
 )
 
-# Force the use of the static runtime (/MT or /MTd) for MSVC
+# Explicitly set runtime library for the plugin target (belt and suspenders approach)
 # =====================================================================
-# This ensures that all parts of the project, including JUCE modules,
-# use the static runtime instead of the dynamic runtime.
+# This ensures the plugin target definitely uses static runtime, even if
+# something tries to override it later
 if (MSVC)
-    # Replace all occurrences of /MD (dynamic runtime) with /MT (static runtime)
-    # in the global CMake flags. These flags control how the compiler and linker
-    # treat runtime libraries across different build configurations.
-    foreach (flag_var
-        CMAKE_C_FLAGS                   # Flags for C compilation
-        CMAKE_C_FLAGS_DEBUG             # Flags for Debug configuration
-        CMAKE_C_FLAGS_RELEASE           # Flags for Release configuration
-        CMAKE_C_FLAGS_MINSIZEREL        # Flags for MinSizeRel configuration
-        CMAKE_C_FLAGS_RELWITHDEBINFO    # Flags for RelWithDebInfo configuration
-        CMAKE_CXX_FLAGS                 # Flags for C++ compilation
-        CMAKE_CXX_FLAGS_DEBUG           # Flags for Debug configuration
-        CMAKE_CXX_FLAGS_RELEASE         # Flags for Release configuration
-        CMAKE_CXX_FLAGS_MINSIZEREL      # Flags for MinSizeRel configuration
-        CMAKE_CXX_FLAGS_RELWITHDEBINFO  # Flags for RelWithDebInfo configuration
-    )
-        # Replace dynamic runtime (/MD) with static runtime (/MT) for Release builds
-        string(REPLACE "/MD" "/MT" ${flag_var} "${${flag_var}}")
-        # Replace dynamic runtime with debugging symbols (/MDd) with static runtime with debug symbols (/MTd)
-        string(REPLACE "/MDd" "/MTd" ${flag_var} "${${flag_var}}")
-    endforeach()
+    set_property(TARGET ${PROJECT_NAME} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
 # Pre-Processor Directive for Demo vs. Full Version
