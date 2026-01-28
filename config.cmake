@@ -4,7 +4,7 @@
 set(wPLUGIN_NAME                "Tertiary")
 set(wCOMPANY_NAME               "Wonderland Audio")
 set(wCOMPANY_ID                 "WonderlandAudio")
-set(wPROJECT_VERSION            "1.0.1")
+set(wPROJECT_VERSION            "1.0.2")
 set(wPLUGIN_MANUFACTURER_CODE   "WLAD")
 set(wFORMATS                    VST3 Standalone)
 
