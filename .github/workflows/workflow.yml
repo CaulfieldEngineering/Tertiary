@@ -1088,8 +1088,6 @@ jobs:
 
 
 
-
-
     # Install GitHub CLI - Tag Only
     # ==========================================================================================
     - name: Install GitHub CLI
@@ -1128,3 +1126,292 @@ jobs:
         # Delete the tag itself
         echo "Deleting tag: $TAG_NAME"
         gh api -X DELETE repos/${GITHUB_REPOSITORY}/git/refs/tags/$TAG_NAME
+
+
+  # Job: Web Build (Wonderlab)
+  # ==========================================================================================
+  # Builds the plugin to WebAssembly using the Wonderlab framework and deploys
+  # to CaulfieldEngineering.com/plug-ins/{repo_name}/web/
+  # ==========================================================================================
+  web-build:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+
+    # Checkout Plugin Code
+    # ==========================================================================================
+    - name: Checkout Plugin Code
+      uses: actions/checkout@v4
+
+
+    # Checkout Wonderlab Framework
+    # ==========================================================================================
+    - name: Checkout Wonderlab
+      uses: actions/checkout@v4
+      with:
+        repository: CaulfieldEngineering/Wonderlab
+        path: Wonderlab
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+
+    # Read Project Configuration
+    # ==========================================================================================
+    - name: Read Project Configuration
+      shell: bash
+      run: |
+        echo "Reading configuration from config.cmake..."
+        while IFS=' ' read -r key value; do
+          value=$(echo $value | tr -d '"')
+          echo "$key=$value" >> $GITHUB_ENV
+        done < <(grep 'set(w' ${GITHUB_WORKSPACE}/config.cmake | sed -e 's/set(//g' -e 's/)//g' -e 's/\s\+/ /g')
+
+
+    # Install Emscripten SDK
+    # ==========================================================================================
+    - name: Install Emscripten SDK
+      uses: mymindstorm/setup-emsdk@v14
+      with:
+        version: 3.1.61
+
+
+    # Install Ninja Build System
+    # ==========================================================================================
+    - name: Install Ninja
+      run: sudo apt-get install -y ninja-build
+
+
+    # Generate BinaryData (native CMake configure only)
+    # ==========================================================================================
+    - name: Generate BinaryData
+      run: |
+        echo "Running native CMake configure to generate BinaryData.h..."
+        cmake -S . -B build -DBUILD_DEMO=OFF
+        echo "BinaryData.h generated."
+
+
+    # Build WebAssembly
+    # ==========================================================================================
+    - name: Build WebAssembly
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+      shell: bash
+      run: |
+        set -e
+
+        WONDERLAB_DIR="${GITHUB_WORKSPACE}/Wonderlab"
+        PLUGIN_SRC_DIR="${GITHUB_WORKSPACE}/plugin/source"
+        WEB_BUILD_DIR="${GITHUB_WORKSPACE}/build/web"
+        BINARY_DATA_DIR="${GITHUB_WORKSPACE}/build/plugin/images/juce_binarydata_${REPOSITORY_NAME}BinaryData/JuceLibraryCode"
+
+        echo "Plugin:  ${wPLUGIN_NAME} v${wPROJECT_VERSION}"
+        echo "Sources: ${PLUGIN_SRC_DIR}"
+        echo ""
+
+        # Verify BinaryData was generated
+        if [ ! -f "${BINARY_DATA_DIR}/BinaryData.h" ]; then
+          echo "ERROR: BinaryData.h not found at ${BINARY_DATA_DIR}"
+          echo "Contents of build/plugin/images/:"
+          find ${GITHUB_WORKSPACE}/build/plugin/images/ -name "BinaryData.h" 2>/dev/null || echo "Not found anywhere"
+          exit 1
+        fi
+
+        # Create build directory
+        mkdir -p "${WEB_BUILD_DIR}"
+        cd "${WEB_BUILD_DIR}"
+
+        # Generate CMakeLists.txt
+        echo "Generating CMakeLists.txt..."
+        cat > CMakeLists.txt <<EOF
+        cmake_minimum_required(VERSION 3.15)
+        project(${REPOSITORY_NAME}Web LANGUAGES C CXX)
+        set(CMAKE_CXX_STANDARD 20)
+        set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+        set(PLUGIN_NAME "${wPLUGIN_NAME}")
+        set(PLUGIN_VERSION "${wPROJECT_VERSION}")
+        set(PLUGIN_SRC_DIR "${PLUGIN_SRC_DIR}")
+        set(WONDERLAB_DIR "${WONDERLAB_DIR}")
+        set(PLUGIN_PROCESSOR_HEADER "PluginProcessor.h")
+        set(PLUGIN_PROCESSOR_CLASS audio_plugin::AudioPluginAudioProcessor)
+        set(PLUGIN_EXTRA_INCLUDE_DIRS "${BINARY_DATA_DIR}")
+        set(PLUGIN_EXTRA_SOURCE_DIRS "${BINARY_DATA_DIR}")
+
+        include(\${WONDERLAB_DIR}/cmake/WonderlabBuild.cmake)
+        EOF
+
+        # Configure with Emscripten
+        echo "Configuring Emscripten..."
+        emcmake cmake -G Ninja -S . -B . -DCMAKE_BUILD_TYPE=Release
+
+        # Build
+        echo "Compiling WebAssembly..."
+        emmake ninja
+
+        WASM_SIZE=$(stat -c%s "${REPOSITORY_NAME}Web.wasm" 2>/dev/null || echo "unknown")
+        echo "WASM size: ${WASM_SIZE} bytes"
+
+
+    # Assemble Web App
+    # ==========================================================================================
+    - name: Assemble Web App
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+      shell: bash
+      run: |
+        set -e
+
+        WONDERLAB_DIR="${GITHUB_WORKSPACE}/Wonderlab"
+        WEB_BUILD_DIR="${GITHUB_WORKSPACE}/build/web"
+        SAMPLE_DIR="${GITHUB_WORKSPACE}/plugin/sample_audio"
+
+        echo "Assembling web app..."
+
+        # Copy Wonderlab web host files
+        cp "${WONDERLAB_DIR}/web/index.html" "${WEB_BUILD_DIR}/index.html"
+        cp "${WONDERLAB_DIR}/web/juce-audio-worklet.js" "${WEB_BUILD_DIR}/juce-audio-worklet.js"
+
+        # Copy sample audio tracks
+        TRACK_LIST=""
+        if [ -d "${SAMPLE_DIR}" ]; then
+          echo "Copying sample audio tracks..."
+          mkdir -p "${WEB_BUILD_DIR}/audio"
+          for f in "${SAMPLE_DIR}"/*; do
+            [ -f "$f" ] || continue
+            cp "$f" "${WEB_BUILD_DIR}/audio/"
+            fname=$(basename "$f")
+            title="${fname%.*}"
+            if [ -n "${TRACK_LIST}" ]; then
+              TRACK_LIST="${TRACK_LIST}, { title: '${title}', file: 'audio/${fname}' }"
+            else
+              TRACK_LIST="{ title: '${title}', file: 'audio/${fname}' }"
+            fi
+            echo "  + ${fname}"
+          done
+        else
+          echo "No sample_audio folder found."
+        fi
+
+        # Generate plugin-config.js
+        echo "Generating plugin-config.js..."
+        cat > "${WEB_BUILD_DIR}/plugin-config.js" <<JSEOF
+        window.WONDERLAB_CONFIG = {
+            pluginName: '${wPLUGIN_NAME}',
+            pluginWidth: 750,
+            pluginHeight: 515,
+            wasmJs: '${wPLUGIN_NAME}Web.js',
+            tracks: [${TRACK_LIST}]
+        };
+        JSEOF
+
+        # List final web app contents
+        echo ""
+        echo "Web app contents:"
+        ls -la "${WEB_BUILD_DIR}/"
+        if [ -d "${WEB_BUILD_DIR}/audio" ]; then
+          ls -la "${WEB_BUILD_DIR}/audio/"
+        fi
+
+
+    # Check SSH Credentials for Web Deploy
+    # ==========================================================================================
+    - name: Check SSH Credentials (Web)
+      id: check_ssh_web
+      shell: bash
+      run: |
+        if [ -z "${{ secrets.SSH_ID }}" ] || [ "${{ secrets.SSH_ID }}" = "SKIP" ]; then
+          echo "ssh_available=false" >> $GITHUB_OUTPUT
+          echo "SSH credentials not set. Skipping web deploy."
+        else
+          echo "ssh_available=true" >> $GITHUB_OUTPUT
+        fi
+
+
+    # Setup SSH for Web Deploy
+    # ==========================================================================================
+    - name: Setup SSH (Web)
+      if: steps.check_ssh_web.outputs.ssh_available == 'true'
+      uses: webfactory/ssh-agent@v0.5.3
+      with:
+        ssh-private-key: ${{ secrets.SSH_ID }}
+
+
+    # Add Host Key (Web)
+    # ==========================================================================================
+    - name: Add Host Key (Web)
+      if: steps.check_ssh_web.outputs.ssh_available == 'true'
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -p 7822 CaulfieldEngineering.com >> ~/.ssh/known_hosts
+
+
+    # Create SSH Config (Web)
+    # ==========================================================================================
+    - name: Create SSH Config (Web)
+      if: steps.check_ssh_web.outputs.ssh_available == 'true'
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        echo "Host CaulfieldEngineering.com
+          HostName CaulfieldEngineering.com
+          User caulfiel
+          Port 7822
+          MACs hmac-sha2-256
+          StrictHostKeyChecking no" > ~/.ssh/config
+
+
+    # Deploy Web App to Server
+    # ==========================================================================================
+    - name: Deploy Web App to Server
+      if: steps.check_ssh_web.outputs.ssh_available == 'true'
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+      shell: bash
+      run: |
+        set -e
+
+        WEB_BUILD_DIR="${GITHUB_WORKSPACE}/build/web"
+        SERVER="CaulfieldEngineering.com"
+        DEST_PATH="/home/caulfiel/public_html/plug-ins/${REPOSITORY_NAME}/web/"
+
+        echo "Deploying web app to ${SERVER}:${DEST_PATH}..."
+
+        # Create destination directory
+        ssh $SERVER "mkdir -p ${DEST_PATH} ${DEST_PATH}audio/"
+
+        # Upload web app files (excluding build artifacts)
+        echo "Uploading web host files..."
+        scp "${WEB_BUILD_DIR}/index.html" "$SERVER:${DEST_PATH}"
+        scp "${WEB_BUILD_DIR}/plugin-config.js" "$SERVER:${DEST_PATH}"
+        scp "${WEB_BUILD_DIR}/juce-audio-worklet.js" "$SERVER:${DEST_PATH}"
+        scp "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.js" "$SERVER:${DEST_PATH}"
+        scp "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.wasm" "$SERVER:${DEST_PATH}"
+
+        # Upload audio samples
+        if [ -d "${WEB_BUILD_DIR}/audio" ]; then
+          echo "Uploading audio samples..."
+          scp "${WEB_BUILD_DIR}/audio/"* "$SERVER:${DEST_PATH}audio/"
+        fi
+
+        # Upload COOP/COEP headers file (.htaccess for Apache)
+        echo "Configuring server headers..."
+        cat > /tmp/htaccess_web <<'HTEOF'
+        # Required for SharedArrayBuffer (Web Audio + WASM)
+        Header set Cross-Origin-Opener-Policy "same-origin"
+        Header set Cross-Origin-Embedder-Policy "require-corp"
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+
+        # MIME types
+        AddType application/wasm .wasm
+        AddType application/javascript .js
+        HTEOF
+        scp /tmp/htaccess_web "$SERVER:${DEST_PATH}.htaccess"
+
+        echo ""
+        echo "==========================================================================="
+        echo "  Web app deployed!"
+        echo "  URL: https://caulfieldengineering.com/plug-ins/${REPOSITORY_NAME}/web/"
+        echo "==========================================================================="
