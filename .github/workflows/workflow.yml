@@ -1183,6 +1183,20 @@ jobs:
       run: sudo apt-get install -y ninja-build
 
 
+    # Install Linux Dependencies (required for JUCE native configure)
+    # ==========================================================================================
+    - name: Install Linux Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxcomposite-dev \
+          libfreetype-dev libfontconfig1-dev \
+          libasound2-dev \
+          libgl-dev \
+          libcurl4-openssl-dev \
+          libwebkit2gtk-4.0-dev libgtk-3-dev
+
+
     # Generate BinaryData (native CMake configure only)
     # ==========================================================================================
     - name: Generate BinaryData
