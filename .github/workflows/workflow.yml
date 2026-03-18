@@ -1154,7 +1154,7 @@ jobs:
       with:
         repository: CaulfieldEngineering/Wonderlab
         path: Wonderlab
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.CE_GITHUB_PAT }}
 
 
     # Read Project Configuration
