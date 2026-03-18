@@ -1416,6 +1416,8 @@ jobs:
         # Upload COOP/COEP headers file (.htaccess for Apache)
         echo "Configuring server headers..."
         {
+          echo 'DirectoryIndex index.html'
+          echo ''
           echo '# Required for SharedArrayBuffer (Web Audio + WASM)'
           echo 'Header set Cross-Origin-Opener-Policy "same-origin"'
           echo 'Header set Cross-Origin-Embedder-Policy "require-corp"'
