@@ -1201,9 +1201,12 @@ jobs:
     # ==========================================================================================
     - name: Generate BinaryData
       run: |
-        echo "Running native CMake configure to generate BinaryData.h..."
+        echo "Running native CMake configure + BinaryData build..."
         cmake -S . -B build -DBUILD_DEMO=OFF
-        echo "BinaryData.h generated."
+        cmake --build build --target TertiaryBinaryData
+        echo "Locating BinaryData.h..."
+        find build -name "BinaryData.h" -type f
+        echo "BinaryData generated."
 
 
     # Build WebAssembly
@@ -1218,19 +1221,18 @@ jobs:
         WONDERLAB_DIR="${GITHUB_WORKSPACE}/Wonderlab"
         PLUGIN_SRC_DIR="${GITHUB_WORKSPACE}/plugin/source"
         WEB_BUILD_DIR="${GITHUB_WORKSPACE}/build/web"
-        BINARY_DATA_DIR="${GITHUB_WORKSPACE}/build/plugin/images/juce_binarydata_${REPOSITORY_NAME}BinaryData/JuceLibraryCode"
-
         echo "Plugin:  ${wPLUGIN_NAME} v${wPROJECT_VERSION}"
         echo "Sources: ${PLUGIN_SRC_DIR}"
         echo ""
 
-        # Verify BinaryData was generated
-        if [ ! -f "${BINARY_DATA_DIR}/BinaryData.h" ]; then
-          echo "ERROR: BinaryData.h not found at ${BINARY_DATA_DIR}"
-          echo "Contents of build/plugin/images/:"
-          find ${GITHUB_WORKSPACE}/build/plugin/images/ -name "BinaryData.h" 2>/dev/null || echo "Not found anywhere"
+        # Find BinaryData.h dynamically (path varies by platform)
+        BINARY_DATA_DIR=$(dirname "$(find ${GITHUB_WORKSPACE}/build -name 'BinaryData.h' -type f | head -1)")
+        if [ -z "${BINARY_DATA_DIR}" ] || [ ! -f "${BINARY_DATA_DIR}/BinaryData.h" ]; then
+          echo "ERROR: BinaryData.h not found anywhere in build/"
+          find ${GITHUB_WORKSPACE}/build -name "BinaryData*" 2>/dev/null
           exit 1
         fi
+        echo "BinaryData found at: ${BINARY_DATA_DIR}"
 
         # Create build directory
         mkdir -p "${WEB_BUILD_DIR}"
