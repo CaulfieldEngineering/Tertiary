@@ -1240,23 +1240,23 @@ jobs:
 
         # Generate CMakeLists.txt
         echo "Generating CMakeLists.txt..."
-        cat > CMakeLists.txt <<EOF
-        cmake_minimum_required(VERSION 3.15)
-        project(${REPOSITORY_NAME}Web LANGUAGES C CXX)
-        set(CMAKE_CXX_STANDARD 20)
-        set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-        set(PLUGIN_NAME "${wPLUGIN_NAME}")
-        set(PLUGIN_VERSION "${wPROJECT_VERSION}")
-        set(PLUGIN_SRC_DIR "${PLUGIN_SRC_DIR}")
-        set(WONDERLAB_DIR "${WONDERLAB_DIR}")
-        set(PLUGIN_PROCESSOR_HEADER "PluginProcessor.h")
-        set(PLUGIN_PROCESSOR_CLASS audio_plugin::AudioPluginAudioProcessor)
-        set(PLUGIN_EXTRA_INCLUDE_DIRS "${BINARY_DATA_DIR}")
-        set(PLUGIN_EXTRA_SOURCE_DIRS "${BINARY_DATA_DIR}")
-
-        include(\${WONDERLAB_DIR}/cmake/WonderlabBuild.cmake)
-        EOF
+        {
+          echo 'cmake_minimum_required(VERSION 3.15)'
+          echo "project(${wPLUGIN_NAME}Web LANGUAGES C CXX)"
+          echo 'set(CMAKE_CXX_STANDARD 20)'
+          echo 'set(CMAKE_CXX_STANDARD_REQUIRED ON)'
+          echo ''
+          echo "set(PLUGIN_NAME \"${wPLUGIN_NAME}\")"
+          echo "set(PLUGIN_VERSION \"${wPROJECT_VERSION}\")"
+          echo "set(PLUGIN_SRC_DIR \"${PLUGIN_SRC_DIR}\")"
+          echo "set(WONDERLAB_DIR \"${WONDERLAB_DIR}\")"
+          echo 'set(PLUGIN_PROCESSOR_HEADER "PluginProcessor.h")'
+          echo 'set(PLUGIN_PROCESSOR_CLASS audio_plugin::AudioPluginAudioProcessor)'
+          echo "set(PLUGIN_EXTRA_INCLUDE_DIRS \"${BINARY_DATA_DIR}\")"
+          echo "set(PLUGIN_EXTRA_SOURCE_DIRS \"${BINARY_DATA_DIR}\")"
+          echo ''
+          echo 'include(${WONDERLAB_DIR}/cmake/WonderlabBuild.cmake)'
+        } > CMakeLists.txt
 
         # Configure with Emscripten
         echo "Configuring Emscripten..."
@@ -1312,15 +1312,15 @@ jobs:
 
         # Generate plugin-config.js
         echo "Generating plugin-config.js..."
-        cat > "${WEB_BUILD_DIR}/plugin-config.js" <<JSEOF
-        window.WONDERLAB_CONFIG = {
-            pluginName: '${wPLUGIN_NAME}',
-            pluginWidth: 750,
-            pluginHeight: 515,
-            wasmJs: '${wPLUGIN_NAME}Web.js',
-            tracks: [${TRACK_LIST}]
-        };
-        JSEOF
+        {
+          echo "window.WONDERLAB_CONFIG = {"
+          echo "    pluginName: '${wPLUGIN_NAME}',"
+          echo "    pluginWidth: 750,"
+          echo "    pluginHeight: 515,"
+          echo "    wasmJs: '${wPLUGIN_NAME}Web.js',"
+          echo "    tracks: [${TRACK_LIST}]"
+          echo "};"
+        } > "${WEB_BUILD_DIR}/plugin-config.js"
 
         # List final web app contents
         echo ""
@@ -1414,16 +1414,16 @@ jobs:
 
         # Upload COOP/COEP headers file (.htaccess for Apache)
         echo "Configuring server headers..."
-        cat > /tmp/htaccess_web <<'HTEOF'
-        # Required for SharedArrayBuffer (Web Audio + WASM)
-        Header set Cross-Origin-Opener-Policy "same-origin"
-        Header set Cross-Origin-Embedder-Policy "require-corp"
-        Header set Cache-Control "no-cache, no-store, must-revalidate"
-
-        # MIME types
-        AddType application/wasm .wasm
-        AddType application/javascript .js
-        HTEOF
+        {
+          echo '# Required for SharedArrayBuffer (Web Audio + WASM)'
+          echo 'Header set Cross-Origin-Opener-Policy "same-origin"'
+          echo 'Header set Cross-Origin-Embedder-Policy "require-corp"'
+          echo 'Header set Cache-Control "no-cache, no-store, must-revalidate"'
+          echo ''
+          echo '# MIME types'
+          echo 'AddType application/wasm .wasm'
+          echo 'AddType application/javascript .js'
+        } > /tmp/htaccess_web
         scp /tmp/htaccess_web "$SERVER:${DEST_PATH}.htaccess"
 
         echo ""
