@@ -1,5 +1,4 @@
 # Staging & Production Pipeline
-# Adding change to trigger commit.
 # ==========================================================================================
 
 
@@ -1288,7 +1287,7 @@ jobs:
 
         # Copy Wonderlab web host files
         cp "${WONDERLAB_DIR}/web/index.html" "${WEB_BUILD_DIR}/index.html"
-        cp "${WONDERLAB_DIR}/web/juce-audio-worklet.js" "${WEB_BUILD_DIR}/juce-audio-worklet.js"
+        # juce-audio-worklet.js no longer needed (replaced by C++ Wasm Audio Worklet)
 
         # Copy sample audio tracks
         TRACK_LIST=""
@@ -1403,7 +1402,7 @@ jobs:
         echo "Uploading web host files..."
         scp "${WEB_BUILD_DIR}/index.html" "$SERVER:${DEST_PATH}"
         scp "${WEB_BUILD_DIR}/plugin-config.js" "$SERVER:${DEST_PATH}"
-        scp "${WEB_BUILD_DIR}/juce-audio-worklet.js" "$SERVER:${DEST_PATH}"
+        # juce-audio-worklet.js removed (C++ Wasm Audio Worklet replaces it)
         scp "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.js" "$SERVER:${DEST_PATH}"
         scp "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.wasm" "$SERVER:${DEST_PATH}"
 

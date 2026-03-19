@@ -264,7 +264,7 @@ echo ""
 # -- Copy Wonderlab web host files --
 echo "         Copying web host files..."
 cp "${WONDERLAB_DIR}/web/index.html" "${WEB_BUILD_DIR}/index.html"
-cp "${WONDERLAB_DIR}/web/juce-audio-worklet.js" "${WEB_BUILD_DIR}/juce-audio-worklet.js"
+# juce-audio-worklet.js no longer needed (replaced by C++ Wasm Audio Worklet)
 
 # -- Copy sample audio tracks --
 SAMPLE_DIR="${PROJECT_ROOT}/plugin/sample_audio"
