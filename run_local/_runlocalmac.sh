@@ -291,15 +291,15 @@ fi
 
 # -- Generate plugin-config.js --
 echo "         Generating plugin-config.js..."
-cat > "${WEB_BUILD_DIR}/plugin-config.js" <<JSEOF
-window.WONDERLAB_CONFIG = {
-    pluginName: '${REPOSITORY_NAME}',
-    pluginWidth: 750,
-    pluginHeight: 515,
-    wasmJs: '${REPOSITORY_NAME}Web.js',
-    tracks: [${TRACK_LIST}]
-};
-JSEOF
+{
+  echo "window.WONDERLAB_CONFIG = {"
+  echo "    pluginName: '${REPOSITORY_NAME}',"
+  echo "    pluginWidth: 750,"
+  echo "    pluginHeight: 515,"
+  echo "    wasmJs: '${REPOSITORY_NAME}Web.js',"
+  echo "    tracks: [${TRACK_LIST}]"
+  echo "};"
+} > "${WEB_BUILD_DIR}/plugin-config.js"
 
 echo ""
 echo " ========================================================================="
