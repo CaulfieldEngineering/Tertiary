@@ -1,4 +1,5 @@
 # Staging & Production Pipeline
+# Ammending for test commit.
 # ==========================================================================================
 
 
@@ -1174,7 +1175,7 @@ jobs:
     - name: Install Emscripten SDK
       uses: mymindstorm/setup-emsdk@v14
       with:
-        version: 3.1.61
+        version: 5.0.3
 
 
     # Install Ninja Build System
