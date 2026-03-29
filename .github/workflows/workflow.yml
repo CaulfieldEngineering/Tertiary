@@ -273,7 +273,7 @@ jobs:
 
         echo "Signing VST3 bundle..."
         # ====================================
-        VST3_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3/${REPOSITORY_NAME}.vst3"
+        VST3_PATH="${GITHUB_WORKSPACE}/build/plugin/${wPLUGIN_NAME}_artefacts/Release/VST3/${wPLUGIN_NAME}.vst3"
         codesign --force \
           --sign "Developer ID Application" \
           --verbose \
@@ -288,7 +288,7 @@ jobs:
 
         echo "Signing standalone application..."
         # ====================================
-        APP_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone/${REPOSITORY_NAME}.app"
+        APP_PATH="${GITHUB_WORKSPACE}/build/plugin/${wPLUGIN_NAME}_artefacts/Release/Standalone/${wPLUGIN_NAME}.app"
         codesign --force \
           --sign "Developer ID Application" \
           --verbose \
@@ -330,8 +330,8 @@ jobs:
         fi
 
         # Define paths
-        APP_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone/${REPOSITORY_NAME}.app"
-        PKG_PATH="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg"
+        APP_PATH="${GITHUB_WORKSPACE}/build/plugin/${wPLUGIN_NAME}_artefacts/Release/Standalone/${wPLUGIN_NAME}.app"
+        PKG_PATH="${GITHUB_WORKSPACE}/build/output/${wPLUGIN_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg"
 
         echo "Checking for standalone app before packaging..."
         if [ ! -d "$APP_PATH" ]; then
@@ -346,9 +346,9 @@ jobs:
 
         pkgbuild \
           --root "$(dirname "$APP_PATH")" \
-          --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.app" \
+          --identifier "com.${FORMATTED_COMPANY_NAME}.${wPLUGIN_NAME}.app" \
           --version "$wPROJECT_VERSION" \
-          --install-location "/Applications/${REPOSITORY_NAME}" \
+          --install-location "/Applications/${wPLUGIN_NAME}" \
           "$PKG_PATH"
 
         # Verify package was created and is not empty
@@ -385,8 +385,8 @@ jobs:
         fi
 
         # Define paths
-        VST3_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3/${REPOSITORY_NAME}.vst3"
-        PKG_PATH="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg"
+        VST3_PATH="${GITHUB_WORKSPACE}/build/plugin/${wPLUGIN_NAME}_artefacts/Release/VST3/${wPLUGIN_NAME}.vst3"
+        PKG_PATH="${GITHUB_WORKSPACE}/build/output/${wPLUGIN_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg"
 
         echo "Checking for VST3 bundle before packaging..."
         if [ ! -d "$VST3_PATH" ]; then
@@ -401,7 +401,7 @@ jobs:
 
         pkgbuild \
           --root "$(dirname "$VST3_PATH")" \
-          --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.vst3" \
+          --identifier "com.${FORMATTED_COMPANY_NAME}.${wPLUGIN_NAME}.vst3" \
           --version "$wPROJECT_VERSION" \
           --install-location "/Library/Audio/Plug-Ins/VST3" \
           "$PKG_PATH"
@@ -464,7 +464,7 @@ jobs:
 
         echo "Signing standalone package..."
         # ====================================
-        STANDALONE_PKG="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg"
+        STANDALONE_PKG="${GITHUB_WORKSPACE}/build/output/${wPLUGIN_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg"
         productsign --sign "Developer ID Installer" \
           "$STANDALONE_PKG" \
           "${STANDALONE_PKG%.pkg}_signed.pkg"
@@ -475,7 +475,7 @@ jobs:
 
         echo "Signing VST3 package..."
         # ====================================
-        VST3_PKG="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg"
+        VST3_PKG="${GITHUB_WORKSPACE}/build/output/${wPLUGIN_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg"
         productsign --sign "Developer ID Installer" \
           "$VST3_PKG" \
           "${VST3_PKG%.pkg}_signed.pkg"
@@ -541,10 +541,10 @@ jobs:
         productbuild \
           --distribution "${GITHUB_WORKSPACE}/build/output/distribution.xml" \
           --package-path "${GITHUB_WORKSPACE}/build/output" \
-          "${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
+          "${{github.workspace}}/build/${wPLUGIN_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
 
         # Verify the final package was created
-        if [ ! -f "${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg" ]; then
+        if [ ! -f "${{github.workspace}}/build/${wPLUGIN_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg" ]; then
           echo "ERROR: Failed to create distribution package"
           exit 1
         fi
@@ -597,8 +597,8 @@ jobs:
         fi
 
         # Sign the distribution package
-        UNSIGNED_PKG="${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
-        SIGNED_PKG="${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}_signed.pkg"
+        UNSIGNED_PKG="${GITHUB_WORKSPACE}/build/${wPLUGIN_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
+        SIGNED_PKG="${GITHUB_WORKSPACE}/build/${wPLUGIN_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}_signed.pkg"
 
         echo "Signing distribution package..."
         productsign --sign "Developer ID Installer" \
@@ -645,7 +645,7 @@ jobs:
         fi
 
         # Store the installer path
-        INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
+        INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${wPLUGIN_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
 
         # Create temporary keychain for notarization
         xcrun notarytool store-credentials "notarytool-profile" \
@@ -723,7 +723,7 @@ jobs:
         fi
     
         # Store the installer path
-        INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
+        INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${wPLUGIN_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
     
         echo "Stapling notarization ticket to installer..."
         xcrun stapler staple "$INSTALLER_PATH"
@@ -788,13 +788,13 @@ jobs:
         
         # Set file paths and titles based on OS
         if [ "${{ matrix.os }}" == "macos-latest" ]; then
-          FILE_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+          FILE_PATH="${GITHUB_WORKSPACE}/build/${wPLUGIN_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
           FILE_TITLE="${wPLUGIN_NAME} Installer v${wPROJECT_VERSION} for Mac"
-          FILE_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+          FILE_NAME="${wPLUGIN_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
         elif [ "${{ matrix.os }}" == "windows-latest" ]; then
-          FILE_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+          FILE_PATH="${GITHUB_WORKSPACE}/build/${wPLUGIN_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
           FILE_TITLE="${wPLUGIN_NAME} Installer v${wPROJECT_VERSION} for Windows"
-          FILE_NAME="${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+          FILE_NAME="${wPLUGIN_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
         else
           echo "Unsupported OS for WordPress upload"
           exit 1
@@ -836,8 +836,8 @@ jobs:
           -H "Content-Disposition: attachment; filename=$(basename "$FILE_PATH")" \
           -F "file=@${FILE_PATH}" \
           -F "title=${FILE_TITLE}" \
-          -F "alt_text=${REPO_NAME} Installer" \
-          -F "caption=Installer for ${REPO_NAME} v${wPROJECT_VERSION}" \
+          -F "alt_text=${wPLUGIN_NAME} Installer" \
+          -F "caption=Installer for ${wPLUGIN_NAME} v${wPROJECT_VERSION}" \
           -F "description=${FILE_TITLE}")
 
         # Check upload response and extract URL
@@ -896,8 +896,8 @@ jobs:
         REPO_NAME_LOWER=$(echo $REPO_NAME | tr '[:upper:]' '[:lower:]')
         
         # Construct destination URLs (keeping original case for file names)
-        FILE_URL_MAC="${URL_ROOT_PATH}/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
-        FILE_URL_WIN="${URL_ROOT_PATH}/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+        FILE_URL_MAC="${URL_ROOT_PATH}/${wPLUGIN_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+        FILE_URL_WIN="${URL_ROOT_PATH}/${wPLUGIN_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
         
         # Construct Source URLs (in lowercase)
         SOURCE_URL_MAC="/${REPO_NAME_LOWER}-download-mac"
@@ -1055,11 +1055,11 @@ jobs:
 
         # Upload installer for current OS
         if [ "${{ matrix.os }}" == "windows-latest" ]; then
-          INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
-          INSTALLER_NAME="${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+          INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${wPLUGIN_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
+          INSTALLER_NAME="${wPLUGIN_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
         elif [ "${{ matrix.os }}" == "macos-latest" ]; then
-          INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
-          INSTALLER_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+          INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${wPLUGIN_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
+          INSTALLER_NAME="${wPLUGIN_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
         else
           echo "Unsupported OS for installer upload"
           INSTALLER_PATH=""
@@ -1266,7 +1266,7 @@ jobs:
         echo "Compiling WebAssembly..."
         emmake ninja
 
-        WASM_SIZE=$(stat -c%s "${REPOSITORY_NAME}Web.wasm" 2>/dev/null || echo "unknown")
+        WASM_SIZE=$(stat -c%s "${wPLUGIN_NAME}Web.wasm" 2>/dev/null || echo "unknown")
         echo "WASM size: ${WASM_SIZE} bytes"
 
 
@@ -1402,8 +1402,8 @@ jobs:
         echo "Uploading web files..."
         scp "${WEB_BUILD_DIR}/index.html" "$CE_SERVER:${CE_DEST}"
         scp "${WEB_BUILD_DIR}/plugin-config.js" "$CE_SERVER:${CE_DEST}"
-        scp "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.js" "$CE_SERVER:${CE_DEST}"
-        scp "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.wasm" "$CE_SERVER:${CE_DEST}"
+        scp "${WEB_BUILD_DIR}/${wPLUGIN_NAME}Web.js" "$CE_SERVER:${CE_DEST}"
+        scp "${WEB_BUILD_DIR}/${wPLUGIN_NAME}Web.wasm" "$CE_SERVER:${CE_DEST}"
 
         if [ -d "${WEB_BUILD_DIR}/audio" ]; then
           echo "Uploading audio samples..."
@@ -1448,8 +1448,8 @@ jobs:
         echo "Uploading web files to WordPress..."
         sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/index.html" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
         sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/plugin-config.js" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
-        sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.js" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
-        sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.wasm" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
+        sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/${wPLUGIN_NAME}Web.js" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
+        sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/${wPLUGIN_NAME}Web.wasm" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
 
         echo "Uploading PHP wrappers..."
         sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WONDERLAB_DIR}/web/index.php" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
