@@ -7,7 +7,7 @@
 #
 #  Prerequisites:
 #    - Xcode Command Line Tools, CMake (native build)
-#    - Emscripten SDK at ~/emsdk or $EMSDK (web build)
+#    - Emscripten SDK: set EMSDK env var, or install to ~/emsdk
 #    - Wonderlab repo cloned alongside this repo (web build)
 # =========================================================================
 
@@ -192,11 +192,16 @@ echo ""
 WONDERLAB_DIR="${PROJECT_ROOT}/../Wonderlab"
 PLUGIN_SRC_DIR="${PROJECT_ROOT}/plugin/source"
 WEB_BUILD_DIR="${PROJECT_ROOT}/build/web"
+BINARY_DATA_DIR="${PROJECT_ROOT}/build/plugin/images/juce_binarydata_${REPOSITORY_NAME}BinaryData/JuceLibraryCode"
 
 # -- Validate dependencies --
 if [ ! -f "${WONDERLAB_DIR}/cmake/WonderlabBuild.cmake" ]; then
     echo " ERROR: Wonderlab not found at ${WONDERLAB_DIR}"
     echo "         Clone it alongside this repo first."
+    exit 1
+fi
+if [ ! -f "${BINARY_DATA_DIR}/BinaryData.h" ]; then
+    echo " ERROR: BinaryData.h not found. Run the native build first."
     exit 1
 fi
 
@@ -235,6 +240,8 @@ set(PLUGIN_SRC_DIR "${PLUGIN_SRC_DIR}")
 set(WONDERLAB_DIR "${WONDERLAB_DIR}")
 set(PLUGIN_PROCESSOR_HEADER "PluginProcessor.h")
 set(PLUGIN_PROCESSOR_CLASS audio_plugin::AudioPluginAudioProcessor)
+set(PLUGIN_EXTRA_INCLUDE_DIRS "${BINARY_DATA_DIR}")
+set(PLUGIN_EXTRA_SOURCE_DIRS "${BINARY_DATA_DIR}")
 
 include(\${WONDERLAB_DIR}/cmake/WonderlabBuild.cmake)
 EOF

@@ -7,7 +7,7 @@ REM  the Wonderlab web version (WASM + web host).
 REM
 REM  Prerequisites:
 REM    - CMake, Visual Studio Build Tools, Chocolatey (native build)
-REM    - Emscripten SDK at C:\Users\jpcfo\emsdk (web build)
+REM    - Emscripten SDK: set EMSDK env var, or install to %USERPROFILE%\emsdk
 REM    - Wonderlab repo cloned alongside this repo (web build)
 REM =========================================================================
 
@@ -207,8 +207,19 @@ echo.
 set "WONDERLAB_DIR=%cd%\..\Wonderlab"
 set "PLUGIN_SRC_DIR=%cd%\plugin\source"
 set "WEB_BUILD_DIR=%cd%\build\web"
-set "EMSDK_DIR=C:\Users\jpcfo\emsdk"
-set "BINARY_DATA_DIR=%cd%\build\plugin\images\juce_binarydata_TertiaryBinaryData\JuceLibraryCode"
+set "BINARY_DATA_DIR=%cd%\build\plugin\images\juce_binarydata_!REPOSITORY_NAME!BinaryData\JuceLibraryCode"
+
+:: -- Find Emscripten SDK --
+if defined EMSDK (
+    set "EMSDK_DIR=!EMSDK!"
+) else if exist "%USERPROFILE%\emsdk" (
+    set "EMSDK_DIR=%USERPROFILE%\emsdk"
+) else (
+    echo  ERROR: Emscripten SDK not found.
+    echo         Set the EMSDK environment variable or install to %%USERPROFILE%%\emsdk
+    pause
+    exit /b 1
+)
 
 :: -- Validate dependencies --
 if not exist "%WONDERLAB_DIR%\cmake\WonderlabBuild.cmake" (
@@ -217,8 +228,8 @@ if not exist "%WONDERLAB_DIR%\cmake\WonderlabBuild.cmake" (
     pause
     exit /b 1
 )
-if not exist "%EMSDK_DIR%\upstream\emscripten\emcmake.bat" (
-    echo  ERROR: Emscripten SDK not found at %EMSDK_DIR%
+if not exist "!EMSDK_DIR!\upstream\emscripten\emcmake.bat" (
+    echo  ERROR: Emscripten SDK not found at !EMSDK_DIR!
     pause
     exit /b 1
 )
@@ -228,8 +239,17 @@ if not exist "!BINARY_DATA_DIR!\BinaryData.h" (
     exit /b 1
 )
 
-set "EMCMAKE=%EMSDK_DIR%\upstream\emscripten\emcmake.bat"
-set "EMMAKE=%EMSDK_DIR%\upstream\emscripten\emmake.bat"
+set "EMCMAKE=!EMSDK_DIR!\upstream\emscripten\emcmake.bat"
+set "EMMAKE=!EMSDK_DIR!\upstream\emscripten\emmake.bat"
+
+:: -- Find Node.js from emsdk (discover version dynamically) --
+set "NODE_EXE="
+for /d %%v in ("!EMSDK_DIR!\node\*_64bit") do set "NODE_EXE=%%v\bin\node.exe"
+if not defined NODE_EXE (
+    echo  ERROR: Node.js not found in emsdk at !EMSDK_DIR!\node\
+    pause
+    exit /b 1
+)
 
 :: -- Convert paths to forward slashes for CMake --
 set "PLUGIN_SRC_FWD=!PLUGIN_SRC_DIR:\=/!"
@@ -348,7 +368,6 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":8080.*LISTENING" 2^>nul') d
 )
 
 :: -- Start Node.js dev server --
-set "NODE_EXE=%EMSDK_DIR%\node\22.16.0_64bit\bin\node.exe"
 "!NODE_EXE!" "%WONDERLAB_DIR%\scripts\serve.js" "%WEB_BUILD_DIR%" 8080
 
 :done
