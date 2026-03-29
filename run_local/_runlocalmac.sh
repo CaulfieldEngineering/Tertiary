@@ -200,6 +200,7 @@ if [ ! -f "${WONDERLAB_DIR}/cmake/WonderlabBuild.cmake" ]; then
     echo "         Clone it alongside this repo first."
     exit 1
 fi
+
 if [ ! -f "${BINARY_DATA_DIR}/BinaryData.h" ]; then
     echo " ERROR: BinaryData.h not found. Run the native build first."
     exit 1
@@ -271,7 +272,6 @@ echo ""
 # -- Copy Wonderlab web host files --
 echo "         Copying web host files..."
 cp "${WONDERLAB_DIR}/web/index.html" "${WEB_BUILD_DIR}/index.html"
-# juce-audio-worklet.js no longer needed (replaced by C++ Wasm Audio Worklet)
 
 # -- Copy sample audio tracks --
 SAMPLE_DIR="${PROJECT_ROOT}/plugin/sample_audio"
