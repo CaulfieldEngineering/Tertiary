@@ -146,7 +146,7 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
-cd "%~dp0\.."
+cd "%~dp0\..\.."
 
 :: -- Copy web assets --
 echo         Copying web assets...
