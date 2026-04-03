@@ -1405,6 +1405,12 @@ jobs:
         scp "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.js" "$CE_SERVER:${CE_DEST}"
         scp "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.wasm" "$CE_SERVER:${CE_DEST}"
 
+        if [ -f "${WEB_BUILD_DIR}/${REPOSITORY_NAME}WebFallback.js" ]; then
+          echo "Uploading fallback WASM..."
+          scp "${WEB_BUILD_DIR}/${REPOSITORY_NAME}WebFallback.js" "$CE_SERVER:${CE_DEST}"
+          scp "${WEB_BUILD_DIR}/${REPOSITORY_NAME}WebFallback.wasm" "$CE_SERVER:${CE_DEST}"
+        fi
+
         if [ -d "${WEB_BUILD_DIR}/audio" ]; then
           echo "Uploading audio samples..."
           scp "${WEB_BUILD_DIR}/audio/"* "$CE_SERVER:${CE_DEST}audio/"
@@ -1450,6 +1456,12 @@ jobs:
         sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/plugin-config.js" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
         sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.js" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
         sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.wasm" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
+
+        if [ -f "${WEB_BUILD_DIR}/${REPOSITORY_NAME}WebFallback.js" ]; then
+          echo "Uploading fallback WASM..."
+          sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/${REPOSITORY_NAME}WebFallback.js" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
+          sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/${REPOSITORY_NAME}WebFallback.wasm" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
+        fi
 
         echo "Uploading PHP wrappers..."
         sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WONDERLAB_DIR}/web/index.php" "${WP_USER}@${WP_HOST}:${WP_DEST}/"

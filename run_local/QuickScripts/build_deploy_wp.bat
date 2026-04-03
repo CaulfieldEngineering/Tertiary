@@ -199,6 +199,8 @@ echo put "!WEB_BUILD_DIR!\serve.php"
 echo put "!WEB_BUILD_DIR!\plugin-config.js"
 echo put "!WEB_BUILD_DIR!\!REPO!Web.js"
 echo put "!WEB_BUILD_DIR!\!REPO!Web.wasm"
+echo put "!WEB_BUILD_DIR!\!REPO!WebFallback.js"
+echo put "!WEB_BUILD_DIR!\!REPO!WebFallback.wasm"
 ) > "!CMDS!"
 
 sftp -i "!SSH_KEY!" -b "!CMDS!" !SFTP_HOST!

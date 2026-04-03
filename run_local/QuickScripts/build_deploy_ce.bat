@@ -204,6 +204,11 @@ scp -P 7822 -i "%SSH_KEY%" -o StrictHostKeyChecking=no "%WEB_BUILD_DIR%\index.ht
 scp -P 7822 -i "%SSH_KEY%" -o StrictHostKeyChecking=no "%WEB_BUILD_DIR%\plugin-config.js" %SERVER%:%DEST%
 scp -P 7822 -i "%SSH_KEY%" -o StrictHostKeyChecking=no "%WEB_BUILD_DIR%\!REPOSITORY_NAME!Web.js" %SERVER%:%DEST%
 scp -P 7822 -i "%SSH_KEY%" -o StrictHostKeyChecking=no "%WEB_BUILD_DIR%\!REPOSITORY_NAME!Web.wasm" %SERVER%:%DEST%
+if exist "%WEB_BUILD_DIR%\!REPOSITORY_NAME!WebFallback.js" (
+    echo         Uploading fallback WASM...
+    scp -P 7822 -i "%SSH_KEY%" -o StrictHostKeyChecking=no "%WEB_BUILD_DIR%\!REPOSITORY_NAME!WebFallback.js" %SERVER%:%DEST%
+    scp -P 7822 -i "%SSH_KEY%" -o StrictHostKeyChecking=no "%WEB_BUILD_DIR%\!REPOSITORY_NAME!WebFallback.wasm" %SERVER%:%DEST%
+)
 
 if exist "%WEB_BUILD_DIR%\audio\*" (
     echo         Uploading audio samples...
@@ -215,7 +220,7 @@ echo         Uploading .htaccess...
 echo DirectoryIndex index.html
 echo.
 echo Header set Cross-Origin-Opener-Policy "same-origin"
-echo Header set Cross-Origin-Embedder-Policy "credentialless"
+echo Header set Cross-Origin-Embedder-Policy "require-corp"
 echo Header set Cache-Control "no-cache, no-store, must-revalidate"
 echo.
 echo Header set X-Frame-Options "ALLOWALL"
