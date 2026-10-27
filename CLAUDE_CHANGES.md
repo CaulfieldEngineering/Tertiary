@@ -132,7 +132,7 @@ Local, Windows 11, MSVC 2022, JUCE 8.0.8:
 - pluginval 1.0.4, strictness 10, VST3: SUCCESS before and after.
 
 CI, run 40546908596 on release-1.1 (all five jobs passed):
-- Apple Silicon (macos-14, macOS 14.8): VST3, AU, ReviewRender and TertiaryTests are universal (arm64 + x86_64), minimum macOS 11.0 on both slices. Unit tests pass. `auval -strict -v aufx EXPL WLAD`: AU VALIDATION SUCCEEDED. pluginval strictness 10: VST3 SUCCESS, AU SUCCESS.
+- Apple Silicon (macos-14, macOS 14.8; the job now runs on macos-15 because macos-14 had no capacity): VST3, AU, ReviewRender and TertiaryTests are universal (arm64 + x86_64), minimum macOS 11.0 on both slices. Unit tests pass. `auval -strict -v aufx EXPL WLAD`: AU VALIDATION SUCCEEDED. pluginval strictness 10: VST3 SUCCESS, AU SUCCESS.
 - Intel (macos-15-intel, macOS 15.7, the same universal files): unit tests pass, auval succeeded, pluginval VST3 and AU SUCCESS.
 - Windows (windows-latest): unit tests pass, pluginval VST3 SUCCESS.
 - Web demo (Wonderlab): compiles with the new files.

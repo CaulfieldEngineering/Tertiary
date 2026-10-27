@@ -6,7 +6,7 @@
 # It never signs, never uploads to a server and needs no secrets. The deploy pipeline is
 # workflow.yml (staging and v* tags) and is not touched by this file.
 #
-#   mac-build    Apple Silicon (macos-14): builds the universal VST3, AU, ReviewRender and the unit tests,
+#   mac-build    Apple Silicon (macos-15): builds the universal VST3, AU, ReviewRender and the unit tests,
 #                checks both chip types and macOS 11, runs the unit tests, auval, pluginval, a short render
 #   mac-intel    Intel (macos-15-intel; macos-13 was retired by GitHub in late 2025): no build, tests the
 #                same universal files on Intel: unit tests, auval, pluginval, render
@@ -48,7 +48,7 @@ jobs:
   # Job: Mac build and test (Apple Silicon)
   # ==========================================================================================
   mac-build:
-    runs-on: macos-14
+    runs-on: macos-15   # Apple Silicon. Was macos-14; on 2026-10-27 GitHub had no capacity for it twice in a row
     timeout-minutes: 60
     steps:
     - name: Checkout code
