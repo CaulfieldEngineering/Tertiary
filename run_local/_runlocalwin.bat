@@ -314,41 +314,15 @@ cd ..
 echo  [6/6] Assembling web app...
 echo.
 
-:: -- Copy Wonderlab web host files --
-echo         Copying web host files...
-copy "%WONDERLAB_DIR%\web\index.html" "%WEB_BUILD_DIR%\index.html" >nul
-
-:: -- Copy sample audio tracks --
-set "SAMPLE_DIR=%cd%\plugin\sample_audio"
-set "TRACK_LIST="
-
-if exist "!SAMPLE_DIR!" (
-    echo         Copying sample audio tracks...
-    mkdir "%WEB_BUILD_DIR%\audio" 2>nul
-    for %%f in ("!SAMPLE_DIR!\*.*") do (
-        copy "%%f" "%WEB_BUILD_DIR%\audio\" >nul
-        if defined TRACK_LIST (
-            set "TRACK_LIST=!TRACK_LIST!, { title: '%%~nf', file: 'audio/%%~nxf' }"
-        ) else (
-            set "TRACK_LIST={ title: '%%~nf', file: 'audio/%%~nxf' }"
-        )
-        echo           + %%~nxf
-    )
-) else (
-    echo         No sample_audio folder found, skipping.
+:: [Claude 2026-10-27] Assembly now runs Wonderlab\scripts\assemble-web.js, the same script
+:: CI uses: index.html, the tracks (plus MP3 copies if ffmpeg is installed), durations, a
+:: build id, and the phone zoom regions from plugin\web_demo.json, into plugin-config.js.
+"!NODE_EXE!" "%WONDERLAB_DIR%\scripts\assemble-web.js" --name "!REPOSITORY_NAME!" --build "%WEB_BUILD_DIR%" --samples "%cd%\plugin\sample_audio" --extra "%cd%\plugin\web_demo.json"
+if errorlevel 1 (
+    echo  ERROR: Assembling the web app failed.
+    pause
+    exit /b 1
 )
-
-:: -- Generate plugin-config.js --
-echo         Generating plugin-config.js...
-(
-echo window.WONDERLAB_CONFIG = {
-echo     pluginName: '!REPOSITORY_NAME!',
-echo     pluginWidth: 750,
-echo     pluginHeight: 515,
-echo     wasmJs: '!REPOSITORY_NAME!Web.js',
-echo     tracks: [!TRACK_LIST!]
-echo };
-) > "%WEB_BUILD_DIR%\plugin-config.js"
 
 echo.
 echo  =========================================================================
