@@ -4,7 +4,9 @@ libraries"; they arrive tonight, so these are written and set up now and rendere
 Each piece is a loop. It is written three times in a row; the render keeps the middle pass, so the tails crossing the
 loop point are real and the file loops without a click.
 
-  python web_midi.py <out dir>      writes <out>/midi/<piece> - <TRACK>.mid and <out>/midi/song/<TRACK>.mid
+  python web_midi.py [out dir]      writes <out>/<piece> - <TRACK>.mid and <out>/song/<TRACK>.mid (default promo/web_midi/).
+
+The MIDI is source only (Joe, 2026-10-27): it is never shipped; only rendered WAVs go in plugin/sample_audio.
 """
 import random
 import sys
@@ -12,7 +14,7 @@ from pathlib import Path
 
 import mido
 
-OUT = Path(sys.argv[1])
+OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parent / "web_midi"
 PPQ, BAR = 480, 480 * 4
 random.seed(27102026)
 PASSES = 3
@@ -102,7 +104,7 @@ def write(events, tempos, name, path):
     mf.save(path)
 
 
-(OUT / "midi" / "song").mkdir(parents=True, exist_ok=True)
+(OUT / "song").mkdir(parents=True, exist_ok=True)
 song, tempo_map, at, lines = {}, [], 1, ["# Web demo MIDI (original, written 2026-10-27)", "",
     "Each piece is one loop, 4/4. The Duet project \"Tertiary Web Demo\" holds each piece three times in a row;",
     "render all three and keep the middle pass (see web_tracks.py).", ""]
@@ -113,13 +115,13 @@ for name, bpm, bars, at, tracks in PIECES:
     lines.append(f"## {name}: {bpm} bpm, {bars} bars a pass, starts at bar {at} in Duet (passes at bars {at}, {at + bars}, {at + 2 * bars})")
     for track, what in tracks.items():
         one = sorted((t, p, ln, v) for tr, t, p, ln, v in ev if tr == track)
-        write(one, [(0, bpm)], track, OUT / "midi" / f"{name} - {track}.mid")
+        write(one, [(0, bpm)], track, OUT / f"{name} - {track}.mid")
         lines.append(f"- `{name} - {track}.mid`: {what}. {len(one)} notes a pass.")
         for k in range(PASSES):
             song.setdefault(f"{name}|{track}", []).extend((start + k * bars * BAR + t, p, ln, v) for t, p, ln, v in one)
     lines.append("")
 for key, ev in song.items():
     name, track = key.split("|")
-    write(sorted(ev), sorted(tempo_map), track, OUT / "midi" / "song" / f"{name} - {track}.mid")
-(OUT / "midi" / "README.md").write_text("\n".join(lines), encoding="utf-8")
+    write(sorted(ev), sorted(tempo_map), track, OUT / "song" / f"{name} - {track}.mid")
+(OUT / "README.md").write_text("\n".join(lines), encoding="utf-8")
 print("\n".join(lines))

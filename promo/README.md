@@ -25,11 +25,11 @@ To build the tool the first time (python3 must be on PATH for `createSourceList.
 
 Joe: more movement, a camera on the UI, a better tagline, dynamic text, no "Joe Caulfield", the Wonderland Audio logo outside the UI; then: keep the AI tells low, and no sampled guitar (guitar only from real recordings). Output: `Dropbox\Caulfield Engineering\Tertiary\Promo 2026-10-27 v2`.
 
-- `reels_v2.py`: crossover sweeps, slider rides, rhythm changes on the beat, solo and bypass, all as ReviewRender ramps so picture and sound stay locked. The editor is drawn at 3x and a camera eases to the control that moves, with a soft veil over the rest. Captions land on the beat and some show the value live. The logo is `plugin/images/CompanyTitle.png`. Reels 02 and 03 use Joe's DI (2024-09-17, GTR 1_01 and GTR 1_02) from the Duet project "Tertiary Web Demo"; v1's 02 and 03 used Shreddage.
+- `reels_v2.py`: crossover sweeps, slider rides, rhythm changes on the beat, solo and bypass, all as ReviewRender ramps so picture and sound stay locked. The editor is drawn at 3x and a camera eases to the control that moves, with a soft veil over the rest. Captions land on the beat and some show the value live. The logo is `plugin/images/CompanyTitle.png`. Reels 02 and 03 play the arpeggio and stabs on electric piano (the KEYS track in "Tertiary Promo"; the sampled-guitar GTR track is muted). v1's 02 and 03 used Shreddage. `make_promo_v2.py` renders the stems and the Reels.
 - `carousel_v2.py`: the same rules for the five slides.
 
 ## Web demo tracks (2026-10-27)
 
 - `web_tracks.py`: dry, looping, -18 LUFS, 16-bit 44.1 kHz tracks for `plugin/sample_audio/` (the live demo's playlist). `--held` renders the MIDI tracks from the Duet project "Tertiary Web Demo" once their instruments are loaded (Kontakt Factory Selection 2, Analog Dreams, GroveBass).
-- `web_midi.py`: their original MIDI (three pads, electric piano, organ, strings, an ambient swell; no drums, no Octavio material, Joe 2026-10-27), each loop written three times so the render keeps a middle pass with real tails.
+- `web_midi.py`: their original MIDI, written to `promo/web_midi/` (source only; never shipped) (three pads, electric piano, organ, strings, an ambient swell; no drums, no Octavio material, Joe 2026-10-27), each loop written three times so the render keeps a middle pass with real tails.
 - `web_test.mjs`: plays every track of a local copy of the web demo in headless Chrome (`node web_test.mjs <url> <profile dir>`, with Wonderlab's `scripts/serve.js` serving it).

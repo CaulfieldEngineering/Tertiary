@@ -30,7 +30,6 @@ RENDERS = HERE / "work" / "web" / "renders"  # Duet renders from the project "Te
 # name: (source files to sum, start s, end s, crossfade s, repeats, mono)
 TRACKS = {
     "Acoustic Guitar": ([str(WORK / "src" / "Acoustic Guitar 96k.wav")], 0.6, 33.0, 0.35, 1, True),
-    "Clean Electric Guitar": ([str(RENDERS / "di-chain.wav")], 1.0, 29.0, 0.35, 1, False),
 }
 
 

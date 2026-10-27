@@ -119,43 +119,46 @@ r.look(b(7), FULL); r.say(b(7), "Tertiary off", "off"); r.bypass(b(7), True)
 r.say(b(7.75), "Tertiary on", "xo"); r.bypass(b(7.75), False); r.step("Bypassed Low Band", b(7.75) + 0.05, 1)
 REELS.append(r)
 
-# 2. Clean guitar, low end left alone. Joe's own DI (2024-09-17, GTR 1_01), with a small room; no sampled guitar
-# (Joe, 2026-10-27). Not played to a click, so the rates run free, in Hz.
-FREE = [f"Sync to Host {x} Band=0" for x in ("Low", "Mid", "High")]
-r = Reel("02 Clean guitar, low end left alone", 120, 28.3, [("DI1/mix.wav", 0)], [],
-         ["Low-Mid Crossover Freq=180", "Mid-High Crossover Freq=1500", "FFT Pickoff Point=Output"] + FREE
+# 2. Electric piano, low end left alone. The P2 arpeggio on keys over its original bass line (GroveBass). Joe,
+# 2026-10-27: no sampled guitar, and his 2024 DI is out, so keys. Needs the KEYS track's instrument (Kontakt Factory
+# Selection 2) before its stems exist.
+r = Reel("02 Electric piano, low end left alone", 96, bars(96, 10) - 0.3, [("P2/mix.wav", 0)], [],
+         ["Low-Mid Crossover Freq=140", "Mid-High Crossover Freq=1500", "FFT Pickoff Point=Output"]
          + [f"Waveshape {x} Band=Triangle" for x in ("Low", "Mid", "High")]
          + [f"Depth {x} Band=85" for x in ("Low", "Mid", "High")]
-         + [f"Rate {x} Band=6" for x in ("Low", "Mid", "High")])
+         + [f"Multiplier {x} Band=1/8 Note" for x in ("Low", "Mid", "High")])
+b = r.b
 r.look(0, FULL)
-r.say(0.4, "Full-band tremolo at 6 Hz. The low strings pulse too.", "off")
-r.look(4.5, LOW); r.say(5, "Low band bypassed. Low strings hold.", "low"); r.step("Bypassed Low Band", 5, 1)
-r.look(8.5, FREQ); r.say(9, "Low crossover up", "xo", (9, 12, 180, 550, hz))
-r.ramp("Low-Mid Crossover Freq", 9, 12, 180, 550); r.ramp("Low-Mid Crossover Freq", 12.5, 13.5, 550, 300)
-r.look(13.5, MID); r.say(14, "Mid band rate up", "mid", (14, 16.5, 6, 9, lambda v: f"{v:.1f} Hz"))
-r.ramp("Rate Mid Band", 14, 16.5, 6, 9)
-r.look(17, HIGH); r.say(17.5, "Highs to square", "high"); r.step("Waveshape High Band", 17.5, SHAPE["Square"])
-r.say(19.5, "High band phase", "high", (19.5, 22.5, 0, 180, lambda v: f"{v:.0f}°"))
-r.ramp("Relative Phase High Band", 19.5, 22.5, 0, 180)
-r.look(22.8, FULL); r.say(23, "Tertiary off", "off"); r.bypass(23, True)
-r.say(24.4, "Tertiary on", "xo"); r.bypass(24.4, False); r.step("Bypassed Low Band", 24.45, 1)
+r.say(b(0.25), "Full-band tremolo. The bass pulses too.", "off")
+r.look(b(1.5), LOW)
+r.say(b(2), "Low band bypassed. Bass holds.", "low"); r.step("Bypassed Low Band", b(2), 1)
+r.look(b(3), FREQ); r.say(b(3), "Low crossover up", "xo", (b(3), b(4.5), 140, 600, hz))
+r.ramp("Low-Mid Crossover Freq", b(3), b(4.5), 140, 600)
+r.ramp("Low-Mid Crossover Freq", b(4.5), b(5), 600, 250)
+r.look(b(5), MID); r.say(b(5), "Mids in 16ths", "mid"); r.step("Multiplier Mid Band", b(5), MULT["1/16"])
+r.ramp("Depth Mid Band", b(5.5), b(6), 85, 55)
+r.look(b(6), HIGH); r.say(b(6), "Highs to square", "high"); r.step("Waveshape High Band", b(6), SHAPE["Square"])
+r.ramp("Relative Phase High Band", b(6.75), b(8), 0, 180)
+r.say(b(6.75), "High band phase", "high", (b(6.75), b(8), 0, 180, lambda v: f"{v:.0f}°"))
+r.look(b(8), FULL)
 REELS.append(r)
 
-# 3. A reverb tail that moves. Joe's DI (GTR 1_02) into a 3.5 s hall; Tertiary on the hall return only.
-r = Reel("03 A reverb tail that moves", 120, 21.5, [("DI2/Big Room.wav", 3.0)], [("DI2/DI GTR 2.wav", 0.0)],
+# 3. A reverb tail that moves. The P3 stabs on electric piano into the Room; Tertiary on the Room return only.
+r = Reel("03 A reverb tail that moves", 80, bars(80, 10) - 1.0, [("P3/Room.wav", 6.0)], [("P3/KEYS.wav", 0.0)],
          ["Low-Mid Crossover Freq=350", "Mid-High Crossover Freq=2200", "FFT Pickoff Point=Output", "Bypassed Low Band=1",
-          "Sync to Host Mid Band=0", "Rate Mid Band=2", "Waveshape Mid Band=Sine", "Depth Mid Band=0",
-          "Sync to Host High Band=0", "Rate High Band=8", "Waveshape High Band=Square", "Depth High Band=100"])
+          "Waveshape Mid Band=Sine", "Depth Mid Band=0", "Multiplier Mid Band=1/4 Note",
+          "Waveshape High Band=Square", "Depth High Band=100", "Multiplier High Band=1/16 Note"])
+b = r.b
 r.look(0, FULL)
-r.say(0.4, "Tertiary on the reverb return only. The dry guitar is untouched.", "xo")
-r.look(3, FREQ); r.say(3.5, "High crossover down", "xo", (3.5, 6.5, 2200, 700, hz))
-r.ramp("Mid-High Crossover Freq", 3.5, 6.5, 2200, 700)
-r.look(7, HIGH); r.say(7.5, "High band rate down", "high", (7.5, 9.5, 8, 4, lambda v: f"{v:.1f} Hz"))
-r.ramp("Rate High Band", 7.5, 9.5, 8, 4)
-r.look(10, MID); r.say(10.5, "Mid depth up", "mid", (10.5, 12.5, 0, 90, lambda v: f"Depth {v:.0f}%"))
-r.ramp("Depth Mid Band", 10.5, 12.5, 0, 90)
-r.look(13, FULL); r.say(13, "Tertiary off", "off"); r.bypass(13, True)
-r.say(15, "Tertiary on", "xo"); r.bypass(15, False); r.step("Bypassed Low Band", 15.05, 1)
+r.say(b(0.25), "Tertiary on the reverb return only. The dry piano is untouched.", "xo")
+r.look(b(1.25), FREQ); r.say(b(1.5), "High crossover down", "xo", (b(1.5), b(3), 2200, 700, hz))
+r.ramp("Mid-High Crossover Freq", b(1.5), b(3), 2200, 700)
+r.say(b(3), "More of the tail in the top band", "high")
+r.look(b(3.25), HIGH); r.say(b(3.75), "Highs to triplets", "high"); r.step("Multiplier High Band", b(3.75), MULT["1/8T"])
+r.look(b(4.5), MID); r.say(b(4.75), "Mid depth up", "mid", (b(4.75), b(5.75), 0, 90, lambda v: f"Depth {v:.0f}%"))
+r.ramp("Depth Mid Band", b(4.75), b(5.75), 0, 90)
+r.look(b(6), FULL); r.say(b(6), "Tertiary off", "off"); r.bypass(b(6), True)
+r.say(b(7), "Tertiary on", "xo"); r.bypass(b(7), False); r.step("Bypassed Low Band", b(7) + 0.05, 1)
 REELS.append(r)
 
 # 4. Rhythm from the low notes. Tertiary on the pad only, in the groove.
