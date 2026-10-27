@@ -4,6 +4,7 @@
 #include <juce_dsp/juce_dsp.h>
 #include "LFO.h"
 #include "Params.h"
+#include "LicenseCheck.h"   // [Claude 2026-10-27] Weekly serial-key re-check and update check
 
 namespace audio_plugin {
 
@@ -104,6 +105,12 @@ namespace audio_plugin {
         //#ifdef DEMO_VERSION
 		bool getIsDemoModeEnabled() { return effectEnabled; }
         //#endif
+
+        /* License Re-Check & Update Check */
+        // =========================================================================
+        // [Claude 2026-10-27] Started once by the editor; runs on its own thread, never on the audio thread
+        void startLicenseCheck();
+        LicenseCheckThread licenseCheck;
         
         
         /* Input & Output Meters */
@@ -154,9 +161,9 @@ namespace audio_plugin {
         // =========================================================================
 		/* Stores the state of the Serial Key Activation */
 		std::unique_ptr<juce::PropertiesFile> propertiesFile;
-        bool mIsDemoVersion { true };
+        std::atomic<bool> mIsDemoVersion { true };   // [Claude 2026-10-27] atomic: written by the GUI and license thread
 
-		bool effectEnabled = true;
+		std::atomic<bool> effectEnabled { true };    // [Claude 2026-10-27] atomic: read by the GUI timer
 
 		//#ifdef DEMO_VERSION
         int demoActiveTimeLimit{50};

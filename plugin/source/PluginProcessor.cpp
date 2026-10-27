@@ -53,7 +53,10 @@ namespace audio_plugin {
     }
 
     //==============================================================================
-    AudioPluginAudioProcessor::~AudioPluginAudioProcessor() {}
+    AudioPluginAudioProcessor::~AudioPluginAudioProcessor() {
+      // [Claude 2026-10-27] Cancel any server call in progress and wait for the license thread to finish
+      licenseCheck.stop();
+    }
 
     /* Attaches all parameters to the ParameterLayout */
     //==============================================================================
@@ -174,6 +177,13 @@ namespace audio_plugin {
 			mIsDemoVersion = true;
 		}
 
+	}
+
+	// [Claude 2026-10-27] Starts the weekly serial-key re-check and the daily update check, once per plugin instance.
+	//                      Called by the editor, so nothing goes on the network during host scans or offline renders.
+	//==============================================================================
+	void AudioPluginAudioProcessor::startLicenseCheck() {
+		licenseCheck.start(*this);
 	}
 
 	void AudioPluginAudioProcessor::setDemoState(bool demoState) {
