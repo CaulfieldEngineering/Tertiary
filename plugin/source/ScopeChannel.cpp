@@ -458,8 +458,10 @@ void ScopeChannel::generateLFOPathForDrawing(   juce::Path &lfoStrokePath,
         else
             scalar = lfoWaveRate * 60.f / lfoHostBPM;
 
-        // Get Relative Phase Shift.  Divide by 2 takes it from 360-deg to 180-deg shift.
-        auto mRelativePhase = lfoRelativePhase / waveTableDownSampleSize / 2;
+        // Get Relative Phase Shift.
+        // [Claude 2026-10-27] No more divide by 2: LFO::setTempo now gives the phase in wavetable samples, so the
+        // scope draws exactly what it drew before, and the audio now matches it.
+        auto mRelativePhase = lfoRelativePhase / waveTableDownSampleSize;
 
         // Get Display Phase Shift
         float mDisplayPhase = scrollCenter * bounds.getWidth();

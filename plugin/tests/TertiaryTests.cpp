@@ -349,6 +349,21 @@ static double measurePeriod (const std::vector<float>& x, int skip)
     return (minima.back() - minima.front()) / double (minima.size() - 1);
 }
 
+/* The sample of the first low point after skip */
+static int firstMinimum (const std::vector<float>& x, int skip)
+{
+    const int window = 200;
+    for (int i = skip + window; i < (int) x.size() - window; ++i)
+    {
+        bool isMin = x[(size_t) i] < 0.1f;
+        for (int k = -window; k <= window && isMin; ++k)
+            if (x[(size_t) (i + k)] < x[(size_t) i]) isMin = false;
+        if (isMin)
+            return i;
+    }
+    return -1;
+}
+
 /* Low band only, slow sine at full depth, so the DC output follows the low LFO */
 static void setUpForPeriod (audio_plugin::AudioPluginAudioProcessor& p, bool synced)
 {
@@ -382,6 +397,33 @@ struct ProcessorTests : juce::UnitTest
             auto period = measurePeriod (out, 9600);
             logMessage ("2 Hz LFO at 96 kHz, period " + juce::String (period) + " samples (expect 48000)");
             expectWithinAbsoluteError (period, 48000.0, 480.0);
+        }
+
+        beginTest ("Relative phase in the audio matches the knob (90 degrees = a quarter cycle)");
+        {
+            // [Claude 2026-10-27] 1.0.2 shifted the audio by twice the knob's value: 90 gave half a cycle
+            auto render = [] (float phase)
+            {
+                audio_plugin::AudioPluginAudioProcessor p;
+                setUpForPeriod (p, false);                     // 2 Hz free-running sine on the low band
+                setParam (p, "Relative Phase Low Band", phase);
+                p.setRateAndBufferSizeDetails (48000, 512);
+                p.prepareToPlay (48000, 512);
+                return runDC (p, 48000 * 2, 512);
+            };
+
+            const int period = 24000;                         // 2 Hz at 48 kHz
+            const int reference = firstMinimum (render (0), 4800);
+
+            for (float phase : { 90.f, -90.f, 45.f, 180.f })
+            {
+                const int m = firstMinimum (render (phase), 4800);
+                int shift = ((m - reference) % period + period) % period;
+                shift = juce::jmin (shift, period - shift);    // the direction doesn't matter here
+                const double expected = std::abs (phase) / 360.0 * period;
+                logMessage ("phase " + juce::String (phase) + ": shift " + juce::String (shift) + " samples (expect " + juce::String (expected) + ")");
+                expectWithinAbsoluteError ((double) shift, expected, period * 0.01);
+            }
         }
 
         beginTest ("Synced LFO follows a host tempo change");

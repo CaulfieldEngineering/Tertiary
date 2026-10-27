@@ -131,10 +131,14 @@ void LFO::setTempo(float hostBPM, double sampleRate)
     //////mRelativePhase = relativePhaseParam->get() / 360.0f;
 
     // Phase Shift is + / - 180 Degrees
+    // [Claude 2026-10-27] One cycle is the wavetable's length, sampleRate / wtScalar (half a second), not a full
+    // second of samples. With sampleRate the audio got twice the phase the knob and the scope show (-90 gave 180).
+    auto cycleLength = sampleRate / wtScalar;
+
     if (mRelativePhase <= 0)    // 0 to +180
-        mRelativePhaseInSamples = abs( (mRelativePhase/360.0f)) * sampleRate;
+        mRelativePhaseInSamples = abs( (mRelativePhase/360.0f)) * cycleLength;     // [Claude 2026-10-27] was * sampleRate
     else                        // 0 to -180
-        mRelativePhaseInSamples = sampleRate * (1 - (mRelativePhase/360.0f) );
+        mRelativePhaseInSamples = cycleLength * (1 - (mRelativePhase/360.0f) );    // [Claude 2026-10-27] was sampleRate *
 
 
     //////switch (multiplierParam->getIndex())     // Convert Multiplier Choice into Float

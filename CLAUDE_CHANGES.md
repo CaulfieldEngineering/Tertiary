@@ -50,6 +50,22 @@ Undo: commits `1f1255e`, `1a37154`, `83e4829`, `5d5cd89`. Removing them doesn't 
 
 Undo: `git revert bb247d9`. Note the license commit (section 4) adds lines next to these, so revert that first if you revert both.
 
+## 2b. Relative phase matches the knob (Joe approved, 2026-10-27)
+
+| File / function | Change | Why |
+|---|---|---|
+| `LFO.cpp` `setTempo` | Phase converted to samples of one wavetable cycle (`sampleRate / wtScalar`) instead of `sampleRate` | The wavetable holds half a second, so the audio got twice the knob's phase (-90 gave 180 degrees, the range wrapped twice) |
+| `ScopeChannel.cpp` `generateLFOPathForDrawing` | The scope's "divide by 2" removed | It compensated for the old doubling; without it the scope draws exactly what it drew before |
+
+**This changes the sound** of any session or preset saved with a relative phase other than 0 (said plainly in CHANGELOG.md). The old sound comes back by doubling the phase value.
+
+Tested by:
+- Unit test "Relative phase in the audio matches the knob": 2 Hz LFO at 48 kHz, shift measured in the audio: 90 and -90 give 6000 samples (a quarter cycle), 45 gives 3000, 180 gives 12000. On the old code it measured 12000, 12000, 6000 and 0.
+- Renders against the previous release-1.1 build: the 20 renders with phase 0 bit-identical; the 15 with phase (the three "varied" settings: Mid 90, High -120) changed.
+- New build at Mid 90 / High -120 against staging at Mid 45 / High -60, three inputs: bit-identical. So the fix halves the shift and changes nothing else.
+
+Undo: revert this commit (look for "Relative phase" in `git log`).
+
 ## 3. GUI fixes (`9c2c231`)
 
 | File / function | Change | Why |
@@ -128,10 +144,10 @@ CI, run 40546908596 on release-1.1 (all five jobs passed):
 
 ## Suggestions I did not change
 
-1. **Relative phase is twice what the knob says, in the audio.** `LFO::setTempo` converts the phase to samples of a full second (`sampleRate`), but the wavetable holds half a second (`sampleRate / wtScalar`). So -90 shifts the audio LFO by half a cycle (180 degrees), and the full range wraps twice. The scope compensates ("Divide by 2" in `ScopeChannel::generateLFOPathForDrawing`), so the picture shows the knob's value while the sound has double. The fix is one line in `setTempo` (use `sampleRate / wtScalar`), but it changes the sound of any saved session with a phase other than 0, so it is your call.
+1. ~~Relative phase is twice what the knob says, in the audio.~~ Fixed after Joe's yes: section 2b.
 2. **The repo is public on GitHub**, not private (the API reports `private: false`). The source and the license logic are readable by anyone. Settings, Danger Zone, Change visibility, if you want it private. (Public also means Actions minutes are free.)
 3. **The FFT pickoff choice names are swapped**: the parameter's "Input" (index 0) makes the spectrum show the output (`setFftPickoffPoint`). The options menu toggle is right; only the names a DAW shows in automation lanes are backwards.
-4. **NewPluginTemplate uses the same codes as Tertiary** (`WLAD` / `EXPL`). A new plugin that forgets to change `wPLUGIN_CODE` will collide with Tertiary in every DAW. Give the template a placeholder like `TMPL`.
+4. ~~NewPluginTemplate uses the same codes as Tertiary.~~ Fixed after Joe's yes, in the NewPluginTemplate repo (see the PR description).
 5. **Crossover order can be crossed by automation.** The GUI keeps low-mid below mid-high; host automation can set them the other way round. A `jmin`/`jmax` in `updateState` would guard it, but it changes the sound of such automation.
 6. **The full wavetable is recalculated on the audio thread** whenever an LFO parameter moves (24,000 points of trig per LFO at 48 kHz). No allocation, but a CPU spike during automation of depth, skew or shape. Could move to a background thread with a swap, but it is a bigger change.
 7. **`LFO::mPosition` is a float** counting up to 24,000 with steps as small as 0.25, so slow free-running rates are off by a fraction of a percent. A `double` would fix it but changes the sound slightly.
