@@ -155,3 +155,21 @@ if (WLA_REVIEW_RENDER)
         set_property(TARGET ReviewRender PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif()
 endif()
+
+# [Claude 2026-10-27] TertiaryTests (only with -DWLA_TESTS=ON; release builds leave it out): unit tests for the 1.1
+# changes (license re-check with a pretend server, sample-rate and tempo changes, no allocation in processBlock,
+# state save/restore, demo mode). Run: TertiaryTests  (exit code 0 = all passed). See tests/TertiaryTests.cpp.
+option(WLA_TESTS "Build the TertiaryTests unit tests" OFF)
+if (WLA_TESTS)
+    juce_add_console_app(TertiaryTests PRODUCT_NAME "TertiaryTests")
+    target_sources(TertiaryTests PRIVATE ${PLUGIN_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/tests/TertiaryTests.cpp)
+    target_compile_definitions(TertiaryTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0
+        JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1 JUCE_UNIT_TESTS=0
+        JucePlugin_Name="${wPLUGIN_NAME}" JucePlugin_VersionString="${wPROJECT_VERSION}" JucePlugin_IsSynth=0
+        JucePlugin_WantsMidiInput=0 JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0)
+    target_include_directories(TertiaryTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source)
+    target_link_libraries(TertiaryTests PRIVATE ${PROJECT_NAME}BinaryData juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
+    if (MSVC)
+        set_property(TARGET TertiaryTests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+endif()
