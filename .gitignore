@@ -8,3 +8,11 @@ temp_*
 build-review/
 build-review*.log
 promo/work/
+
+# REAPER test output (plugin/tests/reaper, 2026-10-27)
+plugin/tests/reaper/out/
+plugin/tests/reaper/input.wav
+
+# Local test runner output (plugin/tests/run_all.ps1, 2026-10-27)
+build-tests/
+__pycache__/

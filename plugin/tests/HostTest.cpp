@@ -1,0 +1,828 @@
+/*
+  ==============================================================================
+
+    HostTest.cpp
+    Created: 27 Oct 2026
+    Author:  Claude (for Joe), Tertiary 1.1
+
+    [Claude 2026-10-27] New file. Joe: "Can we build some kind of automated test harness?
+    So I don't have to do manual testing?"
+
+    A small host: it loads the BUILT plugin (the .vst3, or the installed AU on a Mac) the way
+    a DAW does, through juce::AudioPluginFormatManager, and runs the manual checklist as
+    automated checks. Every check prints one line: PASS, FAIL, SKIP or INFO.
+
+        HostTest --vst3 <path to Tertiary.vst3>        (Windows and Mac)
+        HostTest --au                                   (Mac: the AU installed in Components)
+        options:  --golden <folder>   reference renders (default plugin/tests/golden)
+                  --make-golden       write the reference renders instead of comparing
+                  --expect-demo       this machine has no key, so the demo gaps must be there
+                  --only <n>          run one section (1 to 8)
+        HostTest --write-input <file.wav>               the golden renders' input, for the REAPER test
+
+    Exit code 0 when nothing FAILed.
+
+    The sections
+      1  Load, prepare, process at 44.1/48/96 kHz, blocks 32 to 2048, changing mid-run
+      2  Automation of every automatable parameter through the host's parameter API
+      3  Session save and restore (exact values, bit-identical render)
+      4  Tempo: the synced LFO follows the host's tempo
+      5  Host bypass, band bypass, mute and solo
+      6  Demo mode: 50 s on, 10 s off
+      7  License states with the pretend server (in this program, not the plugin binary:
+         the shipped plugin only ever talks to the real server, so it can't be pointed at a
+         pretend one. Never calls the live server.)
+      8  Golden renders: fixed input and settings, compared with files in the repo
+
+  ==============================================================================
+*/
+
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_formats/juce_audio_formats.h>
+#include "PretendServer.h"
+
+namespace
+{
+//==============================================================================
+// Results
+//==============================================================================
+int passes = 0, failures = 0, skips = 0;
+
+void report(const juce::String& status, const juce::String& name, const juce::String& detail = {})
+{
+    if (status == "PASS") ++passes;
+    if (status == "FAIL") ++failures;
+    if (status == "SKIP") ++skips;
+    std::cout << status.paddedRight(' ', 5) << " " << name.paddedRight(' ', 58) << " " << detail << std::endl;
+}
+
+void check(bool ok, const juce::String& name, const juce::String& detail = {})
+{
+    report(ok ? "PASS" : "FAIL", name, detail);
+}
+
+//==============================================================================
+// Loading the plugin
+//==============================================================================
+juce::AudioPluginFormatManager formatManager;
+juce::PluginDescription description;
+
+bool findPlugin(const juce::StringArray& args)
+{
+    formatManager.addDefaultFormats();
+
+    juce::String formatName, fileOrId;
+
+    if (args.contains("--vst3"))
+    {
+        formatName = "VST3";
+        fileOrId = juce::File::getCurrentWorkingDirectory().getChildFile(args[args.indexOf("--vst3") + 1]).getFullPathName();
+    }
+    else if (args.contains("--au"))
+    {
+        formatName = "AudioUnit";
+    }
+
+    for (auto* format : formatManager.getFormats())
+    {
+        if (format->getName() != formatName)
+            continue;
+
+        juce::StringArray candidates;
+        if (fileOrId.isNotEmpty())
+            candidates.add(fileOrId);
+        else
+            candidates = format->searchPathsForPlugins({}, true, false);   // AU: every installed component
+
+        for (auto& candidate : candidates)
+        {
+            if (formatName == "AudioUnit" && ! candidate.contains(",EXPL,WLAD"))
+                continue;
+
+            juce::OwnedArray<juce::PluginDescription> found;
+            format->findAllTypesForFile(found, candidate);
+
+            if (! found.isEmpty())
+            {
+                description = *found[0];
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+std::unique_ptr<juce::AudioPluginInstance> create(double rate, int maxBlock)
+{
+    juce::String error;
+    auto instance = formatManager.createPluginInstance(description, rate, maxBlock, error);
+
+    if (instance == nullptr)
+    {
+        report("FAIL", "create instance", error);
+        return nullptr;
+    }
+
+    juce::AudioProcessor::BusesLayout stereo;
+    stereo.inputBuses.add(juce::AudioChannelSet::stereo());
+    stereo.outputBuses.add(juce::AudioChannelSet::stereo());
+    instance->setBusesLayout(stereo);
+    instance->setRateAndBufferSizeDetails(rate, maxBlock);
+    instance->prepareToPlay(rate, maxBlock);
+    return instance;
+}
+
+//==============================================================================
+// Parameters, by the names Tertiary gives them (Params.h)
+//==============================================================================
+juce::AudioProcessorParameter* findParam(juce::AudioPluginInstance& p, const juce::String& name)
+{
+    for (auto* prm : p.getParameters())
+        if (prm->getName(256) == name)
+            return prm;
+    return nullptr;
+}
+
+/* Sets a parameter from its normalised (0 to 1) value, as a host's automation does */
+void setNorm(juce::AudioPluginInstance& p, const juce::String& name, float value)
+{
+    if (auto* prm = findParam(p, name))
+        prm->setValueNotifyingHost(value);
+    else
+        report("FAIL", "parameter exists: " + name);
+}
+
+// Normalised values from the ranges in PluginProcessor::createParameterLayout
+float choiceNorm(int index, int numChoices)     { return (float) index / (float) (numChoices - 1); }
+float rateNorm(float hz)                        { return (hz - 0.5f) / 12.0f; }
+float phaseNorm(float degrees)                  { return (degrees + 180.0f) / 360.0f; }
+float percentNorm(float percent)                { return percent / 100.0f; }
+float skewNorm(float percent)                   { return (percent - 12.5f) / 75.0f; }
+float gainNorm(float dB)                        { return (dB + 24.0f) / 48.0f; }
+
+/* Low band only, free-running sine at full depth: with a DC input the output follows the low LFO */
+void lowBandLfoOnly(juce::AudioPluginInstance& p, bool synced, float rateHz)
+{
+    setNorm(p, "Waveshape Low Band", choiceNorm(4, 7));     // Sine
+    setNorm(p, "Depth Low Band", 1.0f);
+    setNorm(p, "Sync to Host Low Band", synced ? 1.0f : 0.0f);
+    setNorm(p, "Rate Low Band", rateNorm(rateHz));
+    setNorm(p, "Multiplier Low Band", choiceNorm(1, 6));    // 1/4 note
+}
+
+//==============================================================================
+// Signals and rendering
+//==============================================================================
+juce::AudioBuffer<float> sine(double rate, double seconds, float freq = 220.0f, float amplitude = 0.25f)
+{
+    juce::AudioBuffer<float> b(2, (int) (rate * seconds));
+    for (int i = 0; i < b.getNumSamples(); ++i)
+    {
+        auto v = amplitude * (float) std::sin(juce::MathConstants<double>::twoPi * freq * i / rate);
+        b.setSample(0, i, v);
+        b.setSample(1, i, v);
+    }
+    return b;
+}
+
+/* One tone in each band (crossovers at 500 Hz and 1 kHz by default), so every band's controls are heard */
+juce::AudioBuffer<float> threeTones(double rate, double seconds)
+{
+    juce::AudioBuffer<float> b(2, (int) (rate * seconds));
+    for (int i = 0; i < b.getNumSamples(); ++i)
+    {
+        const double t = i / rate, w = juce::MathConstants<double>::twoPi;
+        auto v = (float) (0.2 * std::sin(w * 110 * t) + 0.1 * std::sin(w * 700 * t) + 0.05 * std::sin(w * 4000 * t));
+        b.setSample(0, i, v);
+        b.setSample(1, i, v);
+    }
+    return b;
+}
+
+juce::AudioBuffer<float> dc(double rate, double seconds, float value = 0.5f)
+{
+    juce::AudioBuffer<float> b(2, (int) (rate * seconds));
+    for (int c = 0; c < 2; ++c)
+        juce::FloatVectorOperations::fill(b.getWritePointer(c), value, b.getNumSamples());
+    return b;
+}
+
+/* The golden-render input: soft noise, a sweep and a click every 0.25 s. The same on every machine. */
+juce::AudioBuffer<float> testSignal(double rate, double seconds)
+{
+    juce::AudioBuffer<float> b(2, (int) (rate * seconds));
+    juce::Random rnd(1234);
+    double phase = 0;
+    for (int i = 0; i < b.getNumSamples(); ++i)
+    {
+        const double f = 40.0 * std::pow(250.0, i / (double) b.getNumSamples());   // 40 Hz to 10 kHz
+        phase += juce::MathConstants<double>::twoPi * f / rate;
+        const float click = (i % (int) (rate / 4) == 0) ? 0.5f : 0.0f;
+        b.setSample(0, i, 0.25f * (float) std::sin(phase) + 0.05f * (rnd.nextFloat() * 2 - 1) + click);
+        b.setSample(1, i, 0.20f * (float) std::sin(phase) + 0.05f * (rnd.nextFloat() * 2 - 1) - click);
+    }
+    return b;
+}
+
+using BlockCallback = std::function<void(juce::AudioPluginInstance&, int position)>;
+
+/* Runs input through the plugin in blocks (sizes cycle through the list); returns the output */
+juce::AudioBuffer<float> render(juce::AudioPluginInstance& p, const juce::AudioBuffer<float>& input,
+                                std::vector<int> blocks = { 512 }, BlockCallback beforeBlock = {})
+{
+    const int maxBlock = *std::max_element(blocks.begin(), blocks.end());
+    juce::AudioBuffer<float> out(2, input.getNumSamples()), io(2, maxBlock);
+    juce::MidiBuffer midi;
+
+    for (int pos = 0, k = 0; pos < input.getNumSamples(); ++k)
+    {
+        const int n = juce::jmin(blocks[(size_t) k % blocks.size()], input.getNumSamples() - pos);
+        if (beforeBlock)
+            beforeBlock(p, pos);
+        juce::AudioBuffer<float> view(io.getArrayOfWritePointers(), 2, n);
+        for (int c = 0; c < 2; ++c)
+            view.copyFrom(c, 0, input, c, pos, n);
+        p.processBlock(view, midi);
+        for (int c = 0; c < 2; ++c)
+            out.copyFrom(c, pos, view, c, 0, n);
+        pos += n;
+    }
+    return out;
+}
+
+struct Stats { float peak = 0, rms = 0, maxJump = 0; int nonFinite = 0, subnormal = 0; };
+
+Stats stats(const juce::AudioBuffer<float>& b, int from = 0)
+{
+    Stats s;
+    double sum = 0;
+    for (int c = 0; c < b.getNumChannels(); ++c)
+    {
+        auto* x = b.getReadPointer(c);
+        for (int i = from; i < b.getNumSamples(); ++i)
+        {
+            if (! std::isfinite(x[i])) { ++s.nonFinite; continue; }
+            if (x[i] != 0 && std::abs(x[i]) < std::numeric_limits<float>::min()) ++s.subnormal;
+            s.peak = juce::jmax(s.peak, std::abs(x[i]));
+            sum += x[i] * x[i];
+            if (i > from) s.maxJump = juce::jmax(s.maxJump, std::abs(x[i] - x[i - 1]));
+        }
+    }
+    s.rms = (float) std::sqrt(sum / juce::jmax(1, b.getNumChannels() * (b.getNumSamples() - from)));
+    return s;
+}
+
+float maxDiff(const juce::AudioBuffer<float>& a, const juce::AudioBuffer<float>& b)
+{
+    float d = 0;
+    for (int c = 0; c < 2; ++c)
+        for (int i = 0; i < juce::jmin(a.getNumSamples(), b.getNumSamples()); ++i)
+            d = juce::jmax(d, std::abs(a.getSample(c, i) - b.getSample(c, i)));
+    return d;
+}
+
+/* Average distance in samples between the low points of a modulated DC signal (left channel) */
+double lfoPeriod(const juce::AudioBuffer<float>& b, int from)
+{
+    auto* x = b.getReadPointer(0);
+    std::vector<int> minima;
+    const int w = 200;
+    for (int i = from + w; i < b.getNumSamples() - w; ++i)
+    {
+        bool isMin = x[i] < 0.1f;
+        for (int k = -w; k <= w && isMin; ++k)
+            if (x[i + k] < x[i]) isMin = false;
+        if (isMin && (minima.empty() || i - minima.back() > 4 * w))
+            minima.push_back(i);
+    }
+    return minima.size() < 3 ? 0.0 : (minima.back() - minima.front()) / double(minima.size() - 1);
+}
+
+juce::String dB(float x) { return juce::String(juce::Decibels::gainToDecibels(x, -300.0f), 1) + " dBFS"; }
+
+/* A host clock at a settable tempo, playing from the top */
+struct Clock : juce::AudioPlayHead
+{
+    double bpm = 120, rate = 48000;
+    juce::int64 sample = 0;
+    juce::Optional<PositionInfo> getPosition() const override
+    {
+        PositionInfo p;
+        p.setBpm(bpm);
+        p.setTimeSignature(TimeSignature { 4, 4 });
+        p.setIsPlaying(false);
+        p.setTimeInSamples(sample);
+        return p;
+    }
+};
+
+//==============================================================================
+// 1. Load, prepare, process
+//==============================================================================
+void section1()
+{
+    const std::vector<int> blocks { 32, 64, 128, 256, 512, 1024, 2048, 1000, 333, 37 };
+
+    for (double rate : { 44100.0, 48000.0, 96000.0 })
+    {
+        auto p = create(rate, 2048);
+        if (p == nullptr) return;
+        auto in = sine(rate, 3);
+        juce::AudioBuffer<float> withSilence(2, in.getNumSamples() + (int) rate);
+        withSilence.clear();
+        for (int c = 0; c < 2; ++c) withSilence.copyFrom(c, 0, in, c, 0, in.getNumSamples());
+
+        auto out = render(*p, withSilence, blocks);
+        auto s = stats(out), si = stats(in);
+        auto tail = stats(out, out.getNumSamples() - 4800);
+        auto name = "1 process at " + juce::String(rate / 1000.0, 1) + " kHz, blocks 32-2048";
+        check(s.nonFinite == 0 && s.subnormal == 0 && s.peak < 2.0f
+                  && std::abs(juce::Decibels::gainToDecibels(s.rms / juce::jmax(1e-9f, stats(in).rms))) < 12.0f
+                  && tail.peak < 1.0e-4f,
+              name, "peak " + dB(s.peak) + " (input " + dB(si.peak) + "), NaN/inf " + juce::String(s.nonFinite)
+                  + ", denormals " + juce::String(s.subnormal) + ", tail after 1 s silence " + dB(tail.peak));
+    }
+
+    // Change sample rate and block size on a running instance, as a host does when the project changes
+    {
+        auto p = create(44100, 512);
+        if (p == nullptr) return;
+        lowBandLfoOnly(*p, false, 2.0f);              // set before the change: nothing moves afterwards
+        render(*p, sine(44100, 1), { 512 });
+        p->releaseResources();
+        p->setRateAndBufferSizeDetails(96000, 2048);
+        p->prepareToPlay(96000, 2048);
+        auto out = render(*p, dc(96000, 3), { 2048, 31, 700 });
+        auto s = stats(out);
+        auto period = lfoPeriod(out, 9600);
+        check(s.nonFinite == 0 && std::abs(period - 48000.0) < 480.0,
+              "1 change 44.1 to 96 kHz mid-run: LFO keeps its speed",
+              "2 Hz LFO period " + juce::String(period, 0) + " samples (expect 48000)");
+    }
+}
+
+//==============================================================================
+// 2. Automation
+//==============================================================================
+bool expectsNoEffect(const juce::String& name)
+{
+    // Display preferences, and Rate (the LFOs are synced by default, so Rate isn't used)
+    return name.startsWith("Show") || name.startsWith("Stack") || name.startsWith("Scope")
+        || name.startsWith("FFT") || name.startsWith("Rate");
+}
+
+void section2()
+{
+    const double rate = 48000;
+    auto input = threeTones(rate, 2);
+
+    juce::AudioBuffer<float> reference;
+    float refJump = 0;
+    int numParams = 0;
+    {
+        auto p = create(rate, 512);
+        if (p == nullptr) return;
+        numParams = p->getParameters().size();
+        reference = render(*p, input, { 64 });
+        refJump = stats(reference).maxJump;
+        report("INFO", "2 reference render (all defaults)", "largest sample-to-sample step " + juce::String(refJump, 4)
+               + ", " + juce::String(numParams) + " parameters");
+    }
+
+    for (int index = 0; index < numParams; ++index)
+    {
+        auto p = create(rate, 512);
+        if (p == nullptr) return;
+        auto* prm = p->getParameters()[index];
+        if (! prm->isAutomatable())
+            continue;
+
+        const auto name = prm->getName(256);
+        const bool isSwitch = prm->isBoolean() || prm->isDiscrete();
+        const int total = input.getNumSamples();
+
+        // Ramp from 0 to 1 over the render, a new value every 64 samples, like host automation
+        auto out = render(*p, input, { 64 }, [prm, total](juce::AudioPluginInstance&, int pos) {
+            prm->setValueNotifyingHost((float) pos / (float) total);
+        });
+
+        auto s = stats(out);
+        auto diff = maxDiff(out, reference);
+        juce::String label = "2 automate " + name;
+
+        if (s.nonFinite > 0)
+        {
+            check(false, label, "NaN or inf in the output");
+            continue;
+        }
+
+        if (expectsNoEffect(name))
+        {
+            check(diff == 0.0f, label, diff == 0.0f ? "no effect on the sound, as expected" : "changed the sound by " + juce::String(diff));
+            continue;
+        }
+
+        if (diff < 1.0e-4f)
+        {
+            check(false, label, "expected to change the sound, max change " + juce::String(diff));
+            continue;
+        }
+
+        if (isSwitch)
+        {
+            // A switch (shape, rhythm, on/off) changes instantly by design: report the step, don't judge it
+            report("INFO", label, "switches instantly; largest step " + juce::String(s.maxJump, 4) + " (reference " + juce::String(refJump, 4) + ")");
+            continue;
+        }
+
+        // A smooth parameter must not make clicks. Gains may make the signal up to 24 dB (x15.85) louder.
+        const float gainHeadroom = name.contains("Gain") ? 15.85f : 1.0f;
+        const float limit = refJump * gainHeadroom * 2.0f;
+        check(s.maxJump <= limit, label, "largest step " + juce::String(s.maxJump, 4) + " (limit " + juce::String(limit, 4) + ")");
+    }
+}
+
+//==============================================================================
+// 3. Session save and restore
+//==============================================================================
+void section3()
+{
+    const double rate = 48000;
+    auto input = testSignal(rate, 2);
+    juce::Random rnd(99);
+    juce::MemoryBlock state;
+    juce::Array<float> values;
+    juce::AudioBuffer<float> first, second;
+    juce::AudioBuffer<float> silence(2, 256);
+    silence.clear();
+
+    // A session with random settings
+    juce::MemoryBlock session;
+    {
+        auto a = create(rate, 512);
+        if (a == nullptr) return;
+        for (auto* prm : a->getParameters())
+            if (prm != a->getBypassParameter())
+                prm->setValueNotifyingHost(rnd.nextFloat());
+        render(*a, silence, { 256 });                 // let the changes reach the plugin
+        a->getStateInformation(session);
+    }
+
+    // The session opened: its values, its sound, and its state saved again. (The host's own copy of values it
+    // sent isn't rounded to the plugin's steps, so the values are read from an instance that loaded the session.)
+    {
+        auto p = create(rate, 512);
+        if (p == nullptr) return;
+        p->setStateInformation(session.getData(), (int) session.getSize());
+        render(*p, silence, { 256 });
+        for (auto* prm : p->getParameters())
+            values.add(prm->getValue());
+        p->getStateInformation(state);
+        first = render(*p, input, { 512 });
+    }   // destroyed, as when the project is closed
+
+    auto b = create(rate, 512);
+    if (b == nullptr) return;
+    b->setStateInformation(state.getData(), (int) state.getSize());
+    render(*b, silence, { 256 });
+    int mismatches = 0;
+    juce::String firstMismatch;
+    for (int i = 0; i < b->getParameters().size(); ++i)
+        if (b->getParameters()[i]->getValue() != values[i])
+        {
+            if (mismatches++ == 0)
+                firstMismatch = b->getParameters()[i]->getName(64) + " " + juce::String(values[i]) + " -> " + juce::String(b->getParameters()[i]->getValue());
+        }
+    check(mismatches == 0, "3 restore: every parameter exactly the same",
+          juce::String(values.size()) + " parameters, " + juce::String(mismatches) + " differ " + firstMismatch);
+
+    juce::MemoryBlock resaved;
+    b->getStateInformation(resaved);
+    check(resaved == state, "3 restore: saving again gives the same bytes", juce::String((int) state.getSize()) + " bytes");
+
+    second = render(*b, input, { 512 });
+    auto d = maxDiff(first, second);
+    check(d == 0.0f, "3 restore: render bit-identical to before the save", d == 0 ? "identical" : "max diff " + juce::String(d));
+}
+
+//==============================================================================
+// 4. Tempo
+//==============================================================================
+void section4()
+{
+    const double rate = 48000;
+    auto p = create(rate, 512);
+    if (p == nullptr) return;
+    Clock clock;
+    p->setPlayHead(&clock);
+    lowBandLfoOnly(*p, true, 3.0f);   // synced, 1/4 note: one LFO cycle per beat
+
+    for (double bpm : { 120.0, 90.0, 60.0, 140.0 })
+    {
+        clock.bpm = bpm;
+        auto out = render(*p, dc(rate, 4), { 512 }, [&clock](juce::AudioPluginInstance&, int pos) { clock.sample = pos; });
+        auto period = lfoPeriod(out, 4800);
+        auto expected = rate * 60.0 / bpm;
+        check(std::abs(period - expected) < expected * 0.01, "4 synced 1/4-note LFO at " + juce::String(bpm, 0) + " bpm",
+              "period " + juce::String(period, 0) + " samples (expect " + juce::String(expected, 0) + ")");
+    }
+    p->setPlayHead(nullptr);
+}
+
+//==============================================================================
+// 5. Bypass, mute, solo
+//==============================================================================
+juce::AudioBuffer<float> renderWith(std::function<void(juce::AudioPluginInstance&)> setUp, const juce::AudioBuffer<float>& input)
+{
+    auto p = create(48000, 512);
+    if (p == nullptr) return {};
+    setUp(*p);
+    juce::AudioBuffer<float> silence(2, 256);
+    silence.clear();
+    render(*p, silence);
+    return render(*p, input);
+}
+
+void section5()
+{
+    auto input = testSignal(48000, 2);
+
+    auto bypassed = renderWith([](juce::AudioPluginInstance& p) {
+        if (auto* b = p.getBypassParameter()) b->setValueNotifyingHost(1.0f);
+    }, input);
+    auto d = maxDiff(bypassed, input);
+    check(d < 1.0e-7f, "5 host bypass passes the audio through untouched", "max diff " + juce::String(d));
+
+    auto allMuted = renderWith([](juce::AudioPluginInstance& p) {
+        for (auto n : { "Mute Low Band", "Mute Mid Band", "Mute High Band" }) setNorm(p, n, 1.0f);
+    }, input);
+    check(stats(allMuted).peak == 0.0f, "5 all three bands muted: silence", "peak " + dB(stats(allMuted).peak));
+
+    auto soloMid = renderWith([](juce::AudioPluginInstance& p) { setNorm(p, "Solo Mid Band", 1.0f); }, input);
+    auto muteOthers = renderWith([](juce::AudioPluginInstance& p) {
+        setNorm(p, "Mute Low Band", 1.0f);
+        setNorm(p, "Mute High Band", 1.0f);
+    }, input);
+    d = maxDiff(soloMid, muteOthers);
+    check(d == 0.0f && stats(soloMid).peak > 0.01f, "5 solo mid = mute low and high", "max diff " + juce::String(d));
+
+    auto soloWins = renderWith([](juce::AudioPluginInstance& p) {
+        setNorm(p, "Solo Mid Band", 1.0f);
+        setNorm(p, "Mute Mid Band", 1.0f);
+    }, input);
+    d = maxDiff(soloWins, soloMid);
+    check(d == 0.0f, "5 solo wins over mute on the same band", "max diff " + juce::String(d));
+
+    auto bandsBypassed = renderWith([](juce::AudioPluginInstance& p) {
+        for (auto n : { "Bypassed Low Band", "Bypassed Mid Band", "Bypassed High Band" }) setNorm(p, n, 1.0f);
+    }, input);
+    auto depthZero = renderWith([](juce::AudioPluginInstance& p) {
+        for (auto n : { "Depth Low Band", "Depth Mid Band", "Depth High Band" }) setNorm(p, n, 0.0f);
+    }, input);
+    d = maxDiff(bandsBypassed, depthZero);
+    check(d == 0.0f, "5 band bypass = no tremolo (same as depth 0)", "max diff " + juce::String(d));
+
+    auto lowBypassed = renderWith([](juce::AudioPluginInstance& p) { setNorm(p, "Bypassed Low Band", 1.0f); }, input);
+    auto lowDepthZero = renderWith([](juce::AudioPluginInstance& p) { setNorm(p, "Depth Low Band", 0.0f); }, input);
+    d = maxDiff(lowBypassed, lowDepthZero);
+    check(d == 0.0f, "5 low band bypass affects only the low band", "max diff " + juce::String(d));
+}
+
+//==============================================================================
+// 6. Demo mode
+//==============================================================================
+void section6(bool expectDemo)
+{
+    const double rate = 48000;
+    auto p = create(rate, 512);
+    if (p == nullptr) return;
+    lowBandLfoOnly(*p, false, 4.0f);
+    auto out = render(*p, dc(rate, 63), { 512 });
+
+    // 250 ms windows (one LFO cycle): modulated = effect on, flat = the demo's gap
+    const int w = (int) (rate / 4);
+    double gapStart = -1, gapEnd = -1;
+    int flatOutsideGap = 0;
+    for (int i = (int) rate; i + w <= out.getNumSamples(); i += w)
+    {
+        auto range = juce::FloatVectorOperations::findMinAndMax(out.getReadPointer(0) + i, w);
+        const bool flat = range.getLength() < 0.01f;
+        const double t = i / rate;
+        if (flat && gapStart < 0) gapStart = t;
+        if (flat) gapEnd = t + 0.25;
+        if (flat && t > 61) ++flatOutsideGap;
+    }
+
+    if (gapStart < 0)
+    {
+        if (expectDemo)
+            check(false, "6 demo: effect off 10 s in every 60 s", "no gap found, but this machine has no key");
+        else
+            report("SKIP", "6 demo: effect off 10 s in every 60 s", "no gap: Tertiary is activated on this machine");
+        return;
+    }
+
+    check(std::abs(gapStart - 50.0) <= 0.3 && std::abs(gapEnd - 60.0) <= 0.3 && flatOutsideGap == 0,
+          "6 demo: effect off 10 s in every 60 s",
+          "gap from " + juce::String(gapStart, 2) + " s to " + juce::String(gapEnd, 2) + " s (expect 50 to 60)");
+}
+
+//==============================================================================
+// 7. License states, with the pretend server
+//==============================================================================
+void section7()
+{
+    const juce::int64 day = 24LL * 60 * 60 * 1000, now = 1800000000000LL;
+
+    {
+        TempSettings s;
+        s.activated(now - 8 * day, now - 8 * day);
+        PretendServer server;
+        server.validateReply = PretendServer::reply("key_valid");
+        auto r = LicenseCheck::runStartupCheck(server, s.get(), now, "1.1.0");
+        check(! r.revoked && ! r.offlineTooLong && s.get().getValue("licenseKey").isNotEmpty(),
+              "7 license valid: stays activated", "validate called " + juce::String(server.validateCalls) + "x");
+    }
+    {
+        TempSettings s;
+        s.activated(now - 8 * day, now - 8 * day);
+        PretendServer server;
+        server.validateReply = PretendServer::reply("invalid_order", "Please complete your order to activate the serial key.");
+        auto r = LicenseCheck::runStartupCheck(server, s.get(), now, "1.1.0");
+        check(r.revoked && s.get().getValue("licenseKey").isEmpty() && r.message.isNotEmpty(),
+              "7 license revoked (refund): demo, with a message", "\"" + r.message.substring(0, 60) + "...\"");
+    }
+    {
+        TempSettings s;
+        s.activated(now - 20 * day, now - 20 * day);
+        PretendServer server;   // unreachable
+        auto r = LicenseCheck::runStartupCheck(server, s.get(), now, "1.1.0");
+        check(! r.revoked && r.message.isEmpty() && s.get().getValue("licenseKey").isNotEmpty(),
+              "7 server unreachable: nothing changes", "no message, key kept");
+    }
+    {
+        TempSettings s;
+        s.activated(now - 31 * day, now - 31 * day);
+        PretendServer server;
+        auto r = LicenseCheck::runStartupCheck(server, s.get(), now, "1.1.0");
+        check(! r.revoked && r.offlineTooLong && s.get().getValue("licenseKey").isNotEmpty(),
+              "7 offline 31 days: a note only, still activated", "\"" + r.message.substring(0, 60) + "...\"");
+    }
+}
+
+//==============================================================================
+// 8. Golden renders
+//==============================================================================
+struct GoldenSetting { juce::String name; std::function<void(juce::AudioPluginInstance&)> setUp; };
+
+std::vector<GoldenSetting> goldenSettings()
+{
+    return {
+        { "default", [](juce::AudioPluginInstance&) {} },
+        { "varied", [](juce::AudioPluginInstance& p) {
+            setNorm(p, "Input Gain", gainNorm(3));
+            setNorm(p, "Waveshape Low Band", choiceNorm(2, 7));        // Square
+            setNorm(p, "Depth Low Band", 1.0f);
+            setNorm(p, "Skew Low Band", skewNorm(30));
+            setNorm(p, "Invert Low Band", 1.0f);
+            setNorm(p, "Multiplier Low Band", choiceNorm(3, 6));       // 1/8
+            setNorm(p, "Waveshape Mid Band", choiceNorm(3, 7));        // Triangle
+            setNorm(p, "Depth Mid Band", percentNorm(60));
+            setNorm(p, "Relative Phase Mid Band", phaseNorm(90));
+            setNorm(p, "Multiplier Mid Band", choiceNorm(2, 6));       // 1/4 triplet
+            setNorm(p, "Waveshape High Band", choiceNorm(0, 7));       // Ramp Down
+            setNorm(p, "Relative Phase High Band", phaseNorm(-120));
+            setNorm(p, "Multiplier High Band", choiceNorm(5, 6));      // 1/16
+            setNorm(p, "High Output Gain", gainNorm(4));
+        } },
+        { "free", [](juce::AudioPluginInstance& p) {
+            for (auto band : { "Low", "Mid", "High" })
+                setNorm(p, juce::String("Sync to Host ") + band + " Band", 0.0f);
+            setNorm(p, "Rate Low Band", rateNorm(0.5f));
+            setNorm(p, "Rate Mid Band", rateNorm(4.7f));
+            setNorm(p, "Rate High Band", rateNorm(12.5f));
+            setNorm(p, "Waveshape Low Band", choiceNorm(5, 7));        // Hills
+            setNorm(p, "Waveshape Mid Band", choiceNorm(6, 7));        // Valleys
+            setNorm(p, "Depth Mid Band", percentNorm(90));
+        } },
+    };
+}
+
+/* Per platform: Windows and Intel Macs have given bit-identical renders; Apple Silicon fuses
+   multiply-adds, measured at 2.7e-7 (-131 dBFS). The limits leave room above that and are
+   still about 100 dB below the music. */
+float goldenTolerance()
+{
+   #if JUCE_ARM
+    return 1.0e-5f;     // -100 dBFS
+   #else
+    return 1.0e-6f;     // -120 dBFS
+   #endif
+}
+
+void section8(const juce::File& folder, bool make)
+{
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+    auto input = testSignal(48000, 2);
+
+    for (auto& setting : goldenSettings())
+    {
+        auto out = renderWith(setting.setUp, input);
+        auto file = folder.getChildFile(setting.name + ".wav");
+
+        if (make)
+        {
+            folder.createDirectory();
+            file.deleteFile();
+            juce::WavAudioFormat wav;
+            std::unique_ptr<juce::AudioFormatWriter> writer(wav.createWriterFor(new juce::FileOutputStream(file), 48000, 2, 32, {}, 0));
+            writer->writeFromAudioSampleBuffer(out, 0, out.getNumSamples());
+            report("INFO", "8 golden " + setting.name, "written to " + file.getFullPathName());
+            continue;
+        }
+
+        std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
+        if (reader == nullptr)
+        {
+            check(false, "8 golden " + setting.name, "reference missing: " + file.getFullPathName());
+            continue;
+        }
+        juce::AudioBuffer<float> golden(2, (int) reader->lengthInSamples);
+        reader->read(&golden, 0, golden.getNumSamples(), 0, true, true);
+        auto d = maxDiff(out, golden);
+        check(golden.getNumSamples() == out.getNumSamples() && d <= goldenTolerance(), "8 golden " + setting.name,
+              (d == 0 ? juce::String("identical") : "max diff " + juce::String(d) + " (" + dB(d) + ")")
+              + ", tolerance " + juce::String(goldenTolerance()));
+    }
+}
+
+} // namespace
+
+//==============================================================================
+int main(int argc, char* argv[])
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    juce::StringArray args;
+    for (int i = 1; i < argc; ++i) args.add(argv[i]);
+
+    // The golden renders' input as a WAV, for the REAPER test (tests/reaper)
+    if (args.contains("--write-input"))
+    {
+        const juce::File file(juce::File::getCurrentWorkingDirectory().getChildFile(args[args.indexOf("--write-input") + 1]));
+        file.deleteFile();
+        auto input = testSignal(48000, 2);
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::AudioFormatWriter> writer(wav.createWriterFor(new juce::FileOutputStream(file), 48000, 2, 32, {}, 0));
+        writer->writeFromAudioSampleBuffer(input, 0, input.getNumSamples());
+        std::cout << "wrote " << file.getFullPathName() << std::endl;
+        return 0;
+    }
+
+    if (! args.contains("--vst3") && ! args.contains("--au"))
+    {
+        std::cout << "usage: HostTest --vst3 <Tertiary.vst3> | --au  [--golden <folder>] [--make-golden] [--expect-demo] [--only n]" << std::endl;
+        return 2;
+    }
+
+    const auto start = juce::Time::getMillisecondCounterHiRes();
+
+    if (! findPlugin(args))
+    {
+        report("FAIL", "find the plugin", args.contains("--au") ? "no AU aufx/EXPL/WLAD installed" : "can't load " + args[args.indexOf("--vst3") + 1]);
+        return 1;
+    }
+    report("PASS", "load " + description.pluginFormatName + " " + description.name + " " + description.version,
+           description.fileOrIdentifier);
+
+    auto option = [&](const juce::String& name, const juce::String& fallback) {
+        const int i = args.indexOf(name);
+        return i >= 0 && i + 1 < args.size() ? args[i + 1] : fallback;
+    };
+    const int only = option("--only", "0").getIntValue();
+    const juce::File golden = juce::File::getCurrentWorkingDirectory().getChildFile(option("--golden", "plugin/tests/golden"));
+    const bool makeGolden = args.contains("--make-golden");
+
+    auto run = [&](int n, std::function<void()> section) {
+        if (only != 0 && only != n) return;
+        const auto t = juce::Time::getMillisecondCounterHiRes();
+        section();
+        std::cout << "      section " << n << " took " << juce::String((juce::Time::getMillisecondCounterHiRes() - t) / 1000.0, 1) << " s" << std::endl;
+    };
+
+    if (! makeGolden)
+    {
+        run(1, section1);
+        run(2, section2);
+        run(3, section3);
+        run(4, section4);
+        run(5, section5);
+        run(6, [&] { section6(args.contains("--expect-demo")); });
+        run(7, section7);
+    }
+    run(8, [&] { section8(golden, makeGolden); });
+
+    std::cout << "HostTest " << description.pluginFormatName << ": " << passes << " passed, " << failures << " failed, "
+              << skips << " skipped, " << juce::String((juce::Time::getMillisecondCounterHiRes() - start) / 1000.0, 1) << " s" << std::endl;
+    return failures == 0 ? 0 : 1;
+}

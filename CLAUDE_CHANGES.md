@@ -123,6 +123,35 @@ Undo: `git revert 5d7ecad`.
 
 ---
 
+## 6. Automated test harness (Joe: "So I don't have to do manual testing")
+
+| File | What |
+|---|---|
+| `plugin/tests/HostTest.cpp` (new) | A small host. It loads the BUILT plugin (the .vst3, or the installed AU) through JUCE's `AudioPluginFormatManager`, as a DAW does, and runs the checklist below. One line per check: PASS / FAIL / SKIP / INFO |
+| `plugin/tests/PretendServer.h` (new) | The pretend license server, moved out of TertiaryTests.cpp so both programs share it |
+| `plugin/tests/golden/*.wav` (new) | Reference renders (default, varied, free; 2 s, 48 kHz, float), made by `HostTest --make-golden` on Windows |
+| `plugin/tests/run_all.ps1` (new) | One command on the mini PC: build, pluginval, host test, unit tests, renders, one summary |
+| `plugin/tests/reaper/` (new) | A REAPER test, prepared but not run (REAPER isn't installed). See its README |
+| `.github/workflows/installer-test.yml` (new), `plugin/tests/ci/installer_test_mac.sh`, `installer_test_windows.ps1`, `build_unsigned_installer_mac.sh` (new) | Installs the signed installers from the staging pipeline on GitHub's Macs (Apple Silicon and Intel) and Windows, and checks them |
+| `plugin/CMakeLists.txt` | `HostTest` target (with `-DWLA_TESTS=ON`); `WLA_COPY_PLUGIN_AFTER_BUILD` option (default ON, as before: the runner turns it off, since copying into Program Files needs admin); Python found with `find_package` instead of assuming `python3` (on the mini PC `python3` is the Microsoft Store stub, so configuring failed) |
+| `.github/workflows/test.yml`, `plugin/tests/ci/mac_checks.sh` | Build and run HostTest on Windows and both Macs (VST3, and the AU on Macs) |
+
+What HostTest checks:
+1. Load, prepare and process at 44.1, 48 and 96 kHz, block sizes from 32 to 2048 changing every block: no NaN, no denormals, sane level, silence after the input stops. Changing sample rate on a running instance: the LFO keeps its speed.
+2. Every automatable parameter ramped 0 to 1 through the host's parameter API. Display parameters (and Rate, unused while synced) must leave the sound bit-identical; every other one must change it. Smooth parameters must not click (largest sample-to-sample step at most twice the reference, times 16 for gains). Switches (shape, rhythm, on/off) change instantly by design: their step is reported as INFO.
+3. Session: random settings saved, opened in a new instance, recorded, closed, opened again in another. Every parameter exactly equal, the state saved again byte-identical, the render bit-identical.
+4. Tempo: a synced 1/4-note LFO at 120, 90, 60 and 140 bpm, within 1 %.
+5. Host bypass passes audio untouched; all bands muted = silence; solo mid = mute low and high; solo beats mute; band bypass = depth 0, per band and for all three.
+6. Demo: on an unlicensed copy the effect is off from 50 to 60 s (within 0.3 s). `--expect-demo` (used in CI) makes a missing gap a FAIL; on an activated machine it's a SKIP.
+7. License states with the pretend server: valid, revoked (back to demo, with the message), unreachable (unchanged), 31 days offline (a note only). This runs inside HostTest, not the plugin binary: the shipped plugin only talks to the real server and has no switch to point it elsewhere (adding one would be a back door).
+8. Golden renders through the loaded binary, compared with `plugin/tests/golden`: 1e-6 (-120 dBFS) on x86_64, where Windows and Intel Macs have been bit-identical; 1e-5 (-100 dBFS) on Apple Silicon, measured at 2.7e-7 because ARM fuses multiply-adds.
+
+Against the staging (1.0.2) VST3 it fails the sample-rate change, three tempos, and the golden "varied" render (relative phase), as it should.
+
+What the installer test checks (macOS, on Apple Silicon and Intel): `pkgutil --check-signature`, `spctl --assess --type install`, `xcrun stapler validate`; `sudo installer`; the AU, VST3 and app where DAWs look; `codesign --verify --deep --strict` and Gatekeeper on each bundle; `auval` on the installed AU; pluginval and HostTest on the installed VST3 and AU; the standalone starts, runs 6 s and quits; uninstall leaves no files or receipts. Windows: `Get-AuthenticodeSignature` on the installer and on the installed VST3 and app, `/VERYSILENT` install, pluginval and HostTest on the installed VST3, the standalone starts and closes, the Inno uninstaller leaves no files or registry entry. It runs after every staging pipeline run (once this file is on staging), or by hand with a run ID, and a `claude/installer-test...` branch self-tests it with unsigned installers.
+
+Undo: revert the harness commit; nothing in the plugin depends on it.
+
 ## Results
 
 Local, Windows 11, MSVC 2022, JUCE 8.0.8:

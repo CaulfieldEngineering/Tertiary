@@ -8,6 +8,7 @@
 # 2. The unit tests (TertiaryTests)
 # 3. Apple's AU validator (auval), on the AU installed in ~/Library/Audio/Plug-Ins/Components
 # 4. pluginval on the VST3 and the AU
+# 4b. The host test (HostTest) on the VST3 and the AU
 # 5. A short offline render (ReviewRender), for the cross-platform comparison
 # Logs go in ./results. Exits non-zero on the first failure.
 
@@ -43,6 +44,7 @@ check_binary "$OUT/Tertiary.vst3/Contents/MacOS/Tertiary"
 check_binary "$OUT/Tertiary.component/Contents/MacOS/Tertiary"
 check_binary "$OUT/ReviewRender"
 check_binary "$OUT/TertiaryTests"
+check_binary "$OUT/HostTest"
 
 # 2. Unit tests
 # ==========================================================================================
@@ -65,6 +67,11 @@ grep -q "AU VALIDATION SUCCEEDED" results/auval.log || { echo "ERROR: auval fail
     --validate ~/Library/Audio/Plug-Ins/VST3/Tertiary.vst3 2>&1 | tee results/pluginval-vst3.log
 "$PLUGINVAL" --strictness-level "$STRICTNESS" --validate-in-process --output-dir results \
     --validate ~/Library/Audio/Plug-Ins/Components/Tertiary.component 2>&1 | tee results/pluginval-au.log
+
+# 4b. The host test: loads the built VST3 and the installed AU as a DAW does (unlicensed runner: demo gaps expected)
+# ==========================================================================================
+"$OUT/HostTest" --vst3 ~/Library/Audio/Plug-Ins/VST3/Tertiary.vst3 --expect-demo 2>&1 | tee results/hosttest-vst3.log
+"$OUT/HostTest" --au --expect-demo 2>&1 | tee results/hosttest-au.log
 
 # 5. Render
 # ==========================================================================================

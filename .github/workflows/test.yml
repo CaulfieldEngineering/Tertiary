@@ -25,6 +25,7 @@ on:
     branches:
       - 'release-*'
       - 'claude/*'
+      - '!claude/installer-test*'   # those run installer-test.yml instead
     paths-ignore:
       - '**.md'
       - 'promo/**'
@@ -78,7 +79,7 @@ jobs:
           -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Build
-      run: cmake --build build --target Tertiary_VST3 Tertiary_AU ReviewRender TertiaryTests
+      run: cmake --build build --target Tertiary_VST3 Tertiary_AU ReviewRender TertiaryTests HostTest
 
     - name: Collect the built files
       run: |
@@ -88,6 +89,7 @@ jobs:
         cp -R "$A/Tertiary_artefacts/Release/AU/Tertiary.component" out/
         cp "$A/ReviewRender_artefacts/Release/ReviewRender" out/
         cp "$A/TertiaryTests_artefacts/Release/TertiaryTests" out/
+        cp "$A/HostTest_artefacts/Release/HostTest" out/
 
     - name: Upload the built files (for the Intel job)
       uses: actions/upload-artifact@v4
@@ -126,7 +128,7 @@ jobs:
       run: |
         curl -sL -o "$RUNNER_TEMP/pv.zip" "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_TAG/pluginval_macOS.zip"
         unzip -q -o "$RUNNER_TEMP/pv.zip" -d "$RUNNER_TEMP/pv"
-        chmod +x out/ReviewRender out/TertiaryTests
+        chmod +x out/ReviewRender out/TertiaryTests out/HostTest
 
     - name: Check, test and render
       run: bash plugin/tests/ci/mac_checks.sh out "$RUNNER_TEMP/pv/pluginval.app/Contents/MacOS/pluginval" mac-x86_64
@@ -161,7 +163,7 @@ jobs:
       run: |
         T=$(cygpath -m "$RUNNER_TEMP")
         cmake -S . -B build -A x64 -DWLA_REVIEW_RENDER=ON -DWLA_TESTS=ON -DCPM_JUCE_SOURCE="$T/juce"
-        cmake --build build --config Release --target Tertiary_VST3 ReviewRender TertiaryTests -- -m
+        cmake --build build --config Release --target Tertiary_VST3 ReviewRender TertiaryTests HostTest -- -m
 
     - name: Test and render
       shell: bash
@@ -170,6 +172,7 @@ jobs:
         mkdir -p results
         A=build/plugin
         "$A/TertiaryTests_artefacts/Release/TertiaryTests.exe" 2>&1 | tee results/unit-tests.log
+        "$A/HostTest_artefacts/Release/HostTest.exe" --vst3 "$A/Tertiary_artefacts/Release/VST3/Tertiary.vst3" --expect-demo 2>&1 | tee results/hosttest-vst3.log
         "$(cygpath -m "$RUNNER_TEMP")/pv/pluginval.exe" --strictness-level $STRICTNESS --validate-in-process --output-dir results \
           --validate "$A/Tertiary_artefacts/Release/VST3/Tertiary.vst3" 2>&1 | tee results/pluginval-vst3.log
         python plugin/tests/regression/render_matrix.py "$A/ReviewRender_artefacts/Release/ReviewRender.exe" \
