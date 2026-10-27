@@ -33,3 +33,12 @@ Joe: more movement, a camera on the UI, a better tagline, dynamic text, no "Joe 
 - `web_tracks.py`: dry, looping, -18 LUFS, 16-bit 44.1 kHz tracks for `plugin/sample_audio/` (the live demo's playlist). `--held` renders the MIDI tracks from the Duet project "Tertiary Web Demo" once their instruments are loaded (Kontakt Factory Selection 2, Analog Dreams, GroveBass).
 - `web_midi.py`: their original MIDI, written to `promo/web_midi/` (source only; never shipped) (three pads, electric piano, organ, strings, an ambient swell; no drums, no Octavio material, Joe 2026-10-27), each loop written three times so the render keeps a middle pass with real tails.
 - `web_test.mjs`: plays every track of a local copy of the web demo in headless Chrome (`node web_test.mjs <url> <profile dir>`, with Wonderlab's `scripts/serve.js` serving it).
+
+## v3 (2026-10-27)
+
+Joe: "Can we emphasize showing what happens when the parameter is changed? It seems like right now, the effect is engaged - or the parameter changed - right as or during a pan/zoom. So its hard to tell exactly what is being done or showcased in that moment." and "let's end the video on a musical resolve - currently just looks like its getting cut off". Output: `Dropbox\Caulfield Engineering\Tertiary\Promo 2026-10-27 v3`.
+
+- `reels_v3.py`: the `Plan` class schedules each change as its own beat. The camera eases to the control and settles, the old sound holds (1 to 2 beats), the caption comes up, the control moves with the camera still, the new sound holds (2 beats or more), and only then does the camera move on (the last caption leaves as it does). Every camera move and change goes into `work/v3/timing.json`, and the build stops if any overlap.
+- The music is arranged backwards from the plan in the Duet project "Tertiary Promo v3": each piece plays its 8 bars, then its last few bars again so it reaches its V chord, then a written ending on the tonic that lands on the downbeat as the end card comes up and rings out. Reel 05 is a recording, so its end card comes up on the take's own last strum.
+- The end card shows Tertiary 1.1's formats (Mac, Apple Silicon and Intel: VST3, AU and standalone; Windows: VST3 and standalone); `End cards` in the output folder also has a 1.0.2 fallback. `carousel_v3.py` updates slide 5 to match. Reel 05 is marked "(not for posting)": the acoustic take's rights are unknown.
+- The same two rules are in WLA-Playbook chapter 14 (Demo Videos), 20b and 20c, for every product video.
