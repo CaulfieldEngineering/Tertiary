@@ -15,12 +15,16 @@ VERSION=$(grep 'set(wPROJECT_VERSION' config.cmake | sed -E 's/.*"(.*)".*/\1/')
 ART="$BUILD/plugin/${NAME}_artefacts/Release"
 mkdir -p "$OUT" "$BUILD/output"
 
+# Not relocatable, as in workflow.yml (else the installer may update another copy it knows of, e.g. in build/)
+plist() { pkgbuild --analyze --root "$1" "$BUILD/output/$2.plist" >/dev/null; plutil -replace BundleIsRelocatable -bool NO "$BUILD/output/$2.plist"; }
+plist "$ART/Standalone" app; plist "$ART/VST3" vst3; plist "$ART/AU" au
+
 # Same identifiers and install locations as workflow.yml
-pkgbuild --root "$ART/Standalone" --identifier "com.WonderlandAudio.$NAME.app" --version "$VERSION" \
+pkgbuild --component-plist "$BUILD/output/app.plist" --root "$ART/Standalone" --identifier "com.WonderlandAudio.$NAME.app" --version "$VERSION" \
          --install-location "/Applications/$NAME" "$BUILD/output/${NAME}_Standalone_${VERSION}.pkg"
-pkgbuild --root "$ART/VST3" --identifier "com.WonderlandAudio.$NAME.vst3" --version "$VERSION" \
+pkgbuild --component-plist "$BUILD/output/vst3.plist" --root "$ART/VST3" --identifier "com.WonderlandAudio.$NAME.vst3" --version "$VERSION" \
          --install-location "/Library/Audio/Plug-Ins/VST3" "$BUILD/output/${NAME}_VST3_${VERSION}.pkg"
-pkgbuild --root "$ART/AU" --identifier "com.WonderlandAudio.$NAME.component" --version "$VERSION" \
+pkgbuild --component-plist "$BUILD/output/au.plist" --root "$ART/AU" --identifier "com.WonderlandAudio.$NAME.component" --version "$VERSION" \
          --install-location "/Library/Audio/Plug-Ins/Components" "$BUILD/output/${NAME}_AU_${VERSION}.pkg"
 
 cp "$BUILD/distribution-full.xml" "$BUILD/output/distribution.xml"

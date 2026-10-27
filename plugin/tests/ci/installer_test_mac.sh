@@ -69,7 +69,7 @@ step "standalone in Applications" test -d "$APP"
 # 4. Each installed bundle: signature intact, accepted by Gatekeeper
 for bundle in "$COMPONENT" "$VST3" "$APP"; do
     name=$(basename "$bundle")
-    step "codesign $name"       codesign --verify --deep --strict --verbose=2 "$bundle"
+    signed_step "codesign $name" codesign --verify --deep --strict --verbose=2 "$bundle"
 done
 signed_step "Gatekeeper Tertiary.app"  spctl --assess --type execute -vv "$APP"
 for bundle in "$COMPONENT" "$VST3"; do

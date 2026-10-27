@@ -361,8 +361,15 @@ jobs:
         echo "✓ Found standalone app at: $APP_PATH"
         echo "Creating standalone package..."
 
+        # [Claude 2026-10-27] Not relocatable: otherwise, if macOS knows another copy of this bundle anywhere
+        # (an old download, a build folder), the installer updates that copy and the right folder stays empty
+        # (found by installer-test.yml on the Intel Mac)
+        pkgbuild --analyze --root "$(dirname "$APP_PATH")" "$RUNNER_TEMP/component.plist"
+        plutil -replace BundleIsRelocatable -bool NO "$RUNNER_TEMP/component.plist"
+
         pkgbuild \
           --root "$(dirname "$APP_PATH")" \
+          --component-plist "$RUNNER_TEMP/component.plist" \
           --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.app" \
           --version "$wPROJECT_VERSION" \
           --install-location "/Applications/${REPOSITORY_NAME}" \
@@ -416,8 +423,15 @@ jobs:
         echo "✓ Found VST3 bundle at: $VST3_PATH"
         echo "Creating VST3 package..."
 
+        # [Claude 2026-10-27] Not relocatable: otherwise, if macOS knows another copy of this bundle anywhere
+        # (an old download, a build folder), the installer updates that copy and the right folder stays empty
+        # (found by installer-test.yml on the Intel Mac)
+        pkgbuild --analyze --root "$(dirname "$VST3_PATH")" "$RUNNER_TEMP/component.plist"
+        plutil -replace BundleIsRelocatable -bool NO "$RUNNER_TEMP/component.plist"
+
         pkgbuild \
           --root "$(dirname "$VST3_PATH")" \
+          --component-plist "$RUNNER_TEMP/component.plist" \
           --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.vst3" \
           --version "$wPROJECT_VERSION" \
           --install-location "/Library/Audio/Plug-Ins/VST3" \
@@ -472,8 +486,15 @@ jobs:
         echo "✓ Found AU bundle at: $AU_PATH"
         echo "Creating AU package..."
 
+        # [Claude 2026-10-27] Not relocatable: otherwise, if macOS knows another copy of this bundle anywhere
+        # (an old download, a build folder), the installer updates that copy and the right folder stays empty
+        # (found by installer-test.yml on the Intel Mac)
+        pkgbuild --analyze --root "$(dirname "$AU_PATH")" "$RUNNER_TEMP/component.plist"
+        plutil -replace BundleIsRelocatable -bool NO "$RUNNER_TEMP/component.plist"
+
         pkgbuild \
           --root "$(dirname "$AU_PATH")" \
+          --component-plist "$RUNNER_TEMP/component.plist" \
           --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.component" \
           --version "$wPROJECT_VERSION" \
           --install-location "/Library/Audio/Plug-Ins/Components" \

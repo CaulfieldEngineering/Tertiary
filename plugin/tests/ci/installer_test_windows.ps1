@@ -27,10 +27,16 @@ function Step([string]$Name, [scriptblock]$Body) {
     "| $Name | $result | $(([string]$detail).Replace('|', '/')) |" | Out-File -Append -Encoding utf8 $Summary
 }
 
-function Run([string]$Exe, [string[]]$Arguments, [string]$Log) {
-    $p = Start-Process -FilePath $Exe -ArgumentList $Arguments -NoNewWindow -Wait -PassThru `
+# Runs a program with a time limit, so a hung step is named instead of hanging the whole job
+function Run([string]$Exe, [string[]]$Arguments, [string]$Log, [int]$TimeoutSeconds = 600) {
+    Write-Host "running $Log ..."
+    $p = Start-Process -FilePath $Exe -ArgumentList $Arguments -NoNewWindow -PassThru `
          -RedirectStandardOutput "results\$Log.log" -RedirectStandardError "results\$Log.err.log"
-    $last = Get-Content "results\$Log.log" -Tail 1
+    if (-not $p.WaitForExit($TimeoutSeconds * 1000)) {
+        Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+        return $false, "timed out after $TimeoutSeconds s"
+    }
+    $last = Get-Content "results\$Log.log" -Tail 1 -ErrorAction SilentlyContinue
     return ($p.ExitCode -eq 0), "exit $($p.ExitCode): $last"
 }
 
@@ -52,7 +58,7 @@ SignedStep "installer signature" {
 }
 
 # 2. Silent install, as a customer would (all components, default folders)
-Step "silent install" { Run $Installer @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=results\install.log") "install-run" }
+Step "silent install" { Run $Installer @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=`"$PWD\results\install.log`"") "install-run" 300 }
 
 # 3. Files where DAWs look
 Step "VST3 in Common Files\VST3" { (Test-Path $Vst3), $Vst3 }
@@ -85,8 +91,9 @@ Step "standalone starts and quits" {
 Step "uninstall and confirm clean" {
     $uninstaller = Get-ChildItem $AppDir -Filter "unins*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $uninstaller) { return $false, "no uninstaller in $AppDir" }
-    $p = Start-Process $uninstaller.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru
-    Start-Sleep -Seconds 3   # the uninstaller finishes in a copy of itself
+    $p = Start-Process $uninstaller.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -PassThru
+    if (-not $p.WaitForExit(300000)) { return $false, "uninstaller timed out after 300 s" }
+    Start-Sleep -Seconds 5   # the uninstaller finishes in a copy of itself
     $left = @($Vst3, $App) | Where-Object { Test-Path $_ }
     $key = Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" |
            Where-Object { (Get-ItemProperty $_.PSPath).DisplayName -like "*Tertiary*" }
