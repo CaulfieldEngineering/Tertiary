@@ -269,44 +269,11 @@ cd "${PROJECT_ROOT}"
 echo " [6/6] Assembling web app..."
 echo ""
 
-# -- Copy Wonderlab web host files --
-echo "         Copying web host files..."
-cp "${WONDERLAB_DIR}/web/index.html" "${WEB_BUILD_DIR}/index.html"
-
-# -- Copy sample audio tracks --
-SAMPLE_DIR="${PROJECT_ROOT}/plugin/sample_audio"
-TRACK_LIST=""
-
-if [ -d "${SAMPLE_DIR}" ]; then
-    echo "         Copying sample audio tracks..."
-    mkdir -p "${WEB_BUILD_DIR}/audio"
-    for f in "${SAMPLE_DIR}"/*; do
-        [ -f "$f" ] || continue
-        cp "$f" "${WEB_BUILD_DIR}/audio/"
-        fname=$(basename "$f")
-        title="${fname%.*}"
-        if [ -n "${TRACK_LIST}" ]; then
-            TRACK_LIST="${TRACK_LIST}, { title: '${title}', file: 'audio/${fname}' }"
-        else
-            TRACK_LIST="{ title: '${title}', file: 'audio/${fname}' }"
-        fi
-        echo "           + ${fname}"
-    done
-else
-    echo "         No sample_audio folder found, skipping."
-fi
-
-# -- Generate plugin-config.js --
-echo "         Generating plugin-config.js..."
-{
-  echo "window.WONDERLAB_CONFIG = {"
-  echo "    pluginName: '${REPOSITORY_NAME}',"
-  echo "    pluginWidth: 750,"
-  echo "    pluginHeight: 515,"
-  echo "    wasmJs: '${REPOSITORY_NAME}Web.js',"
-  echo "    tracks: [${TRACK_LIST}]"
-  echo "};"
-} > "${WEB_BUILD_DIR}/plugin-config.js"
+# [Claude 2026-10-27] Assembly now runs Wonderlab/scripts/assemble-web.js, the same script
+# CI uses: index.html, the tracks (plus MP3 copies if ffmpeg is installed), durations, a
+# build id, and the phone zoom regions from plugin/web_demo.json, into plugin-config.js.
+node "${WONDERLAB_DIR}/scripts/assemble-web.js" --name "${REPOSITORY_NAME}" --build "${WEB_BUILD_DIR}" \
+    --samples "${PROJECT_ROOT}/plugin/sample_audio" --extra "${PROJECT_ROOT}/plugin/web_demo.json"
 
 echo ""
 echo " ========================================================================="

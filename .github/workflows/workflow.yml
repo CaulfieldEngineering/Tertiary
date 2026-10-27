@@ -1272,62 +1272,31 @@ jobs:
 
     # Assemble Web App
     # ==========================================================================================
+    # [Claude 2026-10-27] The assembly now runs Wonderlab/scripts/assemble-web.js, the same
+    # script the local run_local builds use. It copies index.html and the tracks as before,
+    # and also writes a build id (so browsers can cache the WASM between visits), an MP3 copy
+    # of each WAV (about 1/6 the size; the page falls back to the WAV), track durations, and
+    # the phone zoom regions from plugin/web_demo.json. ffmpeg is only needed for the MP3s.
+    - name: Install ffmpeg (MP3 copies of the demo tracks)
+      run: sudo apt-get install -y -q ffmpeg
+
     - name: Assemble Web App
-      env:
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
       shell: bash
       run: |
         set -e
-
-        WONDERLAB_DIR="${GITHUB_WORKSPACE}/Wonderlab"
-        WEB_BUILD_DIR="${GITHUB_WORKSPACE}/build/web"
-        SAMPLE_DIR="${GITHUB_WORKSPACE}/plugin/sample_audio"
-
-        echo "Assembling web app..."
-
-        # Copy Wonderlab web host files
-        cp "${WONDERLAB_DIR}/web/index.html" "${WEB_BUILD_DIR}/index.html"
-        # juce-audio-worklet.js no longer needed (replaced by C++ Wasm Audio Worklet)
-
-        # Copy sample audio tracks
-        TRACK_LIST=""
-        if [ -d "${SAMPLE_DIR}" ]; then
-          echo "Copying sample audio tracks..."
-          mkdir -p "${WEB_BUILD_DIR}/audio"
-          for f in "${SAMPLE_DIR}"/*; do
-            [ -f "$f" ] || continue
-            cp "$f" "${WEB_BUILD_DIR}/audio/"
-            fname=$(basename "$f")
-            title="${fname%.*}"
-            if [ -n "${TRACK_LIST}" ]; then
-              TRACK_LIST="${TRACK_LIST}, { title: '${title}', file: 'audio/${fname}' }"
-            else
-              TRACK_LIST="{ title: '${title}', file: 'audio/${fname}' }"
-            fi
-            echo "  + ${fname}"
-          done
-        else
-          echo "No sample_audio folder found."
-        fi
-
-        # Generate plugin-config.js
-        echo "Generating plugin-config.js..."
-        {
-          echo "window.WONDERLAB_CONFIG = {"
-          echo "    pluginName: '${wPLUGIN_NAME}',"
-          echo "    pluginWidth: 750,"
-          echo "    pluginHeight: 515,"
-          echo "    wasmJs: '${wPLUGIN_NAME}Web.js',"
-          echo "    tracks: [${TRACK_LIST}]"
-          echo "};"
-        } > "${WEB_BUILD_DIR}/plugin-config.js"
+        node "${GITHUB_WORKSPACE}/Wonderlab/scripts/assemble-web.js" \
+          --name "${wPLUGIN_NAME}" \
+          --build "${GITHUB_WORKSPACE}/build/web" \
+          --samples "${GITHUB_WORKSPACE}/plugin/sample_audio" \
+          --extra "${GITHUB_WORKSPACE}/plugin/web_demo.json" \
+          --build-id "${GITHUB_SHA::8}"
 
         # List final web app contents
         echo ""
         echo "Web app contents:"
-        ls -la "${WEB_BUILD_DIR}/"
-        if [ -d "${WEB_BUILD_DIR}/audio" ]; then
-          ls -la "${WEB_BUILD_DIR}/audio/"
+        ls -la "${GITHUB_WORKSPACE}/build/web/"
+        if [ -d "${GITHUB_WORKSPACE}/build/web/audio" ]; then
+          ls -la "${GITHUB_WORKSPACE}/build/web/audio/"
         fi
 
 
