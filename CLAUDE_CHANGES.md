@@ -181,6 +181,21 @@ CI, run 40546908596 on release-1.1 (all five jobs passed):
 
 ---
 
+## 7. Staging release (2026-10-27, Joe: "let's get Tertiary updated and pushed through to release")
+
+Staging is at `7633d26`: release-1.1 (PR #17, now shown as merged), `claude/web-demo` (the web demo assembled with Wonderlab's `assemble-web.js`, phone zoom regions), and the eight web demo tracks from `promo-2026-10-26` (WAVs only). Wonderlab `main` has `claude/production` merged (`5248a15`). No tag.
+
+- `run_all.ps1` on the merged code before the push: all passed (pluginval, HostTest 53/53, unit tests, renders).
+- Staging pipeline, run 40588771650: success.
+  - Mac: AU, VST3 and app signed with Developer ID, all packages signed, notarization Accepted, ticket stapled.
+  - Windows: installer signed with Trusted Signing.
+  - Installers on the Caulfield Engineering server: `https://caulfieldengineering.com/plug-ins/Tertiary/installers/TertiaryMacInstaller_1.1.0.pkg` and `.../TertiaryWinInstaller_1.1.0.exe`. The workflow's log line prints the path without `/installers/`; the files are in `/installers/`.
+  - Web demo preview: `https://caulfieldengineering.com/plug-ins/Tertiary/web/`, with the eight tracks and their MP3s.
+- Installer test on the SIGNED installers, run 40591256479:
+  - Apple Silicon: 20/20 steps passed.
+  - Intel Mac: 20/20 steps passed.
+  - Windows: 8 passed, 2 failed. The installed `Tertiary.exe` and `Tertiary.vst3` are not signed, because the pipeline signed only the installer. Branch `claude/sign-windows-binaries` signs them before the installer is built: a new "Sign Windows Plug-in and App (Azure)" step, with the secrets check moved ahead of it. It's not on staging yet; pushing it there re-runs the pipeline and the installer test.
+
 ## Suggestions I did not change
 
 1. ~~Relative phase is twice what the knob says, in the audio.~~ Fixed after Joe's yes: section 2b.

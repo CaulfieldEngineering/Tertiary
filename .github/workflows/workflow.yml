@@ -195,15 +195,6 @@ jobs:
       run: choco install innosetup --yes
 
 
-    # Compile Inno Setup script (Windows Only) - All Cases
-    # ==========================================================================================
-    - name: Compile Inno Setup script (Windows Only)
-      if: matrix.os == 'windows-latest'
-      run: |
-        & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' "${{github.workspace}}\build\installer_win.iss"
-      shell: pwsh
-
-
     # Check for required signing secrets - All Cases
     # ==========================================================================================
     - name: Check Required Secrets
@@ -216,6 +207,37 @@ jobs:
         else
           echo "proceed=true" >> $GITHUB_OUTPUT
         fi
+
+
+    # Sign the plug-in and standalone app before they go into the installer - All Cases
+    # [Claude 2026-10-27] Before, only the installer .exe was signed, so the installed Tertiary.exe and
+    # Tertiary.vst3 were unsigned (installer-test.yml on Windows: "NotSigned"). Same signing as the installer.
+    # ==========================================================================================
+    - name: Sign Windows Plug-in and App (Azure)
+      if: ${{ matrix.os == 'windows-latest' && steps.check_secrets.outputs.proceed == 'true' }}
+      uses: azure/trusted-signing-action@v0.5.0
+      with:
+        azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+        endpoint: ${{ secrets.AZURE_ENDPOINT }}
+        trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
+        certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
+        files-folder: ${{ github.workspace }}/build/plugin/${{ env.wPLUGIN_NAME }}_artefacts/Release
+        files-folder-filter: exe,vst3
+        files-folder-recurse: true
+        file-digest: SHA256
+        timestamp-rfc3161: http://timestamp.acs.microsoft.com
+        timestamp-digest: SHA256
+
+
+    # Compile Inno Setup script (Windows Only) - All Cases
+    # ==========================================================================================
+    - name: Compile Inno Setup script (Windows Only)
+      if: matrix.os == 'windows-latest'
+      run: |
+        & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' "${{github.workspace}}\build\installer_win.iss"
+      shell: pwsh
 
 
     # Sign the Windows Installer Executable using Azure Trusted Signing - All Cases
