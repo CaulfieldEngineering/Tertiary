@@ -19,6 +19,9 @@ NAME="$3"
 STRICTNESS="${STRICTNESS:-10}"
 mkdir -p results
 
+# On any failure, keep macOS crash reports (stack traces) with the logs
+trap 'cp ~/Library/Logs/DiagnosticReports/*luginval* ~/Library/Logs/DiagnosticReports/*auval* results/ 2>/dev/null || true' EXIT
+
 echo "=== $NAME: $(sw_vers -productName) $(sw_vers -productVersion), $(uname -m)" | tee results/machine.log
 
 # 1. Architectures and minimum macOS
