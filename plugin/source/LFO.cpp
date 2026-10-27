@@ -39,6 +39,15 @@ void LFO::updateLFO(double sampleRate, double hostBPM)
 }
 
 
+// [Claude 2026-10-27] Called by the processor when the host tempo changes, so synced LFOs keep time.
+//                      Only the increment is recalculated; the wavetable stays as it is.
+//==============================================================================
+void LFO::updateTempo(double sampleRate, double hostBPM)
+{
+    setTempo(hostBPM, sampleRate);
+}
+
+
 void LFO::getProcessorParams()
 {
     mRate = rateParam->get();

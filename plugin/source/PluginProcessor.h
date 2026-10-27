@@ -128,16 +128,18 @@ namespace audio_plugin {
         float fifo[fftSize];
         float fftData[2 * fftSize];
         float scopeData[scopeSize];
-        bool nextFFTBlockReady = false;
+        std::atomic<bool> nextFFTBlockReady { false };   // [Claude 2026-10-27] atomic: set by the audio thread, cleared by the GUI
         int fifoIndex = 0;
 
     private:
 
 		void checkActivationStatusOnStartup();
 
-        bool parameterChangedLfoLow{true};
-        bool parameterChangedLfoMid{true};
-        bool parameterChangedLfoHigh{true};
+        // [Claude 2026-10-27] atomic: set by parameterChanged (any thread), read by the audio thread
+        std::atomic<bool> parameterChangedLfoLow{true};
+        std::atomic<bool> parameterChangedLfoMid{true};
+        std::atomic<bool> parameterChangedLfoHigh{true};
+        double lastHostBpm{0.0};    // [Claude 2026-10-27] To follow host tempo changes
 
         /* Main DSP */
         void applyAmplitudeModulation();
@@ -179,7 +181,7 @@ namespace audio_plugin {
 
         /* FrequencyResponse */
         // =========================================================================
-        bool fftPickoffPointIsInput{false};
+        std::atomic<bool> fftPickoffPointIsInput{false};   // [Claude 2026-10-27] atomic: set by the GUI
         void pushSignalToFFT(juce::AudioBuffer<float>& buffer);
 
         /* BPM and Host Info */

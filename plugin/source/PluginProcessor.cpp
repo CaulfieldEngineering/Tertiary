@@ -247,7 +247,9 @@ namespace audio_plugin {
         juce::MemoryOutputStream mos(destData,  // Destination
                                     true);     // It is appendable
 
-        apvts.state.writeToStream(mos);  // Write mos to the APVTS
+        // [Claude 2026-10-27] copyState() first copies the latest parameter values into the tree. apvts.state on its
+        // own is only brought up to date by a timer, so a save just after a change (or offline) stored old values.
+        apvts.copyState().writeToStream(mos);  // Write mos to the APVTS
     }
 
     /* Saves current settings to be recalled at a later date */
@@ -664,13 +666,21 @@ namespace audio_plugin {
         buffer.setSize(spec.numChannels, samplesPerBlock);
       }
 
+      // [Claude 2026-10-27] Size the LFO wavetables for this sample rate here, off the audio thread, and have
+      // processBlock recalculate them. Before, they were sized at 0 Hz in the constructor, so the first block
+      // allocated on the audio thread, and after a sample-rate change the LFOs ran at the wrong speed.
+      lowLFO.initializeLFO(sampleRate);
+      midLFO.initializeLFO(sampleRate);
+      highLFO.initializeLFO(sampleRate);
+      parameterChangedLfoLow = true;
+      parameterChangedLfoMid = true;
+      parameterChangedLfoHigh = true;
+
 		// Demo Version
 		//#ifdef DEMO_VERSION
-	  if (mIsDemoVersion)
-		{
-			samplesUntilDisable = demoActiveTimeLimit * getSampleRate();
-			samplesUntilEnable = demoBypassTimeLimit * getSampleRate();
-		}
+		// [Claude 2026-10-27] Always set, so they are right if the plugin later returns to demo mode
+		samplesUntilDisable = demoActiveTimeLimit * sampleRate;
+		samplesUntilEnable = demoBypassTimeLimit * sampleRate;
 
 		//#endif
 
@@ -810,6 +820,11 @@ namespace audio_plugin {
           }
         }
       }
+      else if (!effectEnabled) {
+        // [Claude 2026-10-27] Activated during the demo's silent gap: turn the effect back on
+        effectEnabled = true;
+        sampleCounter = 0;
+      }
 	   //#endif
 
 
@@ -827,10 +842,11 @@ namespace audio_plugin {
 
       /* Set Up Host Playhead Data */
       playHead = this->getPlayHead();
-      playPosition = hostInfo.ppqPosition;
 
       if (playHead != nullptr)
         playHead->getCurrentPosition(hostInfo);
+
+      playPosition = hostInfo.ppqPosition;  // [Claude 2026-10-27] Read after the update, not from the previous block
 
       /* Clear Input Buffers */
       for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
@@ -888,6 +904,14 @@ namespace audio_plugin {
       /* Update tremolo effect params */
       for (auto& trem : tremolos)
         trem.updateTremoloSettings();
+
+      // [Claude 2026-10-27] Host tempo changed: synced LFOs follow it (before, only after a parameter change)
+      if (hostInfo.bpm != lastHostBpm) {
+        lowLFO.updateTempo(sampleRate, hostInfo.bpm);
+        midLFO.updateTempo(sampleRate, hostInfo.bpm);
+        highLFO.updateTempo(sampleRate, hostInfo.bpm);
+        lastHostBpm = hostInfo.bpm;
+      }
 
       // Flag to update Low LFO parameters
       if (parameterChangedLfoLow) {
@@ -1032,7 +1056,7 @@ namespace audio_plugin {
 
       // Copy incoming audio into all filter buffers
       for (auto& fb : filterBuffers)
-        fb = inputBuffer;
+        fb.makeCopyOf(inputBuffer, true);  // [Claude 2026-10-27] true = no reallocation on the audio thread when the block size changes
 
       auto fb0Block = juce::dsp::AudioBlock<float>(
           filterBuffers[0]);  // Create audio block for the buffer containing LOWS
@@ -1052,8 +1076,8 @@ namespace audio_plugin {
       AP2.process(fb0Ctx);  // LP1 and AP2 create LOWS
 
       HP1.process(fb1Ctx);  // HP1 splits two ways: MIDS and HIGHS
-      filterBuffers[2] =
-          filterBuffers[1];  // Make a copy before BPF, to prepare for HIGHS
+      filterBuffers[2].makeCopyOf(
+          filterBuffers[1], true);  // Make a copy before BPF, to prepare for HIGHS  [Claude 2026-10-27] no reallocation
       LP2.process(fb1Ctx);   // HP1 and LP2 create BPF
 
       HP2.process(fb2Ctx);  // HP1, and HP2 create HIGHS
