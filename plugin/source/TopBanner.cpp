@@ -21,6 +21,12 @@ TopBanner::TopBanner()
     // Store original aspect ratios
     companyTitleOriginalAspect = imageCompanyTitle.getWidth() / (float)imageCompanyTitle.getHeight();
     pluginTitleOriginalAspect = imagePluginTitle.getWidth() / (float)imagePluginTitle.getHeight();
+
+    // [Claude 2026-10-27] Update link, hidden until the update check finds a newer version
+    mUpdateLink.setURL(juce::URL("https://www.wonderlandaudio.com"));
+    mUpdateLink.setFont(juce::Font(14.0f), false, juce::Justification::centredLeft);
+    mUpdateLink.setColour(juce::HyperlinkButton::textColourId, juce::Colours::lightgrey.withAlpha(0.6f));
+    addChildComponent(mUpdateLink);
 }
 
 TopBanner::~TopBanner()
@@ -32,6 +38,23 @@ void TopBanner::resized()
     // Clear cached images to force redraw at new size
     scaledCompanyTitle = juce::Image();
     scaledPluginTitle = juce::Image();
+
+    // [Claude 2026-10-27] Left side, where "DEMO VERSION" is shown in the demo
+    mUpdateLink.setBounds(25, getHeight() / 2 - 10, getWidth() / 3, 20);
+}
+
+// [Claude 2026-10-27] The update link. Only in the full version: the left side is taken by the demo text,
+// and the server only reports versions for activated keys anyway.
+void TopBanner::setUpdateVersion(const juce::String& version)
+{
+    mUpdateVersion = version;
+    updateVersionLink();
+}
+
+void TopBanner::updateVersionLink()
+{
+    mUpdateLink.setButtonText("Version " + mUpdateVersion + " is available");
+    mUpdateLink.setVisible(mUpdateVersion.isNotEmpty() && !mIsDemoVersion);
 }
 
 void TopBanner::paint(juce::Graphics& g)

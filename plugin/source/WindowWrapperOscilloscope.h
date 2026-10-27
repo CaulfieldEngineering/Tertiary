@@ -15,7 +15,8 @@
 #include "OptionsMenu.h"
 
 struct WindowWrapperOscilloscope :  juce::Component,
-                                    juce::AudioProcessorValueTreeState::Listener
+                                    juce::AudioProcessorValueTreeState::Listener,
+                                    juce::AsyncUpdater   // [Claude 2026-10-27] moves parameter changes to the message thread
 {
     WindowWrapperOscilloscope(audio_plugin::AudioPluginAudioProcessor& p);
     ~WindowWrapperOscilloscope();
@@ -23,6 +24,7 @@ struct WindowWrapperOscilloscope :  juce::Component,
     void resized() override;
 
     void parameterChanged(const juce::String& parameterID, float newValue) override;
+    void handleAsyncUpdate() override;   // [Claude 2026-10-27]
     
     void paint(juce::Graphics& g) override;
     //void paintOverChildren(juce::Graphics& g) override;

@@ -88,13 +88,43 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
             aboutWindow.setVisible(false);
       }
 
+      // [Claude 2026-10-27] Weekly serial-key re-check and update check, on the processor's own thread
+      audioProcessor.licenseCheck.addChangeListener(this);
+      audioProcessor.startLicenseCheck();
+      showLicenseCheckResult();   // In case it already finished while the editor was closed
+
 
     }
 
 
 
     //==============================================================================
-    AudioPluginAudioProcessorEditor::~AudioPluginAudioProcessorEditor() {}
+    AudioPluginAudioProcessorEditor::~AudioPluginAudioProcessorEditor() {
+      audioProcessor.licenseCheck.removeChangeListener(this);   // [Claude 2026-10-27]
+    }
+
+    // [Claude 2026-10-27] Called on the message thread when the license check has finished
+    //==============================================================================
+    void AudioPluginAudioProcessorEditor::changeListenerCallback(juce::ChangeBroadcaster* source) {
+      showLicenseCheckResult();
+    }
+
+    // [Claude 2026-10-27] Back to demo if the key was revoked (and open the About window to say why),
+    // a quiet note if offline too long, and the "Version X is available" link
+    //==============================================================================
+    void AudioPluginAudioProcessorEditor::showLicenseCheckResult() {
+      auto result = audioProcessor.licenseCheck.getResult();
+
+      if (!result.finished)
+        return;
+
+      updateDemoState(audioProcessor.getDemoState());
+      aboutWindow.showLicenseCheckResult(result);
+      topBanner.setUpdateVersion(result.newVersion);
+
+      if (result.revoked && !fullScreenScope)
+        aboutWindow.setVisible(true);
+    }
 
 	//==============================================================================
 	void AudioPluginAudioProcessorEditor::checkForSerialKeyOnStartup()

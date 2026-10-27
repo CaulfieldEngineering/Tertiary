@@ -181,7 +181,7 @@ void AboutWindow::resized()
 
 	// Status Label
 	auto statusArea = buttonArea.translated(0, 35);
-	statusArea.setHeight(20);
+	statusArea.setHeight(27);   // [Claude 2026-10-27] was 20; room for a two-line license-check message
 	mLabelStatus.setBounds(statusArea);
 }
 
@@ -409,10 +409,15 @@ void AboutWindow::mouseExit(const juce::MouseEvent& event)
 
 
 
+// [Claude 2026-10-27] The three server calls below are the same requests as in 1.0.2, now made through
+// licenseServer (LicenseServer.h). Changes: a SafePointer, so a reply that arrives after the window is closed
+// no longer touches a deleted window (that could crash the host); the email is sent in lower case (the server
+// compares it in lower case); the 5 s timeout now applies (it was set on a copy before); and the instance is a
+// real machine ID (LicenseCheck::getMachineInstance) instead of the computer's model name.
 void AboutWindow::attemptSerialKeyValidation()
 {
     auto serialKey = mTextEditorSerialKey.getText().trim();
-    auto email = mTextEditorEmailAddress.getText().trim();
+    auto email = LicenseCheck::normaliseEmail(mTextEditorEmailAddress.getText());
 
     if (serialKey.isEmpty())
     {
@@ -422,62 +427,33 @@ void AboutWindow::attemptSerialKeyValidation()
 
     mLabelStatus.setText("Validating...", juce::dontSendNotification);
 
-    juce::Thread::launch([this, serialKey, email]()
+    juce::Component::SafePointer<AboutWindow> safeThis(this);
+    auto server = licenseServer;
+
+    juce::Thread::launch([safeThis, server, serialKey, email]()
     {
-        juce::URL apiURL("https://wonderlandaudio.com/wp-json/wcsn/validate");
-        apiURL = apiURL.withParameter("product_id", "45")
-                       .withParameter("serial_key", serialKey)
-                       .withParameter("request", "validate");
+        auto reply = server->validate(serialKey, email);
 
-        if (email.isNotEmpty())
-            apiURL = apiURL.withParameter("email", email);
-
-        juce::URL::InputStreamOptions options(juce::URL::ParameterHandling::inAddress);
-        options.withConnectionTimeoutMs(5000);
-
-        std::unique_ptr<juce::InputStream> stream(apiURL.createInputStream(options));
-
-        if (stream != nullptr)
+        juce::MessageManager::callAsync([safeThis, reply]()
         {
-            auto responseStr = stream->readEntireStreamAsString();
+            if (safeThis == nullptr)
+                return;
 
-            auto json = juce::JSON::parse(responseStr);
-            if (auto* obj = json.getDynamicObject())
+            if (!reply.reachable)
+                safeThis->mLabelStatus.setText("Connection to server failed.", juce::dontSendNotification);
+
+            // Key is confirmed to be valid
+            else if (reply.code == "key_valid")
             {
-                auto code = obj->getProperty("code").toString();
-                auto message = obj->getProperty("message").toString();
-
-                juce::MessageManager::callAsync([this, code, message, obj]()
-                {
-					// Key is confirmed to be valid
-                    if (code == "key_valid")
-                    {
-                        mLabelStatus.setText("Serial key valid!", juce::dontSendNotification);
-
-                        attemptSerialKeyActivation();
-                    }
-                    else
-                    {
-                        mLabelStatus.setText("Error: " + message, juce::dontSendNotification);
-                        DBG("API Error: " + code + " - " + message);
-                    }
-                });
+                safeThis->mLabelStatus.setText("Serial key valid!", juce::dontSendNotification);
+                safeThis->attemptSerialKeyActivation();
             }
             else
             {
-                juce::MessageManager::callAsync([this]()
-                {
-                    mLabelStatus.setText("Invalid JSON from server.", juce::dontSendNotification);
-                });
+                safeThis->mLabelStatus.setText("Error: " + reply.message, juce::dontSendNotification);
+                DBG("API Error: " + reply.code + " - " + reply.message);
             }
-        }
-        else
-        {
-            juce::MessageManager::callAsync([this]()
-            {
-                mLabelStatus.setText("Connection to server failed.", juce::dontSendNotification);
-            });
-        }
+        });
     });
 }
 
@@ -486,139 +462,87 @@ void AboutWindow::attemptSerialKeyValidation()
 void AboutWindow::attemptSerialKeyActivation()
 {
     auto serialKey = mTextEditorSerialKey.getText().trim();
-    auto email = mTextEditorEmailAddress.getText().trim();
-    juce::String instance = juce::SystemStats::getDeviceDescription();
+    auto email = LicenseCheck::normaliseEmail(mTextEditorEmailAddress.getText());
+
+    juce::PropertiesFile props(LicenseCheck::getSettingsOptions());
+    juce::String instance = LicenseCheck::getMachineInstance(props);
     juce::String platform = juce::SystemStats::getOperatingSystemName();
 
     mLabelStatus.setText("Activating...", juce::dontSendNotification);
 
-    juce::Thread::launch([this, serialKey, email, instance, platform]()
+    juce::Component::SafePointer<AboutWindow> safeThis(this);
+    auto server = licenseServer;
+
+    juce::Thread::launch([safeThis, server, serialKey, email, instance, platform]()
     {
-        juce::URL activateURL("https://wonderlandaudio.com/wp-json/wcsn/activate");
-        activateURL = activateURL.withParameter("product_id", "45")
-                                 .withParameter("serial_key", serialKey)
-                                 .withParameter("instance", instance)
-                                 .withParameter("platform", platform);
+        auto reply = server->activate(serialKey, email, instance, platform);
 
-        if (email.isNotEmpty())
-            activateURL = activateURL.withParameter("email", email);
-
-        auto stream = activateURL.createInputStream(
-            juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
-                .withConnectionTimeoutMs(5000));
-
-        if (stream)
+        juce::MessageManager::callAsync([safeThis, reply]()
         {
-            auto responseStr = stream->readEntireStreamAsString();
-            auto json = juce::JSON::parse(responseStr);
+            if (safeThis == nullptr)
+                return;
 
-            if (auto* obj = json.getDynamicObject())
+            if (!reply.reachable)
+                safeThis->mLabelStatus.setText("Activation connection failed.", juce::dontSendNotification);
+
+            else if (reply.code == "key_activated" || reply.code == "instance_already_activated")
             {
-                auto code = obj->getProperty("code").toString();
-                auto message = obj->getProperty("message").toString();
+                if (reply.code == "instance_already_activated")
+                    safeThis->mLabelStatus.setText("Instance was already activated.  Reactivation successful!", juce::dontSendNotification);
+                else
+                    safeThis->mLabelStatus.setText("Activation successful!", juce::dontSendNotification);
 
-				juce::MessageManager::callAsync([this, code, message]()
-				{
-					if (code == "key_activated" || code == "instance_already_activated")
-					{
-						if (code == "instance_already_activated")
-							mLabelStatus.setText("Instance was already activated.  Reactivation successful!", juce::dontSendNotification);
-						else
-							mLabelStatus.setText("Activation successful!", juce::dontSendNotification);
-
-						updateAppOnActivationChange(true);
-					}
-					else
-					{
-						mLabelStatus.setText("Activation error: " + message, juce::dontSendNotification);
-						DBG("API Error: " + code + " - " + message);
-					}
-				});
+                safeThis->updateAppOnActivationChange(true);
             }
             else
             {
-                juce::MessageManager::callAsync([this]()
-                {
-                    mLabelStatus.setText("Invalid activation response.", juce::dontSendNotification);
-                });
+                safeThis->mLabelStatus.setText("Activation error: " + reply.message, juce::dontSendNotification);
+                DBG("API Error: " + reply.code + " - " + reply.message);
             }
-        }
-        else
-        {
-            juce::MessageManager::callAsync([this]()
-            {
-                mLabelStatus.setText("Activation connection failed.", juce::dontSendNotification);
-            });
-        }
+        });
     });
 }
 
 void AboutWindow::attemptSerialKeyDeactivation()
 {
 	auto serialKey = mTextEditorSerialKey.getText().fromFirstOccurrenceOf("Key: ", false, true).trim();
-	auto email = mTextEditorEmailAddress.getText().fromFirstOccurrenceOf("Email: ", false, true).trim();
+	auto email = LicenseCheck::normaliseEmail(mTextEditorEmailAddress.getText().fromFirstOccurrenceOf("Email: ", false, true));
 
-    juce::String instance = juce::SystemStats::getDeviceDescription();
+    // The instance it was activated with: the machine ID, or for a 1.0.x activation the device description
+    juce::PropertiesFile props(LicenseCheck::getSettingsOptions());
+    juce::String instance = LicenseCheck::getActivatedInstance(props);
     juce::String platform = juce::SystemStats::getOperatingSystemName();
 
     mLabelStatus.setText("Deactivating...", juce::dontSendNotification);
 
-    juce::Thread::launch([this, serialKey, email, instance, platform]()
+    juce::Component::SafePointer<AboutWindow> safeThis(this);
+    auto server = licenseServer;
+
+    juce::Thread::launch([safeThis, server, serialKey, email, instance, platform]()
     {
-        juce::URL deactivateURL("https://wonderlandaudio.com/wp-json/wcsn/deactivate");
-        deactivateURL = deactivateURL.withParameter("product_id", "45")
-                                     .withParameter("serial_key", serialKey)
-                                     .withParameter("instance", instance)
-                                     .withParameter("platform", platform);
+        auto reply = server->deactivate(serialKey, email, instance, platform);
 
-        if (email.isNotEmpty())
-            deactivateURL = deactivateURL.withParameter("email", email);
-
-        auto stream = deactivateURL.createInputStream(
-            juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
-                .withConnectionTimeoutMs(5000));
-
-        if (stream)
+        juce::MessageManager::callAsync([safeThis, reply]()
         {
-            auto responseStr = stream->readEntireStreamAsString();
-            auto json = juce::JSON::parse(responseStr);
+            if (safeThis == nullptr)
+                return;
 
-            if (auto* obj = json.getDynamicObject())
+            if (!reply.reachable)
+                safeThis->mLabelStatus.setText("Deactivation connection failed.", juce::dontSendNotification);
+
+            else if (reply.code == "key_deactivated" || reply.code == "instance_deactivated")
             {
-                auto code = obj->getProperty("code").toString();
-                auto message = obj->getProperty("message").toString();
+                safeThis->mLabelStatus.setText("Deactivation successful.", juce::dontSendNotification);
 
-                juce::MessageManager::callAsync([this, code, message]()
-                {
-                    if (code == "key_deactivated" || code == "instance_deactivated")
-                    {
-                        mLabelStatus.setText("Deactivation successful.", juce::dontSendNotification);
-
-                        // Optionally clear local props or revert UI to demo mode
-                        updateAppOnActivationChange(false);
-                    }
-                    else
-                    {
-                        mLabelStatus.setText("Deactivation error: " + message, juce::dontSendNotification);
-                        DBG("API Error: " + code + " - " + message);
-                    }
-                });
+                // Optionally clear local props or revert UI to demo mode
+                safeThis->updateAppOnActivationChange(false);
             }
             else
             {
-                juce::MessageManager::callAsync([this]()
-                {
-                    mLabelStatus.setText("Invalid deactivation response.", juce::dontSendNotification);
-                });
+                safeThis->mLabelStatus.setText("Deactivation error: " + reply.message, juce::dontSendNotification);
+                DBG("API Error: " + reply.code + " - " + reply.message);
             }
-        }
-        else
-        {
-            juce::MessageManager::callAsync([this]()
-            {
-                mLabelStatus.setText("Deactivation connection failed.", juce::dontSendNotification);
-            });
-        }
+        });
     });
 }
 
@@ -661,7 +585,7 @@ void AboutWindow::updateLocalKeyData(bool isActivating)
 
     juce::PropertiesFile props(options);
 
-	juce::String email = mTextEditorEmailAddress.getText().trim();
+	juce::String email = mTextEditorEmailAddress.getText().fromFirstOccurrenceOf("Email: ", false, true).trim();  // [Claude 2026-10-27] drop the "Email: " shown when activated
 
 	juce::String serialKey = "";
 
@@ -670,6 +594,13 @@ void AboutWindow::updateLocalKeyData(bool isActivating)
 
     props.setValue("licenseKey", serialKey);
     props.setValue("licenseEmail", email);
+
+    // [Claude 2026-10-27] For the weekly re-check: which machine ID was activated, and when it was last confirmed
+    auto now = juce::String(juce::Time::currentTimeMillis());
+    props.setValue("licenseInstance", isActivating ? LicenseCheck::getMachineInstance(props) : juce::String());
+    props.setValue("licenseLastCheck", isActivating ? now : juce::String());
+    props.setValue("licenseLastValid", isActivating ? now : juce::String());
+
     props.saveIfNeeded();
 
     juce::File file = props.getFile();
@@ -677,3 +608,32 @@ void AboutWindow::updateLocalKeyData(bool isActivating)
 }
 
 
+
+// [Claude 2026-10-27] Called by the editor when the weekly re-check has finished (LicenseCheck.h).
+// A message goes in the status line; a newer version turns the website link into "Version X is available".
+//==============================================================================
+void AboutWindow::showLicenseCheckResult(const LicenseCheck::Result& result)
+{
+    if (result.message.isNotEmpty())
+    {
+        mLabelStatus.setFont(juce::Font(12.0f, juce::Font::italic));
+        mLabelStatus.setText(result.message, juce::dontSendNotification);
+    }
+
+    if (result.newVersion.isNotEmpty())
+        mButtonWebsiteLink.setButtonText("Version " + result.newVersion + " is available at WonderlandAudio.com");
+
+    if (result.revoked)
+        refreshActivationFields();
+}
+
+// [Claude 2026-10-27] Same as the end of updateAppOnActivationChange(), for a change made by the re-check
+//==============================================================================
+void AboutWindow::refreshActivationFields()
+{
+	mIsDemoVersion = audioProcessor.getDemoState();
+	setUpSerialKeyEditor();
+	setUpEmailEditor();
+	setUpActionButton();
+	repaint();
+}

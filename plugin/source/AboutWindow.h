@@ -16,6 +16,8 @@
 #include <ctime>
 #include <juce_core/juce_core.h>
 #include "PluginProcessor.h"
+#include "LicenseServer.h"   // [Claude 2026-10-27]
+#include "LicenseCheck.h"    // [Claude 2026-10-27]
 
 // Forward declaration goes exactly here:
 namespace audio_plugin {
@@ -35,6 +37,12 @@ public:
 
 	/* Tells this class whether or not the app is in Demo Version */
     void setDemoState(bool demoState){mIsDemoVersion = demoState;}
+
+	/* [Claude 2026-10-27] Shows what the weekly re-check found: a message, and a newer version if any */
+	void showLicenseCheckResult(const LicenseCheck::Result& result);
+
+	/* [Claude 2026-10-27] Re-reads the key fields and button after the license state changed elsewhere */
+	void refreshActivationFields();
 
 private:
 
@@ -90,5 +98,8 @@ private:
     float companyTitleOriginalAspect = 1.0f;
 
     juce::HyperlinkButton mButtonWebsiteLink;
+
+	// [Claude 2026-10-27] The server calls, behind an interface (LicenseServer.h). Shared with the request threads.
+	std::shared_ptr<LicenseServer> licenseServer { std::make_shared<WonderlandLicenseServer>() };
 
 };

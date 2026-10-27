@@ -21,7 +21,10 @@ public:
     void resized() override;
 
 	/* Tells this class whether or not the app is in Demo Version */
-	void setDemoState(bool demoState) {mIsDemoVersion = demoState;}
+	void setDemoState(bool demoState) {mIsDemoVersion = demoState; updateVersionLink();}
+
+	/* [Claude 2026-10-27] Shows a quiet "Version X is available" link (full version only). Empty hides it. */
+	void setUpdateVersion(const juce::String& version);
 
     void mouseEnter(const juce::MouseEvent&) override;
     void mouseExit(const juce::MouseEvent&) override;
@@ -51,4 +54,9 @@ private:
 	bool mIsDemoVersion {true};
 
 	bool mIsMouseOver { false };
+
+	// [Claude 2026-10-27] "Version X is available" link to the website
+	juce::HyperlinkButton mUpdateLink;
+	juce::String mUpdateVersion;
+	void updateVersionLink();
 };

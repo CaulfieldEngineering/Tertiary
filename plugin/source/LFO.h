@@ -39,6 +39,9 @@ public:
     void initializeLFO(double sampleRate);
     void updateLFO(double sampleRate, double hostBPM);
 
+    // [Claude 2026-10-27] Follow a host tempo change without recalculating the whole wavetable
+    void updateTempo(double sampleRate, double hostBPM);
+
 
     float getHostBPM() { return mHostBPM; }
 

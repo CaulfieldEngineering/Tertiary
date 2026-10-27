@@ -1,0 +1,181 @@
+# Installer test (on real Macs and Windows, never deploys)
+# ==========================================================================================
+# [Claude 2026-10-27] New file. Joe: "I don't have a real Mac (anymore)... Try to automate as much of
+# the testing as possible so we don't have to do this manually."
+#
+# Installs the SIGNED, NOTARIZED installers that the staging pipeline (workflow.yml) built, on GitHub's
+# Apple Silicon and Intel Macs and on Windows, and checks them like a customer would get them:
+# signatures and Gatekeeper, install, files where DAWs look, auval, pluginval, the host test on the
+# installed plugins, the standalone starts and quits, uninstall leaves nothing. Results in the job summary.
+#
+# When it runs
+#   - after every run of the staging pipeline (workflow_run), on that run's installers
+#   - by hand: Actions, "Installer test", Run workflow, with the run ID of a staging pipeline run
+#   - self-test: push a branch named claude/installer-test...; it builds UNSIGNED installers the same
+#     way the pipeline does and runs every step (signature steps report SKIP)
+# workflow_run and the Run workflow button only work once this file is on the default branch (staging).
+#
+# It downloads, installs and deletes; it never signs, uploads or deploys anything.
+# ==========================================================================================
+
+name: Installer test
+
+on:
+  workflow_run:
+    workflows: ["Staging & Production Pipeline"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID of a 'Staging & Production Pipeline' run (its installers are tested)"
+        required: true
+  push:
+    branches:
+      - 'claude/installer-test*'
+
+permissions:
+  contents: read
+  actions: read          # to download another run's artifacts
+
+env:
+  JUCE_TAG: 8.0.8
+  PLUGINVAL_TAG: v1.0.4
+  # The staging pipeline run whose installers are tested (empty in the self-test)
+  SOURCE_RUN: ${{ github.event.workflow_run.id || inputs.run_id || '' }}
+
+jobs:
+
+  # Job: Mac, Apple Silicon and Intel
+  # ==========================================================================================
+  mac:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    steps:
+    - name: Checkout the code the installers were built from
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+    - name: Get JUCE and pluginval
+      run: |
+        git clone --depth 1 --branch "$JUCE_TAG" https://github.com/juce-framework/JUCE.git "$RUNNER_TEMP/juce"
+        brew list ninja >/dev/null 2>&1 || brew install ninja
+        curl -sL -o "$RUNNER_TEMP/pv.zip" "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_TAG/pluginval_macOS.zip"
+        unzip -q -o "$RUNNER_TEMP/pv.zip" -d "$RUNNER_TEMP/pv"
+
+    - name: Build the host test (and, for the self-test, the plugin)
+      run: |
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DWLA_TESTS=ON -DWLA_COPY_PLUGIN_AFTER_BUILD=OFF \
+          -DCPM_JUCE_SOURCE="$RUNNER_TEMP/juce"
+        TARGETS="HostTest"
+        [ -z "$SOURCE_RUN" ] && TARGETS="$TARGETS Tertiary_VST3 Tertiary_AU Tertiary_Standalone"
+        cmake --build build --target $TARGETS
+
+    - name: Download the signed installer from the staging pipeline
+      if: env.SOURCE_RUN != ''
+      uses: actions/download-artifact@v4
+      with:
+        name: macos-latest-installer
+        run-id: ${{ env.SOURCE_RUN }}
+        github-token: ${{ github.token }}
+        path: installer
+
+    - name: Self-test only - build an unsigned installer like the pipeline does
+      if: env.SOURCE_RUN == ''
+      run: bash plugin/tests/ci/build_unsigned_installer_mac.sh build installer
+
+    - name: Installer test
+      run: |
+        PKG=$(ls installer/*Installer_*.pkg | head -1)
+        [ -z "$SOURCE_RUN" ] && export UNSIGNED=1
+        bash plugin/tests/ci/installer_test_mac.sh "$PKG" "build/plugin/HostTest_artefacts/Release/HostTest" \
+          "$RUNNER_TEMP/pv/pluginval.app/Contents/MacOS/pluginval"
+
+    - name: Summary
+      if: always()
+      run: |
+        echo "## ${{ matrix.os }} ($(uname -m))" >> "$GITHUB_STEP_SUMMARY"
+        cat results/installer-summary.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "no summary" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: installer-test-${{ matrix.os }}
+        path: results/
+
+
+  # Job: Windows
+  # ==========================================================================================
+  windows:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+    - name: Checkout the code the installer was built from
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+    - name: Get JUCE and pluginval
+      shell: bash
+      run: |
+        T=$(cygpath -m "$RUNNER_TEMP")
+        git clone --depth 1 --branch "$JUCE_TAG" https://github.com/juce-framework/JUCE.git "$T/juce"
+        curl -sL -o "$T/pv.zip" "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_TAG/pluginval_Windows.zip"
+        unzip -q -o "$T/pv.zip" -d "$T/pv"
+
+    - name: Build the host test (and, for the self-test, the plugin)
+      shell: bash
+      run: |
+        T=$(cygpath -m "$RUNNER_TEMP")
+        cmake -S . -B build -A x64 -DWLA_TESTS=ON -DWLA_COPY_PLUGIN_AFTER_BUILD=OFF -DCPM_JUCE_SOURCE="$T/juce"
+        TARGETS="--target HostTest"
+        [ -z "$SOURCE_RUN" ] && TARGETS="$TARGETS --target Tertiary_VST3 --target Tertiary_Standalone"
+        cmake --build build --config Release $TARGETS -- -m
+
+    - name: Download the signed installer from the staging pipeline
+      if: env.SOURCE_RUN != ''
+      uses: actions/download-artifact@v4
+      with:
+        name: windows-latest-installer
+        run-id: ${{ env.SOURCE_RUN }}
+        github-token: ${{ github.token }}
+        path: installer
+
+    - name: Self-test only - build an unsigned installer like the pipeline does
+      if: env.SOURCE_RUN == ''
+      shell: pwsh
+      run: |
+        if (-not (Test-Path 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe')) { choco install innosetup --yes }
+        & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' "build\installer_win.iss"
+        New-Item -ItemType Directory -Force installer | Out-Null
+        Move-Item build\*Installer_*.exe installer\
+
+    - name: Installer test
+      shell: pwsh
+      run: |
+        $exe = (Get-ChildItem installer\*Installer_*.exe | Select-Object -First 1).FullName
+        if (-not $env:SOURCE_RUN) { $env:UNSIGNED = "1" }
+        $pv = (Join-Path $env:RUNNER_TEMP "pv\pluginval.exe")
+        & powershell -ExecutionPolicy Bypass -File plugin\tests\ci\installer_test_windows.ps1 $exe (Resolve-Path build\plugin\HostTest_artefacts\Release\HostTest.exe) $pv
+        exit $LASTEXITCODE
+
+    - name: Summary
+      if: always()
+      shell: pwsh
+      run: |
+        "## windows-latest" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+        if (Test-Path results\installer-summary.md) { Get-Content results\installer-summary.md | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY }
+
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: installer-test-windows
+        path: results/

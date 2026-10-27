@@ -23,6 +23,11 @@ endif()
 # =====================================================================
 set(INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/source")
 
+# [Claude 2026-10-27] Copy the built plugin into the system plugin folders (as before). The local test runner
+# (tests/run_all.ps1) turns it off: on Windows that copy needs administrator rights.
+# =====================================================================
+option(WLA_COPY_PLUGIN_AFTER_BUILD "Copy the plugin to the system plugin folders after building" ON)
+
 # Adds a plugin target (that's basically what the Projucer does).
 # =====================================================================
 juce_add_plugin( ${PROJECT_NAME}
@@ -36,7 +41,7 @@ juce_add_plugin( ${PROJECT_NAME}
     FORMATS ${wFORMATS}
     PRODUCT_NAME "${wPLUGIN_NAME}"
     VST3_CATEGORIES ${wPLUGIN_CATEGORY}
-    COPY_PLUGIN_AFTER_BUILD TRUE
+    COPY_PLUGIN_AFTER_BUILD ${WLA_COPY_PLUGIN_AFTER_BUILD}  # [Claude 2026-10-27] was TRUE; still on by default
 )
 
 # Explicitly set runtime library for the plugin target (belt and suspenders approach)
@@ -61,8 +66,15 @@ endif()
 
 # Run the Python script to generate the file list
 # =====================================================================
+# [Claude 2026-10-27] Find Python instead of assuming "python3": on Windows "python3" can be the Microsoft Store
+# stub, which fails (it did on the mini PC). Falls back to python3 as before if CMake can't find one.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if (NOT Python3_EXECUTABLE)
+    set(Python3_EXECUTABLE python3)
+endif()
+
 execute_process(
-    COMMAND ${CMAKE_COMMAND} -E env python3 ${CMAKE_CURRENT_SOURCE_DIR}/createSourceList.py
+    COMMAND ${CMAKE_COMMAND} -E env ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/createSourceList.py
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     RESULT_VARIABLE PYTHON_RUN_RESULT
 )
@@ -138,3 +150,52 @@ target_compile_definitions(${PROJECT_NAME}
 # =====================================================================
 file(GLOB_RECURSE ALL_JUCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../libs/juce/modules/juce_*")
 source_group("JUCE Modules" FILES ${ALL_JUCE_FILES})
+# ReviewRender (only with -DWLA_REVIEW_RENDER=ON; release and CI builds leave it out): runs Tertiary's processor and
+# editor offline for promo and review material, the audio and the UI's frames in sync. See review/ReviewRender.cpp.
+option(WLA_REVIEW_RENDER "Build the offline ReviewRender tool" OFF)
+if (WLA_REVIEW_RENDER)
+    juce_add_console_app(ReviewRender PRODUCT_NAME "ReviewRender")
+    target_sources(ReviewRender PRIVATE ${PLUGIN_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/review/ReviewRender.cpp)
+    target_compile_definitions(ReviewRender PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0
+        JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1
+        # The plugin macros its sources read, as juce_add_plugin would set them
+        JucePlugin_Name="${wPLUGIN_NAME}" JucePlugin_VersionString="${wPROJECT_VERSION}" JucePlugin_IsSynth=0
+        JucePlugin_WantsMidiInput=0 JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0)
+    target_include_directories(ReviewRender PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_link_libraries(ReviewRender PRIVATE ${PROJECT_NAME}BinaryData juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
+    if (MSVC)
+        set_property(TARGET ReviewRender PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+endif()
+
+# [Claude 2026-10-27] TertiaryTests (only with -DWLA_TESTS=ON; release builds leave it out): unit tests for the 1.1
+# changes (license re-check with a pretend server, sample-rate and tempo changes, no allocation in processBlock,
+# state save/restore, demo mode). Run: TertiaryTests  (exit code 0 = all passed). See tests/TertiaryTests.cpp.
+option(WLA_TESTS "Build the TertiaryTests unit tests" OFF)
+if (WLA_TESTS)
+    juce_add_console_app(TertiaryTests PRODUCT_NAME "TertiaryTests")
+    target_sources(TertiaryTests PRIVATE ${PLUGIN_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/tests/TertiaryTests.cpp)
+    target_compile_definitions(TertiaryTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0
+        JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1 JUCE_UNIT_TESTS=0
+        JucePlugin_Name="${wPLUGIN_NAME}" JucePlugin_VersionString="${wPROJECT_VERSION}" JucePlugin_IsSynth=0
+        JucePlugin_WantsMidiInput=0 JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0)
+    target_include_directories(TertiaryTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source)
+    target_link_libraries(TertiaryTests PRIVATE ${PROJECT_NAME}BinaryData juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
+    if (MSVC)
+        set_property(TARGET TertiaryTests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+
+    # [Claude 2026-10-27] HostTest: loads the BUILT plugin (VST3, or the installed AU on a Mac) as a DAW does and runs
+    # the manual checklist automatically. See tests/HostTest.cpp. Also built only with -DWLA_TESTS=ON.
+    juce_add_console_app(HostTest PRODUCT_NAME "HostTest")
+    target_sources(HostTest PRIVATE ${PLUGIN_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/tests/HostTest.cpp)
+    target_compile_definitions(HostTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0
+        JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1 JUCE_PLUGINHOST_VST3=1 JUCE_PLUGINHOST_AU=$<BOOL:${APPLE}>
+        JucePlugin_Name="${wPLUGIN_NAME}" JucePlugin_VersionString="${wPROJECT_VERSION}" JucePlugin_IsSynth=0
+        JucePlugin_WantsMidiInput=0 JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0)
+    target_include_directories(HostTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source)
+    target_link_libraries(HostTest PRIVATE ${PROJECT_NAME}BinaryData juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
+    if (MSVC)
+        set_property(TARGET HostTest PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+endif()

@@ -19,7 +19,8 @@ namespace audio_plugin {
 
 class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                      public juce::Timer,
-                                     public juce::Button::Listener {
+                                     public juce::Button::Listener,
+                                     public juce::ChangeListener {   // [Claude 2026-10-27] hears the license check
     public:
         AudioPluginAudioProcessorEditor(AudioPluginAudioProcessor&);
         ~AudioPluginAudioProcessorEditor() override;
@@ -50,6 +51,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
 		/* Used by GUI and self to update the state, upon Key Checking or GUI Activation */
         void updateDemoState(bool newDemoState);
+
+        /* [Claude 2026-10-27] The weekly license re-check finished (LicenseCheck.h) */
+        void changeListenerCallback(juce::ChangeBroadcaster* source) override;
+        void showLicenseCheckResult();
 
     private:
         juce::String mNameSpace{"PluginEditor"};

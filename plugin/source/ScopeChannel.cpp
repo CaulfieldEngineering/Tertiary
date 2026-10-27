@@ -282,7 +282,7 @@ void ScopeChannel::paintGridLines(juce::Graphics& g)
     {
 
         // Draw Markers at Single-Beat Intervals
-        if (i % (int)beatSpacing == 0)
+        if (i % juce::jmax(1, (int)beatSpacing) == 0)   // [Claude 2026-10-27] jmax: (int)beatSpacing could be 0, a divide-by-zero crash
         {
             g.setColour(juce::Colours::darkgrey);
 
@@ -458,8 +458,10 @@ void ScopeChannel::generateLFOPathForDrawing(   juce::Path &lfoStrokePath,
         else
             scalar = lfoWaveRate * 60.f / lfoHostBPM;
 
-        // Get Relative Phase Shift.  Divide by 2 takes it from 360-deg to 180-deg shift.
-        auto mRelativePhase = lfoRelativePhase / waveTableDownSampleSize / 2;
+        // Get Relative Phase Shift.
+        // [Claude 2026-10-27] No more divide by 2: LFO::setTempo now gives the phase in wavetable samples, so the
+        // scope draws exactly what it drew before, and the audio now matches it.
+        auto mRelativePhase = lfoRelativePhase / waveTableDownSampleSize;
 
         // Get Display Phase Shift
         float mDisplayPhase = scrollCenter * bounds.getWidth();
@@ -528,7 +530,7 @@ void ScopeChannel::resized()
 {
     //WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
 
-    while (scrollZoom == 0 && scrollCenter == 0)
+    if (scrollZoom == 0 && scrollCenter == 0)   // [Claude 2026-10-27] was 'while': if both stayed 0 it looped forever
     {
         scrollZoom = sliderScroll.getScrollZoom();
         scrollCenter = sliderScroll.getScrollCenter();

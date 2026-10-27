@@ -4,6 +4,7 @@
 #include <juce_dsp/juce_dsp.h>
 #include "LFO.h"
 #include "Params.h"
+#include "LicenseCheck.h"   // [Claude 2026-10-27] Weekly serial-key re-check and update check
 
 namespace audio_plugin {
 
@@ -104,6 +105,12 @@ namespace audio_plugin {
         //#ifdef DEMO_VERSION
 		bool getIsDemoModeEnabled() { return effectEnabled; }
         //#endif
+
+        /* License Re-Check & Update Check */
+        // =========================================================================
+        // [Claude 2026-10-27] Started once by the editor; runs on its own thread, never on the audio thread
+        void startLicenseCheck();
+        LicenseCheckThread licenseCheck;
         
         
         /* Input & Output Meters */
@@ -128,16 +135,18 @@ namespace audio_plugin {
         float fifo[fftSize];
         float fftData[2 * fftSize];
         float scopeData[scopeSize];
-        bool nextFFTBlockReady = false;
+        std::atomic<bool> nextFFTBlockReady { false };   // [Claude 2026-10-27] atomic: set by the audio thread, cleared by the GUI
         int fifoIndex = 0;
 
     private:
 
 		void checkActivationStatusOnStartup();
 
-        bool parameterChangedLfoLow{true};
-        bool parameterChangedLfoMid{true};
-        bool parameterChangedLfoHigh{true};
+        // [Claude 2026-10-27] atomic: set by parameterChanged (any thread), read by the audio thread
+        std::atomic<bool> parameterChangedLfoLow{true};
+        std::atomic<bool> parameterChangedLfoMid{true};
+        std::atomic<bool> parameterChangedLfoHigh{true};
+        double lastHostBpm{0.0};    // [Claude 2026-10-27] To follow host tempo changes
 
         /* Main DSP */
         void applyAmplitudeModulation();
@@ -152,9 +161,9 @@ namespace audio_plugin {
         // =========================================================================
 		/* Stores the state of the Serial Key Activation */
 		std::unique_ptr<juce::PropertiesFile> propertiesFile;
-        bool mIsDemoVersion { true };
+        std::atomic<bool> mIsDemoVersion { true };   // [Claude 2026-10-27] atomic: written by the GUI and license thread
 
-		bool effectEnabled = true;
+		std::atomic<bool> effectEnabled { true };    // [Claude 2026-10-27] atomic: read by the GUI timer
 
 		//#ifdef DEMO_VERSION
         int demoActiveTimeLimit{50};
@@ -179,7 +188,7 @@ namespace audio_plugin {
 
         /* FrequencyResponse */
         // =========================================================================
-        bool fftPickoffPointIsInput{false};
+        std::atomic<bool> fftPickoffPointIsInput{false};   // [Claude 2026-10-27] atomic: set by the GUI
         void pushSignalToFFT(juce::AudioBuffer<float>& buffer);
 
         /* BPM and Host Info */

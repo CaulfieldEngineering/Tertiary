@@ -4,9 +4,11 @@
 set(wPLUGIN_NAME                "Tertiary")
 set(wCOMPANY_NAME               "Wonderland Audio")
 set(wCOMPANY_ID                 "WonderlandAudio")
-set(wPROJECT_VERSION            "1.0.2")
+set(wPROJECT_VERSION            "1.1.0")
 set(wPLUGIN_MANUFACTURER_CODE   "WLAD")
-set(wFORMATS                    VST3 Standalone)
+# [Claude 2026-10-27] 1.1.0, and AU added (Mac only; JUCE leaves AU out on Windows by itself).
+# The codes above and below are unchanged: they are Tertiary's identity in every DAW session (VST3 and AU).
+set(wFORMATS                    VST3 AU Standalone)
 
 set(wIS_SYNTH                   FALSE)
 set(wNEEDS_MIDI_INPUT           FALSE)
