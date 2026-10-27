@@ -130,7 +130,8 @@ def render_held(name):
     subprocess.run(["node", "duet.mjs", "render", str(full), "--from", str(first), "--to", str(first + 3 * bars),
                     "--tracks", tracks + ",Room,Hall"], cwd=r"C:\Users\Joe\Documents\GitHub\duet", env=env, check=True)
     one = bars * 4 * 60.0 / bpm
-    TRACKS[name] = ([str(full)], one, 2 * one, 0.0, 1, False)
+    # a 50 ms crossfade from the third pass into the start: free-running modulation (rotary, LFOs) is not in phase
+    TRACKS[name] = ([str(full)], one, 2 * one, 0.05, 1, False)
 
 
 if __name__ == "__main__":
