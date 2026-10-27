@@ -31,5 +31,5 @@ Joe: more movement, a camera on the UI, a better tagline, dynamic text, no "Joe 
 ## Web demo tracks (2026-10-27)
 
 - `web_tracks.py`: dry, looping, -18 LUFS, 16-bit 44.1 kHz tracks for `plugin/sample_audio/` (the live demo's playlist). `--held` renders the MIDI tracks from the Duet project "Tertiary Web Demo" once their instruments are loaded (Kontakt Factory Selection 2, Analog Dreams, GroveBass).
-- `web_midi.py`: their original MIDI, each loop written three times so the render keeps a middle pass with real tails.
+- `web_midi.py`: their original MIDI (three pads, electric piano, organ, strings, an ambient swell; no drums, no Octavio material, Joe 2026-10-27), each loop written three times so the render keeps a middle pass with real tails.
 - `web_test.mjs`: plays every track of a local copy of the web demo in headless Chrome (`node web_test.mjs <url> <profile dir>`, with Wonderlab's `scripts/serve.js` serving it).

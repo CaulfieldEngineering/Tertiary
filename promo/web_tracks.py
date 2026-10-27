@@ -31,7 +31,6 @@ RENDERS = HERE / "work" / "web" / "renders"  # Duet renders from the project "Te
 TRACKS = {
     "Acoustic Guitar": ([str(WORK / "src" / "Acoustic Guitar 96k.wav")], 0.6, 33.0, 0.35, 1, True),
     "Clean Electric Guitar": ([str(RENDERS / "di-chain.wav")], 1.0, 29.0, 0.35, 1, False),
-    "Bass and Drums": ([str(SOURCES / "Octavio B1 bass (Duet render).wav"), str(SOURCES / "Octavio B1 drums (Duet render).wav")], 0.0, None, 0.02, 2, False),
 }
 
 
@@ -112,14 +111,15 @@ def build(name, spec):
 
 
 # Tracks from original MIDI (web_midi.py) in the Duet project "Tertiary Web Demo", held until the new Kontakt
-# libraries are loaded on their tracks (Joe, 2026-10-27). name: (first bar, bars a pass, bpm, Duet tracks)
+# libraries are loaded on their tracks (Joe, 2026-10-27). No drums and no Octavio material in the demo tracks (Joe). name: (first bar, bars a pass, bpm, Duet tracks)
 HELD = {
-    "Synth Pad": (1, 8, 75, "SYNTH PAD"),
+    "Warm Pad": (1, 8, 75, "WARM PAD"),
     "Electric Piano": (27, 12, 88, "EPIANO"),
     "Organ": (65, 8, 70, "ORGAN"),
     "Strings": (91, 12, 92, "STRINGS"),
-    "Small Band": (129, 12, 100, "BAND DRUMS,BAND BASS,BAND KEYS"),
+    "Airy Pad": (129, 8, 80, "AIRY PAD"),
     "Ambient Swell": (167, 8, 60, "AMBIENT PAD"),
+    "Dark Pad": (245, 8, 64, "DARK PAD"),
 }
 
 
