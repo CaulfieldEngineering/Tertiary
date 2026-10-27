@@ -31,6 +31,9 @@ PIECES = [
     ("Airy Pad", 80, 8, 129, {"AIRY PAD": "a bright, airy pad (Analog Dreams or Factory Selection 2)"}),
     ("Ambient Swell", 60, 8, 167, {"PAD": "a soft pad or bowed sound, into a long hall"}),
     ("Dark Pad", 64, 8, 245, {"DARK PAD": "a dark, slowly evolving pad (Analog Dreams)"}),
+    # Joe, 2026-10-27, on the Content Rig's Jazz Guitar: "make it known that these Kontakt guitar sounds are pretty dang
+    # good"; a guitar track for the demo: "yes".
+    ("Clean Guitar Chords", 72, 12, 275, {"GUITAR": "the clean jazz guitar (Kontakt Factory Selection 2, Jazz Guitar)"}),
 ]
 
 
@@ -55,6 +58,62 @@ def compose(name):
         prog = [[62, 69, 74, 76, 81], [59, 66, 71, 74, 78], [55, 62, 67, 71, 76], [57, 64, 69, 73, 78],
                 [62, 69, 74, 76, 83], [54, 62, 66, 69, 76], [55, 62, 67, 69, 74], [57, 64, 67, 69, 76]]
         chords_held(n, "AIRY PAD", prog, 62, 20)
+    elif name == "Clean Guitar Chords":
+        # Joe, 2026-10-27: "just make sure the samples are musically sound. And interesting. Something someone would
+        # really play." A slow soul / Little Wing style clean part in E, 72 bpm, 12 bars (40 s), written as a guitarist
+        # plays it: each chord a real shape (frets per string, low E to high e, x = not played) with open strings
+        # ringing; a picked pattern with loose timing, a muted chuck now and then, hammer-on fills and a short hook in
+        # the gaps. Colour: add9s, maj7s, F#m11, sus4 to major, a passing E/G# bass and the borrowed bVI-bVII (Cmaj7 to
+        # Dadd9) before it resolves on Emaj7.
+        open_ = [40, 45, 50, 55, 59, 64]
+        shapes = {"Eadd9": "0 2 4 4 0 0", "C#m7": "x 4 6 4 5 4", "Aadd9": "x 0 2 4 2 0", "Bsus4": "x 2 4 4 5 2", "B": "x 2 4 4 4 2",
+                  "E/G#": "4 x 2 1 0 0", "Amaj7": "x 0 2 1 2 0", "F#m11": "2 x 2 2 0 0", "B7sus4": "x 2 4 2 5 2", "B7": "x 2 1 2 0 2",
+                  "G#m7": "4 6 4 4 4 4", "Cmaj7": "x 3 2 0 0 0", "Dadd9": "x x 0 2 3 0", "Emaj7": "0 2 1 1 0 0"}
+        frets = {k: [None if f == "x" else int(f) for f in v.split()] for k, v in shapes.items()}
+        # (chord, beat it starts) per bar
+        form = [[("Eadd9", 0)], [("C#m7", 0)], [("Aadd9", 0)], [("Bsus4", 0), ("B", 2)],
+                [("Eadd9", 0), ("E/G#", 2)], [("Amaj7", 0)], [("F#m11", 0)], [("B7sus4", 0), ("B7", 2)],
+                [("C#m7", 0), ("G#m7", 2)], [("Aadd9", 0)], [("Cmaj7", 0), ("Dadd9", 2)], [("Emaj7", 0)]]
+        dyn = [0.8, 0.82, 0.88, 0.92, 0.85, 0.88, 0.95, 1.0, 1.02, 0.96, 1.05, 0.78]
+        # the picked pattern over two beats: (beat offset, which string counted from the chord's lowest played one)
+        half = [(0.0, 0), (0.5, 2), (1.0, 3), (1.5, 4)]
+        def strings(ch):
+            return [(k, open_[k] + f) for k, f in enumerate(frets[ch]) if f is not None]
+        for bar, chords in enumerate(form):
+            t0 = bar * BAR
+            last = bar == len(form) - 1
+            for ci, (ch, start) in enumerate(chords):
+                st = strings(ch)
+                span = (4 - start) if ci == len(chords) - 1 else chords[ci + 1][1] - start
+                if last:   # the last chord rolled once and left to ring
+                    for k, (_, p) in enumerate(st):
+                        t, v = hum(t0 + k * 30, int(84 * dyn[bar]) - k * 2, 3, 3)
+                        n.append(("GUITAR", t, p, 2 * BAR - 60, v))
+                    continue
+                for h in range(int(span // 2)):
+                    for off, idx in half:
+                        beat = start + 2 * h + off
+                        sidx = min(idx, len(st) - 1)
+                        p = st[sidx][1]
+                        accent = 88 if off == 0 else (72 if off == 1.0 else 62)
+                        t, v = hum(t0 + int(beat * PPQ), int(accent * dyn[bar]), 9, 7)
+                        ring = int((span - (beat - start)) * PPQ) - 30   # let it ring to the next chord
+                        n.append(("GUITAR", t, p, max(PPQ // 2, ring), v))
+            if bar in (2, 6, 9):   # a muted chuck on the and of 4: three strings, very short and soft
+                for k in (2, 3, 4):
+                    t, v = hum(t0 + int(3.5 * PPQ) + k * 8, 34, 3, 4)
+                    n.append(("GUITAR", t, open_[k] + 2, 45, v))
+        # fills and the hook, on the top strings, from the hand position of the chord under them:
+        # (bar, beat, pitch, beats long, velocity)
+        line = [(1, 3.0, 64, 0.5, 70), (1, 3.5, 66, 0.25, 74), (1, 3.75, 68, 0.75, 80),        # hook: e 0-2-4 hammer-on
+                (3, 3.0, 66, 0.25, 74), (3, 3.25, 68, 0.25, 78), (3, 3.5, 71, 1.0, 86),         # fill into bar 5: e 2-4-7
+                (5, 3.0, 64, 0.5, 72), (5, 3.5, 66, 0.25, 76), (5, 3.75, 68, 0.75, 82),         # the hook again
+                (7, 2.5, 63, 0.5, 80), (7, 3.0, 66, 0.5, 84), (7, 3.5, 64, 0.5, 78),            # B7 fill: B 4, e 2, e 0
+                (9, 3.0, 68, 0.5, 80), (9, 3.5, 71, 0.5, 86), (9, 3.75, 73, 0.75, 90),          # the hook reaching up: e 4-7-9
+                (10, 3.5, 66, 0.5, 76)]                                                          # F# over D, into the resolve
+        for bar, beat, p, l, v in line:
+            t, vv = hum(bar * BAR + int(beat * PPQ), v, 6, 4)
+            n.append(("GUITAR", t, p, int(l * PPQ) - 15, vv))
     elif name == "Dark Pad":  # C minor, low and close, two bars a chord, one inner voice moving each bar
         prog = [[36, 48, 51, 55, 58], [36, 48, 51, 55, 56], [32, 44, 48, 51, 55], [32, 44, 48, 50, 55],
                 [29, 41, 48, 51, 56], [29, 41, 48, 53, 56], [31, 43, 47, 50, 55], [31, 43, 46, 50, 55]]

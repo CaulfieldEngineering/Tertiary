@@ -118,6 +118,7 @@ HELD = {
     "Airy Pad": (129, 8, 80, "AIRY PAD"),
     "Ambient Swell": (167, 8, 60, "AMBIENT PAD"),
     "Dark Pad": (245, 8, 64, "DARK PAD"),
+    "Clean Guitar Chords": (275, 12, 72, "GUITAR"),
 }
 
 

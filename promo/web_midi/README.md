@@ -23,3 +23,6 @@ render all three and keep the middle pass (see web_tracks.py).
 
 ## Dark Pad: 64 bpm, 8 bars a pass, starts at bar 245 in Duet (passes at bars 245, 253, 261)
 - `Dark Pad - DARK PAD.mid`: a dark, slowly evolving pad (Analog Dreams). 40 notes a pass.
+
+## Clean Guitar Chords: 72 bpm, 12 bars a pass, starts at bar 275 in Duet (passes at bars 275, 287, 299)
+- `Clean Guitar Chords - GUITAR.mid`: the clean jazz guitar (Kontakt Factory Selection 2, Jazz Guitar). 119 notes a pass.
