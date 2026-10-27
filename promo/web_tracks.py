@@ -111,13 +111,13 @@ def build(name, spec):
 # Tracks from original MIDI (web_midi.py) in the Duet project "Tertiary Web Demo", held until the new Kontakt
 # libraries are loaded on their tracks (Joe, 2026-10-27). No drums and no Octavio material in the demo tracks (Joe). name: (first bar, bars a pass, bpm, Duet tracks)
 HELD = {
-    "Warm Pad": (1, 8, 75, "WARM PAD"),
-    "Electric Piano": (27, 12, 88, "EPIANO"),
-    "Organ": (65, 8, 70, "ORGAN"),
-    "Strings": (91, 12, 92, "STRINGS"),
-    "Airy Pad": (129, 8, 80, "AIRY PAD"),
-    "Ambient Swell": (167, 8, 60, "AMBIENT PAD"),
-    "Dark Pad": (245, 8, 64, "DARK PAD"),
+    "Warm Pad": (1, 8, 60, "WARM PAD"),
+    "Electric Piano": (27, 12, 84, "EPIANO"),
+    "Organ": (65, 8, 62, "ORGAN"),
+    "Strings": (91, 12, 84, "STRINGS"),
+    "Airy Pad": (129, 12, 80, "AIRY PAD"),
+    "Ambient Swell": (167, 8, 56, "AMBIENT PAD"),
+    "Dark Pad": (245, 8, 60, "DARK PAD"),
     "Clean Guitar Chords": (275, 12, 72, "GUITAR"),
 }
 
