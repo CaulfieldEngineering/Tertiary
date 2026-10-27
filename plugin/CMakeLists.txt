@@ -138,3 +138,20 @@ target_compile_definitions(${PROJECT_NAME}
 # =====================================================================
 file(GLOB_RECURSE ALL_JUCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../libs/juce/modules/juce_*")
 source_group("JUCE Modules" FILES ${ALL_JUCE_FILES})
+# ReviewRender (only with -DWLA_REVIEW_RENDER=ON; release and CI builds leave it out): runs Tertiary's processor and
+# editor offline for promo and review material, the audio and the UI's frames in sync. See review/ReviewRender.cpp.
+option(WLA_REVIEW_RENDER "Build the offline ReviewRender tool" OFF)
+if (WLA_REVIEW_RENDER)
+    juce_add_console_app(ReviewRender PRODUCT_NAME "ReviewRender")
+    target_sources(ReviewRender PRIVATE ${PLUGIN_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/review/ReviewRender.cpp)
+    target_compile_definitions(ReviewRender PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0
+        JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1
+        # The plugin macros its sources read, as juce_add_plugin would set them
+        JucePlugin_Name="${wPLUGIN_NAME}" JucePlugin_VersionString="${wPROJECT_VERSION}" JucePlugin_IsSynth=0
+        JucePlugin_WantsMidiInput=0 JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0)
+    target_include_directories(ReviewRender PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_link_libraries(ReviewRender PRIVATE ${PROJECT_NAME}BinaryData juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
+    if (MSVC)
+        set_property(TARGET ReviewRender PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+endif()

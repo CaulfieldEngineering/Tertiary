@@ -3,3 +3,8 @@ libs/
 plugin/sourceListResult.cmake
 node_modules/
 temp_*
+
+# Offline ReviewRender build and promo work files (2026-10-26)
+build-review/
+build-review*.log
+promo/work/
