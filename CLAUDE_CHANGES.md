@@ -5,7 +5,7 @@ Written by Claude, 2026-10-27, at Joe's request: "Do your best to indicate which
 How to find it in the code:
 - Every block Claude added or changed starts with `// [Claude 2026-10-27] what and why`. Small fixes inside your lines have the same tag at the end of the line. Search the repo for `[Claude 2026-10-27]`.
 - New files say at the top that Claude wrote them, when and why.
-- Everything is on the `release-1.1` branch, in eight commits, one per area below. Each commit can be reverted on its own (`git revert <hash>`), oldest last, except where "Undo" says otherwise.
+- Everything is on the `release-1.1` branch, in small commits, one per area below. Each commit can be reverted on its own (`git revert <hash>`), oldest last, except where "Undo" says otherwise.
 
 Nothing was reformatted, renamed or "modernised". Your files keep their layout, banners and naming.
 
