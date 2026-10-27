@@ -29,8 +29,10 @@ jobs:
         include:
           - os: windows-latest
             cmake_arch: -A x64
+          # [Claude 2026-10-27] Universal: Apple Silicon and Intel in one binary (was x86_64 only).
+          # The oldest macOS (11.0) is set in CMakeLists.txt.
           - os: macos-latest
-            cmake_arch: -DCMAKE_OSX_ARCHITECTURES=x86_64
+            cmake_arch: -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
 
     runs-on: ${{ matrix.os }}
 
@@ -286,6 +288,21 @@ jobs:
         # Only verify code signature, skip notarization check
         codesign --display --verbose=2 "$VST3_PATH"
 
+        # [Claude 2026-10-27] AU bundle, signed exactly like the VST3
+        echo "Signing AU bundle..."
+        # ====================================
+        AU_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/AU/${REPOSITORY_NAME}.component"
+        codesign --force \
+          --sign "Developer ID Application" \
+          --verbose \
+          --deep --strict --options=runtime --timestamp \
+          "$AU_PATH"
+
+        echo "Verifying AU signature..."
+        # ====================================
+        codesign --verify --deep --verbose=2 "$AU_PATH"
+        codesign --display --verbose=2 "$AU_PATH"
+
         echo "Signing standalone application..."
         # ====================================
         APP_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone/${REPOSITORY_NAME}.app"
@@ -418,6 +435,57 @@ jobs:
         fi
 
         echo "✓ Successfully created VST3 package at: $PKG_PATH"
+
+
+    # Package: AU (Mac) - All Cases
+    # [Claude 2026-10-27] New in 1.1: the AU, for Logic and GarageBand. Same as the VST3 step, into Components.
+    # ==========================================================================================
+    - name: Create AU Package (Mac Only)
+      if: matrix.os == 'macos-latest'
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+      run: |
+        # Create output directory
+        mkdir -p ${GITHUB_WORKSPACE}/build/output
+
+        # Format COMPANY_NAME by removing spaces
+        FORMATTED_COMPANY_NAME=$(echo "$wCOMPANY_NAME" | tr -d ' ')
+
+        # Determine the suffix based on the version
+        SUFFIX=""
+        if [[ "${{ matrix.version }}" == "Demo" ]]; then
+          SUFFIX=".D"
+        fi
+
+        # Define paths
+        AU_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/AU/${REPOSITORY_NAME}.component"
+        PKG_PATH="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_AU_${wPROJECT_VERSION}${SUFFIX}.pkg"
+
+        echo "Checking for AU bundle before packaging..."
+        if [ ! -d "$AU_PATH" ]; then
+          echo "ERROR: AU bundle not found at: $AU_PATH"
+          echo "Contents of $(dirname "$AU_PATH"):"
+          ls -la "$(dirname "$AU_PATH")"
+          exit 1
+        fi
+
+        echo "✓ Found AU bundle at: $AU_PATH"
+        echo "Creating AU package..."
+
+        pkgbuild \
+          --root "$(dirname "$AU_PATH")" \
+          --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.component" \
+          --version "$wPROJECT_VERSION" \
+          --install-location "/Library/Audio/Plug-Ins/Components" \
+          "$PKG_PATH"
+
+        # Verify package was created and is not empty
+        if [ ! -s "$PKG_PATH" ]; then
+          echo "ERROR: AU package was not created, or is empty: $PKG_PATH"
+          exit 1
+        fi
+
+        echo "✓ Successfully created AU package at: $PKG_PATH"
           
 
     # Sign Individual Packages (Mac) - 2024.10.25 CLAUDE - All Cases
@@ -484,10 +552,23 @@ jobs:
         # ====================================
         pkgutil --check-signature "${VST3_PKG%.pkg}_signed.pkg"
 
+        # [Claude 2026-10-27] AU package, signed like the VST3 package
+        echo "Signing AU package..."
+        # ====================================
+        AU_PKG="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_AU_${wPROJECT_VERSION}${SUFFIX}.pkg"
+        productsign --sign "Developer ID Installer" \
+          "$AU_PKG" \
+          "${AU_PKG%.pkg}_signed.pkg"
+
+        echo "Verifying AU package signature..."
+        # ====================================
+        pkgutil --check-signature "${AU_PKG%.pkg}_signed.pkg"
+
         # Replace unsigned with signed packages
         # ====================================
         mv "${STANDALONE_PKG%.pkg}_signed.pkg" "$STANDALONE_PKG"
         mv "${VST3_PKG%.pkg}_signed.pkg" "$VST3_PKG"
+        mv "${AU_PKG%.pkg}_signed.pkg" "$AU_PKG"
 
         # Clean up
         # ====================================

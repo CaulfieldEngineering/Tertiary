@@ -5,6 +5,7 @@
 
   <choices-outline>
     <line choice="vst3"/>
+    <line choice="au"/>
     <line choice="standalone"/>
   </choices-outline>
 
@@ -12,11 +13,17 @@
     <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.vst3"/>
   </choice>
 
+  <!-- [Claude 2026-10-27] AU, for Logic and GarageBand -->
+  <choice id="au" title="@wPLUGIN_NAME@ - AU" description="Install the AU (Audio Unit) version of @wPLUGIN_NAME@, for Logic Pro and GarageBand" start_selected="true">
+    <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.component"/>
+  </choice>
+
   <choice id="standalone" title="@wPLUGIN_NAME@ - Standalone" description="Install the standalone version of @wPLUGIN_NAME@" start_selected="true">
     <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.standalone"/>
   </choice>
 
   <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.vst3" version="@wPROJECT_VERSION@">@wPLUGIN_NAME@_VST3_@wPROJECT_VERSION@.pkg</pkg-ref>
+  <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.component" version="@wPROJECT_VERSION@">@wPLUGIN_NAME@_AU_@wPROJECT_VERSION@.pkg</pkg-ref>
   <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.standalone" version="@wPROJECT_VERSION@">@wPLUGIN_NAME@_Standalone_@wPROJECT_VERSION@.pkg</pkg-ref>
 
 </installer-script>

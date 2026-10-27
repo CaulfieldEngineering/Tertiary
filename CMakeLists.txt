@@ -14,6 +14,13 @@ if(WIN32 AND NOT CMAKE_GENERATOR_PLATFORM)
 endif()
 
 
+# [Claude 2026-10-27] Oldest macOS the Mac build runs on (Joe's call, 2026-10-27: macOS 11 Big Sur).
+# Must be set before project(). Without it the build needed the build machine's macOS (15).
+# The universal (Apple Silicon + Intel) build is chosen in the workflows: -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+# =====================================================================
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Oldest macOS supported")
+
+
 # Include the configuration file
 # =====================================================================
 include(${CMAKE_CURRENT_SOURCE_DIR}/config.cmake)
