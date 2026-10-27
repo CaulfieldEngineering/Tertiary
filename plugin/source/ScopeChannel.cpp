@@ -282,7 +282,7 @@ void ScopeChannel::paintGridLines(juce::Graphics& g)
     {
 
         // Draw Markers at Single-Beat Intervals
-        if (i % (int)beatSpacing == 0)
+        if (i % juce::jmax(1, (int)beatSpacing) == 0)   // [Claude 2026-10-27] jmax: (int)beatSpacing could be 0, a divide-by-zero crash
         {
             g.setColour(juce::Colours::darkgrey);
 
@@ -528,7 +528,7 @@ void ScopeChannel::resized()
 {
     //WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
 
-    while (scrollZoom == 0 && scrollCenter == 0)
+    if (scrollZoom == 0 && scrollCenter == 0)   // [Claude 2026-10-27] was 'while': if both stayed 0 it looped forever
     {
         scrollZoom = sliderScroll.getScrollZoom();
         scrollCenter = sliderScroll.getScrollCenter();

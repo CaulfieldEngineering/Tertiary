@@ -87,6 +87,13 @@ void GlobalControls::timerCallback()
               highBandControls.setEnabled(true);
         }
     }
+    else if (!lowBandControls.isEnabled())
+    {
+        // [Claude 2026-10-27] Activated during the demo's silent gap: the controls stayed greyed out until reload
+        lowBandControls.setEnabled(true);
+        midBandControls.setEnabled(true);
+        highBandControls.setEnabled(true);
+    }
     //#endif
 }
 
