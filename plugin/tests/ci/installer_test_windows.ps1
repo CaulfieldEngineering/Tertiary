@@ -32,6 +32,7 @@ function Run([string]$Exe, [string[]]$Arguments, [string]$Log, [int]$TimeoutSeco
     Write-Host "running $Log ..."
     $p = Start-Process -FilePath $Exe -ArgumentList $Arguments -NoNewWindow -PassThru `
          -RedirectStandardOutput "results\$Log.log" -RedirectStandardError "results\$Log.err.log"
+    $null = $p.Handle   # without this, PowerShell loses the exit code of a process started without -Wait
     if (-not $p.WaitForExit($TimeoutSeconds * 1000)) {
         Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
         return $false, "timed out after $TimeoutSeconds s"
@@ -80,6 +81,7 @@ Step "HostTest installed VST3" { Run $HostTest @("--vst3", "`"$Vst3`"", "--expec
 # 6. The standalone starts, runs a few seconds, and closes cleanly when its window is closed
 Step "standalone starts and quits" {
     $p = Start-Process -FilePath $App -PassThru
+    $null = $p.Handle
     Start-Sleep -Seconds 6
     if ($p.HasExited) { return $false, "exited by itself, code $($p.ExitCode)" }
     $null = $p.CloseMainWindow()
@@ -92,6 +94,7 @@ Step "uninstall and confirm clean" {
     $uninstaller = Get-ChildItem $AppDir -Filter "unins*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $uninstaller) { return $false, "no uninstaller in $AppDir" }
     $p = Start-Process $uninstaller.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -PassThru
+    $null = $p.Handle
     if (-not $p.WaitForExit(300000)) { return $false, "uninstaller timed out after 300 s" }
     Start-Sleep -Seconds 5   # the uninstaller finishes in a copy of itself
     $left = @($Vst3, $App) | Where-Object { Test-Path $_ }

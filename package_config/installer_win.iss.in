@@ -147,6 +147,9 @@ begin
       InstallMessage := InstallMessage + 'Standalone (.EXE) installed to: ' + #13#10 + StandaloneDirPage.Values[0] + '\{#MyAppExeName}' + #13#10 + #13#10;
     if WizardIsComponentSelected('vst3') then
       InstallMessage := InstallMessage + 'VST3 (.VST3) installed to: ' + #13#10 + VST3DirPage.Values[0] + '\{#MyAppVst3Name}' + #13#10;
-    MsgBox(InstallMessage, mbInformation, MB_OK);
+    // [Claude 2026-10-27] Not in a silent install: a plain MsgBox waits for a click even with /SUPPRESSMSGBOXES,
+    // so "/VERYSILENT" installs never finished (found by the installer test)
+    if not WizardSilent then
+      MsgBox(InstallMessage, mbInformation, MB_OK);
   end;
 end;

@@ -150,7 +150,11 @@ Against the staging (1.0.2) VST3 it fails the sample-rate change, three tempos, 
 
 What the installer test checks (macOS, on Apple Silicon and Intel): `pkgutil --check-signature`, `spctl --assess --type install`, `xcrun stapler validate`; `sudo installer`; the AU, VST3 and app where DAWs look; `codesign --verify --deep --strict` and Gatekeeper on each bundle; `auval` on the installed AU; pluginval and HostTest on the installed VST3 and AU; the standalone starts, runs 6 s and quits; uninstall leaves no files or receipts. Windows: `Get-AuthenticodeSignature` on the installer and on the installed VST3 and app, `/VERYSILENT` install, pluginval and HostTest on the installed VST3, the standalone starts and closes, the Inno uninstaller leaves no files or registry entry. It runs after every staging pipeline run (once this file is on staging), or by hand with a run ID, and a `claude/installer-test...` branch self-tests it with unsigned installers.
 
-Undo: revert the harness commit; nothing in the plugin depends on it.
+Real problems the installer test found, and fixed:
+- **Mac packages were relocatable** (pkgbuild's default). If macOS knew another copy of a bundle (an old download, a build folder, a copied VST3), the installer updated that copy and left /Applications or the plug-in folder empty: on the Intel runner the app "installed" into the build folder. `workflow.yml` now builds each component package with `BundleIsRelocatable` off.
+- **The Windows installer couldn't install silently**: the "Installation Complete!" `MsgBox` in `installer_win.iss.in` waits for a click even with `/SUPPRESSMSGBOXES`. Now only shown when not silent (`if not WizardSilent`).
+
+Undo: revert the harness commits; nothing in the plugin depends on them.
 
 ## Results
 
