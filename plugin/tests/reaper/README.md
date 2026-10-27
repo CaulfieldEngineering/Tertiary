@@ -1,4 +1,10 @@
-# REAPER test (prepared, not run)
+# REAPER test (parked)
+
+**Status 2026-10-27 (Claude):** tried on the mini PC with REAPER 7.83 (evaluation), then parked for the 1.1 release. What was learned:
+- Passing the `.lua` file on REAPER's command line does run it at start-up (the script built the track with the input).
+- A fresh configuration asks "You have not yet selected an audio device" at start-up, which blocks the script. The setting is `audiodev=` in the `[reaper]` section; it takes effect in `%APPDATA%\REAPER\REAPER.ini` but was ignored when given through `-cfgfile`. Values 2 and 3 open WaveOut; 4 and 6 open no device (one of them is probably Dummy Audio). Not yet confirmed which.
+- A portable copy of the program folder is not portable on its own: it still used `%APPDATA%\REAPER`.
+- Still to do: pick the device setting, point `vstpath64` at the release VST3 in the same file, launch minimized, confirm the render-format string, compare. Joe asked that test windows stay minimized and that no REAPER is left running.
 
 Written by Claude, 2026-10-27. REAPER isn't installed on the mini PC; Joe hasn't decided whether to (it is a free 60-day evaluation that keeps working, then a $60 licence). Nothing here has been run yet, so expect a first-run fix or two: the REAPER command-line options and the render-format string are marked "unverified" in the files.
 
