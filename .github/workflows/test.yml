@@ -1,0 +1,280 @@
+# Tests (build and check only, never deploys)
+# ==========================================================================================
+# [Claude 2026-10-27] New file, for Tertiary 1.1. Tests on real Macs without owning one.
+#
+# Runs on pushes to release-* and claude/* branches, and by hand (Actions tab, "Run workflow").
+# It never signs, never uploads to a server and needs no secrets. The deploy pipeline is
+# workflow.yml (staging and v* tags) and is not touched by this file.
+#
+#   mac-build    Apple Silicon (macos-14): builds the universal VST3, AU, ReviewRender and the unit tests,
+#                checks both chip types and macOS 11, runs the unit tests, auval, pluginval, a short render
+#   mac-intel    Intel (macos-15-intel; macos-13 was retired by GitHub in late 2025): no build, tests the
+#                same universal files on Intel: unit tests, auval, pluginval, render
+#   windows      builds the VST3, runs the unit tests, pluginval and the render
+#   compare      compares the renders of all three: they should sound the same
+#   web          compiles the Wonderlab web demo like workflow.yml does, but deploys nothing
+#                (skipped if the CE_GITHUB_PAT secret, used to read the Wonderlab repo, isn't available)
+#
+# Mac minutes count 10x on private repos, so the Intel job reuses the Apple Silicon build.
+# ==========================================================================================
+
+name: Tests (no deploy)
+
+on:
+  push:
+    branches:
+      - 'release-*'
+      - 'claude/*'
+    paths-ignore:
+      - '**.md'
+      - 'promo/**'
+  workflow_dispatch:
+
+# A newer push to the same branch cancels the run still going
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  JUCE_TAG: 8.0.8            # Same as CMakeLists.txt
+  PLUGINVAL_TAG: v1.0.4
+  STRICTNESS: 10             # pluginval strictness (5 is the usual minimum for host compatibility)
+
+jobs:
+
+  # Job: Mac build and test (Apple Silicon)
+  # ==========================================================================================
+  mac-build:
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Get JUCE and tools
+      run: |
+        git clone --depth 1 --branch "$JUCE_TAG" https://github.com/juce-framework/JUCE.git "$RUNNER_TEMP/juce"
+        brew list ninja >/dev/null 2>&1 || brew install ninja
+        brew list ccache >/dev/null 2>&1 || brew install ccache
+        curl -sL -o "$RUNNER_TEMP/pv.zip" "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_TAG/pluginval_macOS.zip"
+        unzip -q -o "$RUNNER_TEMP/pv.zip" -d "$RUNNER_TEMP/pv"
+
+    - name: Compiler cache
+      uses: actions/cache@v4
+      with:
+        path: ~/Library/Caches/ccache
+        key: ccache-mac-${{ github.sha }}
+        restore-keys: ccache-mac-
+
+    - name: Configure (universal, macOS 11)
+      run: |
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+          -DWLA_REVIEW_RENDER=ON -DWLA_TESTS=ON \
+          -DCPM_JUCE_SOURCE="$RUNNER_TEMP/juce" \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+    - name: Build
+      run: cmake --build build --target Tertiary_VST3 Tertiary_AU ReviewRender TertiaryTests
+
+    - name: Collect the built files
+      run: |
+        A=build/plugin
+        mkdir -p out
+        cp -R "$A/Tertiary_artefacts/Release/VST3/Tertiary.vst3" out/
+        cp -R "$A/Tertiary_artefacts/Release/AU/Tertiary.component" out/
+        cp "$A/ReviewRender_artefacts/Release/ReviewRender" out/
+        cp "$A/TertiaryTests_artefacts/Release/TertiaryTests" out/
+
+    - name: Upload the built files (for the Intel job)
+      uses: actions/upload-artifact@v4
+      with:
+        name: mac-universal-build
+        path: out/
+
+    - name: Check, test and render
+      run: bash plugin/tests/ci/mac_checks.sh out "$RUNNER_TEMP/pv/pluginval.app/Contents/MacOS/pluginval" mac-arm64
+
+    - name: Upload logs and renders
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: results-mac-arm64
+        path: results/
+
+
+  # Job: Mac test (Intel), using the universal build above
+  # ==========================================================================================
+  mac-intel:
+    needs: mac-build
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download the universal build
+      uses: actions/download-artifact@v4
+      with:
+        name: mac-universal-build
+        path: out
+
+    - name: Get pluginval
+      run: |
+        curl -sL -o "$RUNNER_TEMP/pv.zip" "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_TAG/pluginval_macOS.zip"
+        unzip -q -o "$RUNNER_TEMP/pv.zip" -d "$RUNNER_TEMP/pv"
+        chmod +x out/ReviewRender out/TertiaryTests
+
+    - name: Check, test and render
+      run: bash plugin/tests/ci/mac_checks.sh out "$RUNNER_TEMP/pv/pluginval.app/Contents/MacOS/pluginval" mac-x86_64
+
+    - name: Upload logs and renders
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: results-mac-x86_64
+        path: results/
+
+
+  # Job: Windows build and test
+  # ==========================================================================================
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Get JUCE and pluginval
+      shell: bash
+      run: |
+        T=$(cygpath -m "$RUNNER_TEMP")   # forward slashes, so CMake doesn't read \ as escapes
+        git clone --depth 1 --branch "$JUCE_TAG" https://github.com/juce-framework/JUCE.git "$T/juce"
+        curl -sL -o "$T/pv.zip" "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_TAG/pluginval_Windows.zip"
+        unzip -q -o "$T/pv.zip" -d "$T/pv"
+
+    - name: Configure and build
+      shell: bash
+      run: |
+        T=$(cygpath -m "$RUNNER_TEMP")
+        cmake -S . -B build -A x64 -DWLA_REVIEW_RENDER=ON -DWLA_TESTS=ON -DCPM_JUCE_SOURCE="$T/juce"
+        cmake --build build --config Release --target Tertiary_VST3 ReviewRender TertiaryTests -- -m
+
+    - name: Test and render
+      shell: bash
+      run: |
+        set -o pipefail
+        mkdir -p results
+        A=build/plugin
+        "$A/TertiaryTests_artefacts/Release/TertiaryTests.exe" 2>&1 | tee results/unit-tests.log
+        "$(cygpath -m "$RUNNER_TEMP")/pv/pluginval.exe" --strictness-level $STRICTNESS --validate-in-process --output-dir results \
+          --validate "$A/Tertiary_artefacts/Release/VST3/Tertiary.vst3" 2>&1 | tee results/pluginval-vst3.log
+        python plugin/tests/regression/render_matrix.py "$A/ReviewRender_artefacts/Release/ReviewRender.exe" \
+          plugin/sample_audio results/renders --quick 2>&1 | tee results/renders.log
+
+    - name: Upload logs and renders
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: results-windows
+        path: results/
+
+
+  # Job: Compare the renders across the three machines
+  # ==========================================================================================
+  compare:
+    needs: [mac-build, mac-intel, windows]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download results
+      uses: actions/download-artifact@v4
+      with:
+        pattern: results-*
+        path: results
+
+    - name: Compare Windows with both Macs
+      run: |
+        # Different compilers and chips round floating point differently; 1e-3 (-60 dBFS) is far below
+        # anything audible here, and the report shows the actual numbers.
+        set -o pipefail
+        python3 plugin/tests/regression/compare_renders.py results/results-windows/renders results/results-mac-arm64/renders \
+          --tolerance 1e-3 --report compare-windows-vs-mac-arm64.txt | tee -a "$GITHUB_STEP_SUMMARY"
+        python3 plugin/tests/regression/compare_renders.py results/results-windows/renders results/results-mac-x86_64/renders \
+          --tolerance 1e-3 --report compare-windows-vs-mac-x86_64.txt | tee -a "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload the comparison
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: render-comparison
+        path: compare-*.txt
+
+
+  # Job: Web demo compiles (Wonderlab), nothing is deployed
+  # ==========================================================================================
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PAT: ${{ secrets.CE_GITHUB_PAT }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Checkout Wonderlab
+      if: env.PAT != ''
+      uses: actions/checkout@v4
+      with:
+        repository: CaulfieldEngineering/Wonderlab
+        path: Wonderlab
+        token: ${{ secrets.CE_GITHUB_PAT }}
+
+    - name: Install Emscripten SDK
+      if: env.PAT != ''
+      uses: mymindstorm/setup-emsdk@v14
+      with:
+        version: 5.0.3
+
+    - name: Install build dependencies
+      if: env.PAT != ''
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ninja-build libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxcomposite-dev           libfreetype-dev libfontconfig1-dev libasound2-dev libgl-dev libcurl4-openssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev
+
+    - name: Build the web demo (same steps as workflow.yml)
+      if: env.PAT != ''
+      shell: bash
+      run: |
+        set -e
+        cmake -S . -B build -DBUILD_DEMO=OFF
+        cmake --build build --target TertiaryBinaryData
+        BINARY_DATA_DIR=$(dirname "$(find build -name 'BinaryData.h' -type f | head -1)")
+        mkdir -p build/web && cd build/web
+        {
+          echo 'cmake_minimum_required(VERSION 3.15)'
+          echo 'project(TertiaryWeb LANGUAGES C CXX)'
+          echo 'set(CMAKE_CXX_STANDARD 20)'
+          echo 'set(CMAKE_CXX_STANDARD_REQUIRED ON)'
+          echo 'set(PLUGIN_NAME "Tertiary")'
+          echo 'set(PLUGIN_VERSION "1.1.0")'
+          echo "set(PLUGIN_SRC_DIR \"${GITHUB_WORKSPACE}/plugin/source\")"
+          echo "set(WONDERLAB_DIR \"${GITHUB_WORKSPACE}/Wonderlab\")"
+          echo 'set(PLUGIN_PROCESSOR_HEADER "PluginProcessor.h")'
+          echo 'set(PLUGIN_PROCESSOR_CLASS audio_plugin::AudioPluginAudioProcessor)'
+          echo "set(PLUGIN_EXTRA_INCLUDE_DIRS \"${GITHUB_WORKSPACE}/${BINARY_DATA_DIR}\")"
+          echo "set(PLUGIN_EXTRA_SOURCE_DIRS \"${GITHUB_WORKSPACE}/${BINARY_DATA_DIR}\")"
+          echo 'include(${WONDERLAB_DIR}/cmake/WonderlabBuild.cmake)'
+        } > CMakeLists.txt
+        emcmake cmake -G Ninja -S . -B . -DCMAKE_BUILD_TYPE=Release
+        emmake ninja
+        ls -la TertiaryWeb.*
+
+    - name: No Wonderlab access
+      if: env.PAT == ''
+      run: echo "CE_GITHUB_PAT is not available to this run; the web build check was skipped."
