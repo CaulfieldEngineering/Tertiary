@@ -57,8 +57,9 @@ Undo: `git revert bb247d9`. Note the license commit (section 4) adds lines next 
 | `GlobalControls.cpp` `timerCallback` | When not in demo, re-enable the band controls if they are disabled | Same demo-gap problem as above: the controls stayed greyed out |
 | `ScopeChannel.cpp` `resized` | `while` became `if` | If zoom and center were both 0 it looped forever (host freeze) |
 | `ScopeChannel.cpp` `paintGridLines` | `i % juce::jmax(1, (int)beatSpacing)` | `(int)beatSpacing` can be 0 for a very narrow scope or a high zoom: integer divide by zero crashes on Intel |
+| `WindowWrapperOscilloscope.h/.cpp` `parameterChanged` (commit `c90f23b`) | Calls `triggerAsyncUpdate()`; the new `handleAsyncUpdate()` does what `parameterChanged` did | `parameterChanged` runs on whatever thread changed the parameter (host automation, the audio thread). It re-laid out the scopes there (setBounds, toFront), which is GUI work off the message thread. On the Mac this aborted pluginval's AU "Editor Automation" test (found by the new CI) |
 
-Tested by: pluginval (opens and resizes the editor), building. Undo: `git revert 9c2c231`.
+Tested by: pluginval (opens, resizes and automates the editor) on Windows, Apple Silicon and Intel; building. Undo: `git revert c90f23b` and `git revert 9c2c231`.
 
 ---
 
@@ -114,7 +115,14 @@ Local, Windows 11, MSVC 2022, JUCE 8.0.8:
 - Unit tests: all pass. Each processor test was run against the 1.0.2 code and failed there.
 - pluginval 1.0.4, strictness 10, VST3: SUCCESS before and after.
 
-CI (Apple Silicon, Intel Mac, Windows): see the PR description.
+CI, run 40546908596 on release-1.1 (all five jobs passed):
+- Apple Silicon (macos-14, macOS 14.8): VST3, AU, ReviewRender and TertiaryTests are universal (arm64 + x86_64), minimum macOS 11.0 on both slices. Unit tests pass. `auval -strict -v aufx EXPL WLAD`: AU VALIDATION SUCCEEDED. pluginval strictness 10: VST3 SUCCESS, AU SUCCESS.
+- Intel (macos-15-intel, macOS 15.7, the same universal files): unit tests pass, auval succeeded, pluginval VST3 and AU SUCCESS.
+- Windows (windows-latest): unit tests pass, pluginval VST3 SUCCESS.
+- Web demo (Wonderlab): compiles with the new files.
+- Renders, 12 per machine (3 inputs x 4 settings, 8 s): Windows vs Intel Mac bit-identical; Windows vs Apple Silicon max difference 2.7e-7 (-131 dBFS), residual about -133 dB (ARM fuses multiply-adds, so rounding differs in the last bit). Inaudible by about 100 dB.
+- The first run (40543756608) found the AU abort fixed in `c90f23b`.
+- Time: about 10 min per Mac build, 2 min for the Intel checks, 8 min Windows. The repo is public, so GitHub bills 0 minutes (it would be about 10 x 12 = 120 Mac quota minutes per run on a private repo).
 
 ---
 

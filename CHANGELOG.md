@@ -15,6 +15,7 @@
 - Steadier in hosts that change the audio block size while playing (no memory is allocated while processing audio).
 - Activating your serial key during the demo's 10-second pause left the effect and the band controls off until the plugin was reopened. Fixed.
 - Closing the plugin window while an activation was in progress could crash the host. Fixed.
+- Automating the scope's display options from the host could crash the plugin window. Fixed.
 - Email addresses with capital letters were refused at activation. Fixed.
 
 **Serial keys and updates**
