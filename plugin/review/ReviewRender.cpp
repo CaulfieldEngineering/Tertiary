@@ -177,8 +177,29 @@ int main (int argc, char* argv[])
     double nextFrame = 0;
     float peak = 0;
     double sumSq = 0;
+    // --report-at t1,t2,... --report-out file.json: every parameter read back from the plugin at those times (seconds
+    // into the render), with the loaded preset's name, for the promo's first-frame and after-change checks.
+    juce::StringArray reportAt;
+    reportAt.addTokens (opt ("--report-at"), ",", "");
+    reportAt.removeEmptyStrings();
+    int nextReport = 0;
+    juce::Array<juce::var> reports;
     for (int pos = 0; pos < total; pos += block)
     {
+        while (nextReport < reportAt.size() && pos / rate >= reportAt[nextReport].getDoubleValue())
+        {
+            auto* snap = new juce::DynamicObject();
+            snap->setProperty ("t", pos / rate);
+            snap->setProperty ("preset", proc->getProgramName (proc->getCurrentProgram()));
+            auto* values = new juce::DynamicObject();
+            for (auto* prm : proc->getParameters())
+                if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (prm))
+                    values->setProperty (rp->getParameterID(), rp->getCurrentValueAsText());
+            snap->setProperty ("values", juce::var (values));
+            reports.add (juce::var (snap));
+            ++nextReport;
+        }
+
         const int n = juce::jmin (block, total - pos);
         const double t = pos / rate;
         for (auto& r : ramps)
@@ -220,6 +241,8 @@ int main (int argc, char* argv[])
         }
     }
 
+    if (opt ("--report-out").isNotEmpty())
+        juce::File (opt ("--report-out")).replaceWithText (juce::JSON::toString (juce::var (reports)));
     out.deleteFile();
     juce::WavAudioFormat wav;
     std::unique_ptr<juce::AudioFormatWriter> w (wav.createWriterFor (new juce::FileOutputStream (out), rate, (unsigned) result.getNumChannels(), 24, {}, 0));

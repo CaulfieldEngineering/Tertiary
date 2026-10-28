@@ -59,3 +59,19 @@ Joe on v4: "Dark drone is garbage. It sounds like white noise.", "I like the app
 - `reels_v5.py`: three beds (Bright shimmer, Warm keys, Organ), each a real progression of eight or so chords that resolves, voiced for the instrument, with a slow top line. The dark drone and the slow texture are gone, and the String Melody patch was tried and dropped; all three were noisy by spectral flatness. Each bed is checked for pitch clarity (energy in sharp spectral peaks, 93 to 96%).
 - Each Reel's first change sweeps both crossovers to 250 Hz and 900 Hz, which balances the bands (soloed lows and mids 3 to 7 dB under the whole) and keeps the low pulse on a phone. The pads were dark, so the bright one is doubled by Factory Selection 2's Chrystal pad and the electric piano plays the upper voices.
 - The end card adds "Try it free in your browser" and wonderlandaudio.com.
+
+## v6 (2026-10-27/28): ten options
+
+Joe: "Let's build 10 options overnight. I'll get better at feedback tomorrow, and not simply slot machine my requests to you." `reels_v6.py` builds ten options (`Promo 2026-10-27 v6\index.md` lists them), varied by hook (five), sound (the three v5 beds plus Jazz Guitar and piano), structure (fast cut, standard, long listen, bypass reveal, dry start) and framing (scope, band display). Each one has:
+- an opening hook line;
+- a visible waveshape change;
+- a wide mid band set before the first frame (200 Hz up to 2.5 or 3 kHz);
+- the lows at full depth;
+- a larger logo;
+- a 0.4 s fade-in.
+
+Joe: "Let's also ensure all parameters are loaded prior to recording". Each option renders from a pre-roll of whole bars of its own opening, which is cut off afterwards. The build then checks:
+- every control, read back from the plugin with ReviewRender `--report-at`, at the first frame and after every change;
+- on the first frame, the band colours at the expected crossovers, the scope's waveforms and the spectrum.
+
+It stops if any check fails. The first frames are saved under `First frames\`.
