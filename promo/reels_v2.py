@@ -36,7 +36,7 @@ TITLE_IMG = TITLE_IMG.crop(TITLE_IMG.getbbox())
 
 # Picked from three (Joe 2026-10-27: keep the AI tells low; prefer what a working engineer would say). The others,
 # "Three bands. Three tremolos." and "Move the highs. Keep the lows.", are in Captions.md.
-TAGLINE = "A tremolo, split into three bands."
+TAGLINE = "Multiband Tremolo"   # Joe, 2026-10-27: "the text should be Multiband Tremolo not 'A tremolo, split into three bands'"
 FPS, SCALE = 30, 3
 W, H = 1080, 1920
 VIEW = (20, 520, 1060, 1234)  # where the plugin sits on the canvas: 1040 x 714, the editor's own 750:515
@@ -387,7 +387,7 @@ def draw_end(img, reel, t):
     text_center(d, y, "Tertiary", NAME, TEXT)
     y += 150
     text_center(d, y, TAGLINE, TAG, TEXT)
-    text_center(d, y + 110, "Multiband tremolo  ·  VST3, AU, standalone", SMALL, MUTED)
+    text_center(d, y + 110, "Multiband Tremolo  ·  VST3, AU, standalone", SMALL, MUTED)
     text_center(d, y + 162, "wonderlandaudio.com", SMALL, MUTED)
     return Image.blend(img, card.convert("RGB"), a)
 

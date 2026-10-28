@@ -37,7 +37,7 @@ TITLE_IMG = TITLE_IMG.crop(TITLE_IMG.getbbox())
 
 # Picked from three (Joe 2026-10-27: keep the AI tells low; prefer what a working engineer would say). The others,
 # "Three bands. Three tremolos." and "Move the highs. Keep the lows.", are in Captions.md.
-TAGLINE = "A tremolo, split into three bands."
+TAGLINE = "Multiband Tremolo"   # Joe, 2026-10-27: "the text should be Multiband Tremolo not 'A tremolo, split into three bands'"
 FPS, SCALE = 30, 3
 W, H = 1080, 1920
 VIEW = (20, 520, 1060, 1234)  # where the plugin sits on the canvas: 1040 x 714, the editor's own 750:515
