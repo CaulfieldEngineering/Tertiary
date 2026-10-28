@@ -259,7 +259,9 @@ namespace audio_plugin {
 
         // [Claude 2026-10-27] copyState() first copies the latest parameter values into the tree. apvts.state on its
         // own is only brought up to date by a timer, so a save just after a change (or offline) stored old values.
-        apvts.copyState().writeToStream(mos);  // Write mos to the APVTS
+        auto state = apvts.copyState();
+        presets.writeToSession(state);   // [Claude 2026-10-27] the current preset's name, saved with the session
+        state.writeToStream(mos);  // Write mos to the APVTS
     }
 
     /* Saves current settings to be recalled at a later date */
@@ -274,6 +276,18 @@ namespace audio_plugin {
 		{
 		apvts.replaceState(
 			tree);  // If valid, load from memory and replace current state
+		// [Claude 2026-10-27] Snap every parameter to a legal value. replaceState() skips a parameter whose stored
+		// value equals what it means now, so an on/off switch left at, say, 0.49 by a host (which acts as off)
+		// stayed at 0.49 after loading a session where it is off. pluginval's state test caught it.
+		for (auto* p : getParameters())
+		  if (auto* r = dynamic_cast<juce::RangedAudioParameter*>(p))
+		  {
+		    const float legal = r->convertTo0to1(r->convertFrom0to1(r->getValue()));
+		    if (legal != r->getValue())
+		      r->setValueNotifyingHost(legal);
+		  }
+
+		presets.restoreFromSession(tree);   // [Claude 2026-10-27] which preset, if any (1.0.x sessions: none)
 		}
 
     }
@@ -1244,27 +1258,40 @@ namespace audio_plugin {
     }
 
     //==============================================================================
+    // [Claude 2026-10-27] The host's program list is the preset list: factory presets, then the user's.
+    // A DAW's preset browser and program-change messages use these.
     int AudioPluginAudioProcessor::getNumPrograms() {
-      return 1;
+      return presets.getNumPresets();
     }
 
     //==============================================================================
     int AudioPluginAudioProcessor::getCurrentProgram() {
-      return 0;
+      return juce::jmax(0, presets.getCurrentIndex());   // [Claude 2026-10-27] "No preset" reports 0
     }
 
     //==============================================================================
-    void AudioPluginAudioProcessor::setCurrentProgram(int index) {}
+    void AudioPluginAudioProcessor::setCurrentProgram(int index) {
+      presets.loadPreset(index);   // [Claude 2026-10-27]
+    }
 
     //==============================================================================
     const juce::String AudioPluginAudioProcessor::getProgramName(int index) {
-      return {};
+      return presets.getPresetName(index);   // [Claude 2026-10-27]
     }
 
     //==============================================================================
     void AudioPluginAudioProcessor::changeProgramName(
         int index,
-                                                   const juce::String& newName) {}
+                                                   const juce::String& newName) {
+      if (presets.renameUser(index, newName))   // [Claude 2026-10-27] only user presets can be renamed
+        presetListChanged();
+    }
+
+    // [Claude 2026-10-27] Called by the preset bar after a save, rename, delete or load
+    //==============================================================================
+    void AudioPluginAudioProcessor::presetListChanged() {
+      updateHostDisplay(ChangeDetails().withProgramChanged(true));
+    }
 
     //==============================================================================
     void AudioPluginAudioProcessor::releaseResources() {

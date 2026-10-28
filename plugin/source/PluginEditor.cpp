@@ -88,6 +88,10 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
             aboutWindow.setVisible(false);
       }
 
+      // [Claude 2026-10-27] Presets, over the left of the banner
+      if (!fullScreenScope)
+        addAndMakeVisible(presetBar);
+
       // [Claude 2026-10-27] Weekly serial-key re-check and update check, on the processor's own thread
       audioProcessor.licenseCheck.addChangeListener(this);
       audioProcessor.startLicenseCheck();
@@ -246,6 +250,10 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       flexBox.items.add(FlexItem(globalControls).withFlex(1.f));
 
       flexBox.performLayout(bounds);
+
+      // [Claude 2026-10-27] The preset bar sits on the left of the banner; the line under it is the
+      // banner's own (the demo note, or the update link)
+      presetBar.setBounds(topBanner.getX() + 8, topBanner.getY() + 4, 230, 22);
 
 	  	if (fullScreenScope)
 		  wrapperOscilloscope.setBounds(getLocalBounds());

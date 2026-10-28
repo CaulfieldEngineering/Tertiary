@@ -17,7 +17,8 @@
         options:  --golden <folder>   reference renders (default plugin/tests/golden)
                   --make-golden       write the reference renders instead of comparing
                   --expect-demo       this machine has no key, so the demo gaps must be there
-                  --only <n>          run one section (1 to 8)
+                  --only <n>          run one section (1 to 9)
+                  --write-session <file>   save a session (and its values, .txt) from the loaded plugin
         HostTest --write-input <file.wav>               the golden renders' input, for the REAPER test
 
     Exit code 0 when nothing FAILed.
@@ -33,6 +34,8 @@
          the shipped plugin only ever talks to the real server, so it can't be pointed at a
          pretend one. Never calls the live server.)
       8  Golden renders: fixed input and settings, compared with files in the repo
+      9  Presets through the host: the list, each one loads and is heard, Default = golden,
+         remembered in the session, a 1.0.2 session loads unchanged  [Claude 2026-10-27]
 
   ==============================================================================
 */
@@ -40,6 +43,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 #include "PretendServer.h"
+#include "PresetManager.h"   // [Claude 2026-10-27] the factory preset list, to check what the host sees
 
 namespace
 {
@@ -462,7 +466,7 @@ void section3()
         auto a = create(rate, 512);
         if (a == nullptr) return;
         for (auto* prm : a->getParameters())
-            if (prm != a->getBypassParameter())
+            if (prm != a->getBypassParameter() && prm->getName(256) != "Program")   // not the host's preset selector
                 prm->setValueNotifyingHost(rnd.nextFloat());
         render(*a, silence, { 256 });                 // let the changes reach the plugin
         a->getStateInformation(session);
@@ -757,6 +761,150 @@ void section8(const juce::File& folder, bool make)
     }
 }
 
+//==============================================================================
+// 9. Presets through the host's program list  [Claude 2026-10-27]
+//==============================================================================
+juce::File oldSessionFile(const juce::File& golden)
+{
+    return golden.getChildFile("session-1.0.2-" + description.pluginFormatName + ".bin");
+}
+
+void section9(const juce::File& golden)
+{
+    const auto& factory = PresetManager::getFactoryPresets();
+    auto input = testSignal(48000, 2);
+    juce::AudioBuffer<float> silence(2, 256);
+    silence.clear();
+
+    auto p = create(48000, 512);
+    if (p == nullptr) return;
+
+    // a. The list
+    juce::StringArray missing;
+    for (int i = 0; i < (int) factory.size(); ++i)
+        if (p->getProgramName(i) != factory[(size_t) i].name)
+            missing.add(factory[(size_t) i].name + " (got \"" + p->getProgramName(i) + "\")");
+    check(p->getNumPrograms() >= (int) factory.size() && missing.isEmpty(), "9 host sees the factory presets in order",
+          juce::String(p->getNumPrograms()) + " programs " + missing.joinIntoString(", "));
+
+    // b. Each preset loads through the host and changes the sound (Default is the reference)
+    juce::AudioBuffer<float> defaultRender;
+    int silentPresets = 0, wrongIndex = 0;
+    juce::String silentNames;
+    for (int i = 0; i < (int) factory.size(); ++i)
+    {
+        auto q = create(48000, 512);
+        q->setCurrentProgram(i);
+        render(*q, silence);
+        if (q->getCurrentProgram() != i) ++wrongIndex;
+        auto out = render(*q, input);
+        if (i == 0)
+            defaultRender = out;
+        else if (maxDiff(out, defaultRender) < 1.0e-3f)
+        {
+            ++silentPresets;
+            silentNames << factory[(size_t) i].name << " ";
+        }
+    }
+    check(wrongIndex == 0 && silentPresets == 0, "9 every preset loads by program number and changes the sound",
+          juce::String((int) factory.size()) + " presets, " + juce::String(wrongIndex) + " wrong program number, "
+          + juce::String(silentPresets) + " same as Default " + silentNames);
+
+    // c. Default through the program list sounds exactly like the golden default
+    {
+        juce::AudioFormatManager formats;
+        formats.registerBasicFormats();
+        std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(golden.getChildFile("default.wav")));
+        if (reader != nullptr)
+        {
+            auto q = create(48000, 512);
+            q->setCurrentProgram(6);
+            q->setCurrentProgram(0);
+            render(*q, silence);
+            auto out = render(*q, input);
+            juce::AudioBuffer<float> ref(2, (int) reader->lengthInSamples);
+            reader->read(&ref, 0, ref.getNumSamples(), 0, true, true);
+            auto d = maxDiff(out, ref);
+            check(d <= goldenTolerance(), "9 preset Default = golden default render", "max diff " + juce::String(d));
+        }
+    }
+
+    // d. The preset is remembered in the session
+    {
+        juce::MemoryBlock state;
+        juce::AudioBuffer<float> first;
+        {
+            auto a = create(48000, 512);
+            a->setCurrentProgram(9);
+            render(*a, silence);
+            a->getStateInformation(state);
+            first = render(*a, input);
+        }
+        auto b = create(48000, 512);
+        b->setStateInformation(state.getData(), (int) state.getSize());
+        render(*b, silence);
+        auto d = maxDiff(render(*b, input), first);
+        check(b->getCurrentProgram() == 9 && d == 0.0f, "9 session remembers the preset (" + factory[9].name + ")",
+              "program " + juce::String(b->getCurrentProgram()) + ", render max diff " + juce::String(d));
+    }
+
+    // e. A session saved by Tertiary 1.0.2 loads with the same values
+    {
+        auto file = oldSessionFile(golden);
+        juce::MemoryBlock old;
+        juce::StringArray expected;
+        if (! file.loadFileAsData(old) || ! file.withFileExtension(".txt").exists())
+        {
+            report("SKIP", "9 a 1.0.2 session loads unchanged", "no 1.0.2 " + description.pluginFormatName + " session to load (1.0.2 had no AU)");
+            return;
+        }
+        expected.addLines(file.withFileExtension(".txt").loadFileAsString());
+        auto b = create(48000, 512);
+        b->setStateInformation(old.getData(), (int) old.getSize());
+        render(*b, silence);
+        int differ = 0;
+        juce::String first;
+        for (auto& line : expected)
+        {
+            auto name = line.upToLastOccurrenceOf("=", false, false);
+            if (name.isEmpty()) continue;
+            auto* prm = findParam(*b, name);
+            const float want = line.fromLastOccurrenceOf("=", false, false).getFloatValue();
+            if (prm == nullptr || std::abs(prm->getValue() - want) > 1.0e-6f)
+            {
+                if (differ++ < 3) first << name << " " << juce::String(want) << " -> " << (prm ? juce::String(prm->getValue()) : juce::String("missing")) << "; ";
+            }
+        }
+        check(differ == 0, "9 a 1.0.2 session loads unchanged", juce::String(expected.size()) + " values, " + juce::String(differ) + " differ " + first);
+    }
+}
+
+/* Writes a session from whichever Tertiary is loaded (run against the 1.0.2 build to make the old-session file) */
+void writeSession(const juce::File& file)
+{
+    auto p = create(48000, 512);
+    setNorm(*p, "Depth Low Band", percentNorm(42));
+    setNorm(*p, "Waveshape Mid Band", choiceNorm(2, 7));
+    setNorm(*p, "Multiplier High Band", choiceNorm(4, 6));
+    setNorm(*p, "Output Gain", gainNorm(-3));
+    setNorm(*p, "Show FFT", 0.0f);
+    juce::AudioBuffer<float> silence(2, 256);
+    silence.clear();
+    render(*p, silence);
+    // Let the message loop run, as in a DAW: Tertiary 1.0.2 only copies changed values into its saved state on
+    // a timer (fixed in 1.1), so saving straight away would store the old values
+    juce::MessageManager::getInstance()->runDispatchLoopUntil(500);
+    juce::MemoryBlock state;
+    p->getStateInformation(state);
+    file.replaceWithData(state.getData(), state.getSize());
+    juce::String values;
+    for (auto* prm : p->getParameters())
+        if (prm->getName(256) != "Bypass" && prm->getName(256) != "Program")
+            values << prm->getName(256) << "=" << juce::String(prm->getValue(), 9) << "\n";
+    file.withFileExtension(".txt").replaceWithText(values);
+    report("INFO", "wrote session", file.getFullPathName());
+}
+
 } // namespace
 
 //==============================================================================
@@ -803,6 +951,12 @@ int main(int argc, char* argv[])
     const juce::File golden = juce::File::getCurrentWorkingDirectory().getChildFile(option("--golden", "plugin/tests/golden"));
     const bool makeGolden = args.contains("--make-golden");
 
+    if (args.contains("--write-session"))
+    {
+        writeSession(juce::File::getCurrentWorkingDirectory().getChildFile(option("--write-session", "session.bin")));
+        return 0;
+    }
+
     auto run = [&](int n, std::function<void()> section) {
         if (only != 0 && only != n) return;
         const auto t = juce::Time::getMillisecondCounterHiRes();
@@ -819,6 +973,7 @@ int main(int argc, char* argv[])
         run(5, section5);
         run(6, [&] { section6(args.contains("--expect-demo")); });
         run(7, section7);
+        run(9, [&] { section9(golden); });
     }
     run(8, [&] { section8(golden, makeGolden); });
 

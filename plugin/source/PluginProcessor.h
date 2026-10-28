@@ -5,6 +5,7 @@
 #include "LFO.h"
 #include "Params.h"
 #include "LicenseCheck.h"   // [Claude 2026-10-27] Weekly serial-key re-check and update check
+#include "PresetManager.h"  // [Claude 2026-10-27] Factory and user presets
 
 namespace audio_plugin {
 
@@ -92,6 +93,11 @@ namespace audio_plugin {
                     nullptr,                   // Undo Manager
                     "Parameters",              // Identifier &valueTreeType
                     createParameterLayout()};  // parameterLayout
+
+        /* Presets (factory and user), also the host's program list */
+        // [Claude 2026-10-27] Declared after apvts, which it uses
+        PresetManager presets{apvts};
+        void presetListChanged();   // tell the host the preset list or the current preset changed
 
         juce::AudioParameterBool* getShowLowBandParam() { return showLowBandParam; }
         juce::AudioParameterBool* getShowMidBandParam() { return showMidBandParam; }

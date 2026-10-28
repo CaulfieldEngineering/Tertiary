@@ -8,10 +8,10 @@
 #   python render_matrix.py <ReviewRender executable> <input folder> <output folder> [--quick]
 #
 # Every .wav in the input folder is rendered with every setting below (--quick: the first 8 seconds, fewer settings).
-# A synthetic test signal (noise, a sweep and clicks, 48 kHz stereo) is written into the input folder if it is missing.
+# A synthetic test signal (noise, a sweep and clicks, 48 kHz stereo) is written to the temp folder and rendered too.
 # Output files are 32-bit float WAVs named <input>__<setting>.wav.
 
-import math, os, random, struct, subprocess, sys
+import math, os, random, struct, subprocess, sys, tempfile
 
 # Each setting: name, ReviewRender arguments. Values are in the parameter's own units, or a choice's text.
 SETTINGS = [
@@ -74,16 +74,20 @@ def main():
     exe, inputs, outputs = os.path.abspath(sys.argv[1]), sys.argv[2], sys.argv[3]
     quick = "--quick" in sys.argv
     os.makedirs(outputs, exist_ok=True)
-    signal = os.path.join(inputs, "Test Signal.wav")
+    # [Claude 2026-10-27] The test signal goes in the temp folder, not the input folder: the input folder is often
+    # plugin/sample_audio, which becomes the web demo's track list
+    signal = os.path.join(tempfile.gettempdir(), "Test Signal.wav")
     if not os.path.exists(signal):
         write_test_signal(signal)
     failures = 0
-    for wav in sorted(f for f in os.listdir(inputs) if f.lower().endswith(".wav")):
+    files = [os.path.join(inputs, f) for f in os.listdir(inputs) if f.lower().endswith(".wav") and f != "Test Signal.wav"]
+    for path in sorted(files + [signal], key=os.path.basename):
+        wav = os.path.basename(path)
         for name, args in SETTINGS:
             if quick and name not in QUICK:
                 continue
             out = os.path.join(outputs, os.path.splitext(wav)[0] + "__" + name + ".wav")
-            cmd = [exe, "--in", os.path.join(inputs, wav), "--out", out, "--bits", "32",
+            cmd = [exe, "--in", path, "--out", out, "--bits", "32",
                    "--seconds", "8" if quick else "20"] + args
             result = subprocess.run(cmd, capture_output=True, text=True)
             print(("ok   " if result.returncode == 0 else "FAIL ") + os.path.basename(out) + "  " + result.stdout.strip())

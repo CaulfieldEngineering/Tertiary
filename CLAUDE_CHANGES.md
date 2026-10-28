@@ -196,6 +196,27 @@ Staging is at `7633d26`: release-1.1 (PR #17, now shown as merged), `claude/web-
   - Intel Mac: 20/20 steps passed.
   - Windows: 8 passed, 2 failed. The installed `Tertiary.exe` and `Tertiary.vst3` are not signed, because the pipeline signed only the installer. Branch `claude/sign-windows-binaries` signs them before the installer is built: a new "Sign Windows Plug-in and App (Azure)" step, with the secrets check moved ahead of it. It's not on staging yet; pushing it there re-runs the pipeline and the installer test.
 
+## 8. Presets (Joe, 2026-10-27: "I just remembered I wanted to implement presets")
+
+| File | What |
+|---|---|
+| `PresetManager.h/.cpp` (new) | The preset list (factory, then the user's, alphabetical), load, previous/next, the modified check, Save As / Rename / Delete of user preset files, and the preset name in the session. Presets hold only the sound parameters, never the scope and spectrum view settings. |
+| `FactoryPresets.cpp` (new) | The 14 factory presets, in plain code: a name and only the settings that differ from the defaults. The comment at the top lists what the numbers mean. Add one by adding a block. |
+| `PresetBar.h/.cpp` (new) | The bar at the top left of the window: `<`, the name (with * when modified) opening the menu, `>`. Menu: factory presets, your presets, Save, Save As, Rename, Delete, Open Presets Folder. |
+| `PluginProcessor.h/.cpp` | Owns `presets`. `getNumPrograms`/`getCurrentProgram`/`setCurrentProgram`/`getProgramName`/`changeProgramName` use it, so the DAW's preset list works (JUCE adds a "Program" parameter for VST3 hosts). `getStateInformation` adds `presetName`/`presetIsUser` to the saved tree; `setStateInformation` reads them back (none in a 1.0.x session: "No preset"). After loading a state every parameter is snapped to a legal value (see below). |
+| `PluginEditor.h/.cpp` | Shows the bar over the left of the banner. |
+| `TopBanner.cpp` | The demo notice is one smaller line under the bar ("DEMO - DOUBLE-CLICK TO ACTIVATE"), where it was two large lines; the old drawing is kept under `if (false)` for reference. The update link moved under the bar too. |
+| `FrequencyResponse.cpp` `sliderValueChanged` | Fix: the hidden 0.001-step interface sliders fed their rounded value back to the crossover, so opening the window moved Mid-High from 1000 Hz to about 999 Hz (in 1.0.2 too). They are now updated with `dontSendNotification`. |
+| `plugin/tests/regression/render_matrix.py` | The generated test signal goes to the temp folder; it had landed in `plugin/sample_audio`, the web demo's track folder. |
+
+User preset files: `Documents/Wonderland Audio/Tertiary/Presets/<name>.tertiarypreset` (XML; values in the parameter's own units), on Windows and Mac, shared by VST3, AU and the standalone. Deleting moves the file to the Recycle Bin / Trash. The web demo gets the factory presets and the bar automatically (it compiles the same source); Save there lasts only for the visit, and "Open Presets Folder" is left out.
+
+Two fixes the new tests found:
+- The window-open crossover shift above (unit test "Opening the plugin window changes no parameter").
+- pluginval's state test failed once the Program parameter changed its random values: an on/off switch left at 0.49 by a host (which acts as off) kept that raw value after a state load where it is off, because `replaceState` skips values that already mean the same. `setStateInformation` now snaps every parameter to a legal value.
+
+Tests: unit tests (presets: the list and parameter names, Default = defaults, every preset loads, modified marker, host programs, user save/load/rename/delete in a temp folder, session recall and 1.0.x sessions, opening the window changes nothing). HostTest section 9 through the built plugin: the host sees the 14 presets in order; each loads by program number and changes the sound; Default = the golden default render; the session remembers the preset (bit-identical render); a session saved by the real 1.0.2 VST3 (`plugin/tests/golden/session-1.0.2-VST3.*`) loads with all 49 values unchanged. Regression renders: 35/35 bit-identical to the previous build. pluginval strictness 10: SUCCESS.
+
 ## Suggestions I did not change
 
 1. ~~Relative phase is twice what the knob says, in the audio.~~ Fixed after Joe's yes: section 2b.

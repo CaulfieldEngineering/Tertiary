@@ -521,6 +521,175 @@ struct ProcessorTests : juce::UnitTest
     }
 };
 
+//==============================================================================
+// [Claude 2026-10-27] Presets (PresetManager, FactoryPresets.cpp). User presets go to a temp folder.
+//==============================================================================
+struct PresetTests : juce::UnitTest
+{
+    PresetTests() : juce::UnitTest ("Presets", "Tertiary") {}
+
+    static float valueOf (juce::AudioProcessor& p, const juce::String& id)
+    {
+        for (auto* prm : p.getParameters())
+            if (auto* r = dynamic_cast<juce::RangedAudioParameter*> (prm))
+                if (r->getParameterID() == id) return r->convertFrom0to1 (r->getValue());
+        return -1.0e9f;
+    }
+
+    void runTest() override
+    {
+        const auto& factory = PresetManager::getFactoryPresets();
+
+        beginTest ("Factory presets: 10 or more, unique names, every parameter name real, first is Default");
+        {
+            audio_plugin::AudioPluginAudioProcessor p;
+            expect (factory.size() >= 10);
+            expectEquals (factory[0].name, juce::String ("Default"));
+            juce::StringArray names;
+            for (auto& preset : factory)
+            {
+                expect (! names.contains (preset.name), "duplicate " + preset.name);
+                names.add (preset.name);
+                for (auto& [id, value] : preset.values)
+                {
+                    auto* prm = p.apvts.getParameter (id);
+                    expect (prm != nullptr, preset.name + ": no parameter " + id);
+                    if (prm != nullptr)
+                        expect (prm->getNormalisableRange().getRange().contains (value) || value == prm->getNormalisableRange().end,
+                                preset.name + ": " + id + " out of range");
+                }
+            }
+            logMessage (names.joinIntoString (", "));
+        }
+
+        beginTest ("Default = the plugin defaults; a new instance is on Default, not modified");
+        {
+            audio_plugin::AudioPluginAudioProcessor p;
+            expectEquals (p.presets.getCurrentName(), juce::String ("Default"));
+            expect (! p.presets.isModified());
+            p.presets.loadPreset (5);
+            p.presets.loadPreset (0);
+            for (auto* prm : p.getParameters())
+                if (auto* r = dynamic_cast<juce::RangedAudioParameter*> (prm))
+                    if (PresetManager::isSoundParameter (r->getParameterID()))
+                        expectWithinAbsoluteError (r->getValue(), r->getDefaultValue(), 1.0e-6f, r->getParameterID());
+        }
+
+        beginTest ("Loading every factory preset; the modified marker");
+        {
+            audio_plugin::AudioPluginAudioProcessor p;
+            for (int i = 0; i < (int) factory.size(); ++i)
+            {
+                expect (p.presets.loadPreset (i));
+                expectEquals (p.presets.getCurrentIndex(), i);
+                expect (! p.presets.isModified(), factory[(size_t) i].name + " modified right after loading");
+            }
+            p.presets.loadPreset (6);   // Hard Chop
+            expectEquals (valueOf (p, "Waveshape Low Band"), 2.0f);
+            p.apvts.getParameter ("Depth Mid Band")->setValueNotifyingHost (0.1f);
+            expect (p.presets.isModified());
+            p.apvts.getParameter ("Show FFT")->setValueNotifyingHost (0.0f);   // view settings are not part of a preset
+            p.presets.loadPreset (6);
+            p.apvts.getParameter ("Show FFT")->setValueNotifyingHost (1.0f);
+            expect (! p.presets.isModified());
+        }
+
+        beginTest ("Opening the plugin window changes no parameter");
+        {
+            audio_plugin::AudioPluginAudioProcessor p;
+            juce::Array<float> before;
+            for (auto* prm : p.getParameters()) before.add (prm->getValue());
+            std::unique_ptr<juce::AudioProcessorEditor> editor (p.createEditorIfNeeded());
+            juce::MessageManager::getInstance()->runDispatchLoopUntil (200);
+            for (int i = 0; i < p.getParameters().size(); ++i)
+                expectEquals (p.getParameters()[i]->getValue(), before[i], p.getParameters()[i]->getName (64));
+            expect (! p.presets.isModified());
+            editor.reset();
+        }
+
+        beginTest ("Host programs: count, names, select");
+        {
+            audio_plugin::AudioPluginAudioProcessor p;
+            expectEquals (p.getNumPrograms(), p.presets.getNumPresets());
+            expect (p.getNumPrograms() >= (int) factory.size());
+            expectEquals (p.getProgramName (1), factory[1].name);
+            p.setCurrentProgram (4);
+            expectEquals (p.getCurrentProgram(), 4);
+            expectEquals (p.presets.getCurrentName(), factory[4].name);
+        }
+
+        beginTest ("User presets: save, list, load, rename, delete (temp folder)");
+        {
+            audio_plugin::AudioPluginAudioProcessor p;
+            auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory).getNonexistentChildFile ("TertiaryPresets", "");
+            PresetManager m (p.apvts, folder);
+            m.useTrash = false;
+            const int numFactory = (int) factory.size();
+
+            m.loadPreset (7);
+            p.apvts.getParameter ("Depth Low Band")->setValueNotifyingHost (0.33f);
+            expect (m.saveCurrentAsUser ("My Chop"));
+            expect (folder.getChildFile ("My Chop.tertiarypreset").existsAsFile());
+            expectEquals (m.getNumPresets(), numFactory + 1);
+            expectEquals (m.getCurrentIndex(), numFactory);
+            expect (! m.isModified());
+            expect (! m.saveCurrentAsUser ("Hard Chop"));      // a factory name
+            expect (! m.saveCurrentAsUser ("   "));
+
+            m.loadPreset (0);
+            expect (m.loadPreset (numFactory));
+            expectWithinAbsoluteError (p.apvts.getParameter ("Depth Low Band")->getValue(), 0.33f, 0.01f);
+            expectEquals (valueOf (p, "Invert Mid Band"), 1.0f);   // from Alternating Chop
+
+            expect (m.saveCurrentAsUser ("Another"));               // sorted: Another, My Chop
+            expectEquals (m.getPresetName (numFactory), juce::String ("Another"));
+            expect (m.renameUser (numFactory + 1, "Zed Chop"));
+            expectEquals (m.getPresetName (numFactory + 1), juce::String ("Zed Chop"));
+            expect (! m.renameUser (numFactory + 1, "Another"));    // taken
+            expect (m.deleteUser (numFactory));
+            expectEquals (m.getNumPresets(), numFactory + 1);
+            expect (! folder.getChildFile ("Another.tertiarypreset").exists());
+            folder.deleteRecursively();
+        }
+
+        beginTest ("Session: the preset name is saved and restored; modified survives; 1.0.x sessions show No preset");
+        {
+            juce::MemoryBlock state;
+            {
+                audio_plugin::AudioPluginAudioProcessor a;
+                a.setCurrentProgram (9);
+                a.getStateInformation (state);
+            }
+            audio_plugin::AudioPluginAudioProcessor b;
+            b.setStateInformation (state.getData(), (int) state.getSize());
+            expectEquals (b.presets.getCurrentIndex(), 9);
+            expectEquals (b.presets.getCurrentName(), factory[9].name);
+            expect (! b.presets.isModified());
+
+            b.apvts.getParameter ("Depth High Band")->setValueNotifyingHost (0.05f);
+            state.reset();   // getStateInformation appends to the block it is given; hosts pass an empty one
+            b.getStateInformation (state);
+            audio_plugin::AudioPluginAudioProcessor c;
+            c.setStateInformation (state.getData(), (int) state.getSize());
+            expectEquals (c.presets.getCurrentIndex(), 9);
+            expect (c.presets.isModified());
+
+            // A 1.0.x session: the parameters only, no preset name
+            auto tree = c.apvts.copyState();
+            tree.removeProperty ("presetName", nullptr);
+            tree.removeProperty ("presetIsUser", nullptr);
+            juce::MemoryOutputStream old;
+            tree.writeToStream (old);
+            audio_plugin::AudioPluginAudioProcessor d;
+            d.setStateInformation (old.getData(), (int) old.getDataSize());
+            expectEquals (d.presets.getCurrentName(), juce::String ("No preset"));
+            expectEquals (d.getCurrentProgram(), 0);
+            expectWithinAbsoluteError (d.apvts.getParameter ("Depth High Band")->getValue(), 0.05f, 0.01f);
+        }
+    }
+};
+
+static PresetTests presetTests;
 static LicenseTests licenseTests;
 static ProcessorTests processorTests;
 

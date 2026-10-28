@@ -8,6 +8,7 @@
 #include "TopBanner.h"
 #include "UtilityFunctions.h"
 #include "AboutWindow.h"
+#include "PresetBar.h"   // [Claude 2026-10-27]
 
 // For DPI Awareness...
 #if JUCE_WINDOWS
@@ -87,6 +88,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         TopBanner topBanner;
 
         AboutWindow aboutWindow;
+
+        PresetBar presetBar{audioProcessor};   // [Claude 2026-10-27] top left of the banner
 
         /* Header displayed in top corner */
         juce::Label companyTitle;

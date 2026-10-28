@@ -40,7 +40,7 @@ void TopBanner::resized()
     scaledPluginTitle = juce::Image();
 
     // [Claude 2026-10-27] Left side, where "DEMO VERSION" is shown in the demo
-    mUpdateLink.setBounds(25, getHeight() / 2 - 10, getWidth() / 3, 20);
+    mUpdateLink.setBounds(4, 28, getWidth() / 3, 20);   // under the preset bar
 }
 
 // [Claude 2026-10-27] The update link. Only in the full version: the left side is taken by the demo text,
@@ -133,6 +133,16 @@ void TopBanner::paint(juce::Graphics& g)
 	// Demo Declaration
 	// ==========================================================
 	if (mIsDemoVersion)
+	{
+		// [Claude 2026-10-27] One smaller line under the preset bar (which now takes the top left);
+		// it was two large lines here
+		auto line = juce::Rectangle<int>(10, 29, 226, 18);
+		g.setFont(juce::Font("Helvetica", 12.0f, juce::Font::bold));
+		g.setColour(juce::Colours::lightgrey.withAlpha(0.5f));
+		g.drawFittedText("DEMO - DOUBLE-CLICK TO ACTIVATE", line, juce::Justification::left, 1);
+	}
+
+	if (false)   // [Claude 2026-10-27] the old two-line demo text, kept for reference
 	{
 		auto area = getLocalBounds().withTrimmedRight(getWidth() * 0.60f).withLeft(25);
 

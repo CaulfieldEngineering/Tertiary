@@ -786,8 +786,10 @@ void FrequencyResponse::sliderValueChanged(juce::Slider* slider)
 
     if (slider == &sliderLowMidCutoff || slider == &sliderMidHighCutoff)
     {
-        sliderMidHighInterface.setValue(mapLog2(sliderMidHighCutoff.getValue()));
-        sliderLowMidInterface.setValue(mapLog2(sliderLowMidCutoff.getValue()));
+        // [Claude 2026-10-27] dontSendNotification: without it, the 0.001-step interface sliders sent their rounded
+        // value back to the crossover, so just opening the window moved Mid-High from 1000 Hz to about 999 Hz
+        sliderMidHighInterface.setValue(mapLog2(sliderMidHighCutoff.getValue()), juce::dontSendNotification);
+        sliderLowMidInterface.setValue(mapLog2(sliderLowMidCutoff.getValue()), juce::dontSendNotification);
     }
     
     if (slider == &sliderLowMidCutoff)

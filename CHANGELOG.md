@@ -7,7 +7,14 @@
 - Runs on macOS 11 (Big Sur) and later. 1.0.2 needed macOS 15.
 - New: Audio Unit (AU) version, for Logic Pro and GarageBand. The Mac installer now installs VST3, AU and the standalone app.
 
+**Presets**
+- A preset bar at the top left: the preset's name, arrows for the previous and next preset, and a menu.
+- 14 factory presets: Default, Gentle Movement, Amp Tremolo, Slow Swell, Low End Pump, High Shimmer, Hard Chop, Alternating Chop, Sixteenth Gate, Three Rhythms, Rolling Triplets, Half-Time Sway, Free Flutter, Midrange Chop.
+- Save your own presets (Save, Save As, Rename, Delete). They are files in Documents/Wonderland Audio/Tertiary/Presets, shared by the VST3, AU and standalone versions. A * after the name shows when the settings differ from the preset.
+- Your DAW's preset list shows the same presets, and a session remembers which preset was loaded. Sessions from 1.0 load exactly as before.
+
 **Fixes**
+- Opening the plugin window moved the Mid-High crossover from 1000 Hz to about 999 Hz. Fixed.
 - Relative phase now does what the knob and the scope show: 90 degrees shifts a band's LFO by a quarter of a cycle. Before, the sound got twice the shift (90 degrees gave half a cycle). **Sessions and presets saved with a relative phase other than 0 will sound different in 1.1**: they now match the knob. To get the old sound back, double the phase value (for example 45 becomes 90).
 - After a change of sample rate, the LFOs ran at the wrong speed until a control was moved. Fixed.
 - Tempo-synced LFOs now follow tempo changes in the host. Before, they kept the old tempo until a control was moved.
