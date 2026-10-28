@@ -51,3 +51,11 @@ Joe: "I want a broadband synth/pad whose performance is kind of static, where th
 - Each Reel opens on a Tertiary 1.1 factory preset (the preset bar shows it). It makes three or four changes, each held about two bars, with the low band at full depth. v3's camera and ending rules apply.
 - The UI comes from Tertiary 1.1 with the preset bar: ReviewRender is built from `claude/presets` (56d1041) in the worktree `Tertiary-promo-presets`, with `--preset <name>` (also added here).
 - Checked through a phone-speaker simulation (180 Hz high-pass, presence bump, top roll-off): the low band's pulse still swings 18 to 27 dB there with Tertiary on, against 13 to 16 dB bypassed.
+
+## v5 (2026-10-27): more musical
+
+Joe on v4: "Dark drone is garbage. It sounds like white noise.", "I like the approach but lets make the samples slightly more musical still.", and on the captions: "don't forget to include like an introductory sentence ... Remember to sell the thing. Also mention that you can try it for free directly in the browser". Output: `Dropbox\Caulfield Engineering\Tertiary\Promo 2026-10-27 v5`.
+
+- `reels_v5.py`: three beds (Bright shimmer, Warm keys, Organ), each a real progression of eight or so chords that resolves, voiced for the instrument, with a slow top line. The dark drone and the slow texture are gone, and the String Melody patch was tried and dropped; all three were noisy by spectral flatness. Each bed is checked for pitch clarity (energy in sharp spectral peaks, 93 to 96%).
+- Each Reel's first change sweeps both crossovers to 250 Hz and 900 Hz, which balances the bands (soloed lows and mids 3 to 7 dB under the whole) and keeps the low pulse on a phone. The pads were dark, so the bright one is doubled by Factory Selection 2's Chrystal pad and the electric piano plays the upper voices.
+- The end card adds "Try it free in your browser" and wonderlandaudio.com.
