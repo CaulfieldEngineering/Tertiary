@@ -132,8 +132,7 @@ int main (int argc, char* argv[])
         int found = -1;
         for (int p = 0; p < proc->getNumPrograms(); ++p)
             if (proc->getProgramName (p) == opt ("--preset")) found = p;
-        if (found < 0) { std::cerr << "no preset " << opt ("--preset") << "
-"; return 2; }
+        if (found < 0) { std::cerr << "no preset " << opt ("--preset") << "\n"; return 2; }
         proc->setCurrentProgram (found);
     }
 
