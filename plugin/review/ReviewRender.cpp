@@ -126,6 +126,17 @@ int main (int argc, char* argv[])
     proc->prepareToPlay (rate, block);
     proc->setNonRealtime (true);
 
+    // --preset <name>: a factory or user preset by name, through the host's program list, before any --set (1.1 on)
+    if (opt ("--preset").isNotEmpty())
+    {
+        int found = -1;
+        for (int p = 0; p < proc->getNumPrograms(); ++p)
+            if (proc->getProgramName (p) == opt ("--preset")) found = p;
+        if (found < 0) { std::cerr << "no preset " << opt ("--preset") << "
+"; return 2; }
+        proc->setCurrentProgram (found);
+    }
+
     std::vector<Ramp> ramps;
     for (int i = 0; i < args.size(); ++i)
     {

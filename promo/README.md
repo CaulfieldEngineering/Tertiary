@@ -42,3 +42,12 @@ Joe: "Can we emphasize showing what happens when the parameter is changed? It se
 - The music is arranged backwards from the plan in the Duet project "Tertiary Promo v3": each piece plays its 8 bars, then its last few bars again so it reaches its V chord, then a written ending on the tonic that lands on the downbeat as the end card comes up and rings out. Reel 05 is a recording, so its end card comes up on the take's own last strum.
 - The end card shows Tertiary 1.1's formats (Mac, Apple Silicon and Intel: VST3, AU and standalone; Windows: VST3 and standalone); `End cards` in the output folder also has a 1.0.2 fallback. `carousel_v3.py` updates slide 5 to match. Reel 05 is marked "(not for posting)": the acoustic take's rights are unknown.
 - The same two rules are in WLA-Playbook chapter 14 (Demo Videos), 20b and 20c, for every product video.
+
+## v4 (2026-10-27): for paid ads
+
+Joe: "I want a broadband synth/pad whose performance is kind of static, where the rhythm is primarily invented by the tremolo. Showcasing all frequency bands. We really need to make it interesting to be worthy of paid ads.", "the text should be Multiband Tremolo not 'A tremolo, split into three bands'", "a lot of coverage per setting would be ideal", and "low frequencies tend to need more depth to be audible especially on mobile devices". Output: `Dropbox\Caulfield Engineering\Tertiary\Promo 2026-10-27 v4`.
+
+- `reels_v4.py`: four held, wide beds on the Content Rig (Duet project "Tertiary Promo v4"): dark drone, bright shimmer, warm keys and slow texture. Upper voices enter as each bed builds, there's a CC11 swell, and each ends on its tonic. The low layer carries a 100 to 300 Hz body note and the pads have light tube drive, so the low pulse is heard on a phone.
+- Each Reel opens on a Tertiary 1.1 factory preset (the preset bar shows it). It makes three or four changes, each held about two bars, with the low band at full depth. v3's camera and ending rules apply.
+- The UI comes from Tertiary 1.1 with the preset bar: ReviewRender is built from `claude/presets` (56d1041) in the worktree `Tertiary-promo-presets`, with `--preset <name>` (also added here).
+- Checked through a phone-speaker simulation (180 Hz high-pass, presence bump, top roll-off): the low band's pulse still swings 18 to 27 dB there with Tertiary on, against 13 to 16 dB bypassed.

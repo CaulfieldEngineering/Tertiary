@@ -27,7 +27,8 @@ ONLY = set(sys.argv[3:])
 HERE = Path(__file__).resolve().parent
 WORK = HERE / "work" / "v4"
 REPO = HERE.parent
-RR = str(REPO / "build-review" / "plugin" / "ReviewRender_artefacts" / "Release" / "ReviewRender.exe")
+# Built from Tertiary 1.1 with the preset bar (claude/presets, 56d1041), in its own worktree, with --preset added.
+RR = str(REPO.parent / "Tertiary-promo-presets" / "build-review" / "plugin" / "ReviewRender_artefacts" / "Release" / "ReviewRender.exe")
 FFMPEG = r"C:\Users\Joe\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.2-full_build\bin\ffmpeg.exe"
 ACOUSTIC = str(HERE / "work" / "web" / "src" / "Acoustic Guitar 96k.wav")   # the take as it was; it left the web demo
 LOGO = Image.open(REPO / "plugin" / "images" / "CompanyTitle.png").convert("RGBA")
@@ -198,67 +199,52 @@ BEDS = {
 
 
 # Fewer changes, each held long (Joe: "You don't have to go in order with the bands necessarily, but a lot of coverage
-# per setting would be ideal."): every setting gets 8 beats, about two bars, before anything else moves. The low band
-# runs at full depth, well above the mids and highs (Joe: "low frequencies tend to need more depth to be audible
-# especially on mobile devices"), and the low crossover sits high enough (250 to 280 Hz) that the low band carries
-# 100 to 300 Hz body a phone can play, not only sub.
+# per setting would be ideal."): every setting gets 8 beats, about two bars, before anything else moves. Each Reel
+# opens on one of Tertiary 1.1's factory presets, named on screen (the preset bar shows it), and the low band ends up at
+# full depth, well above the mids and highs where it differs (Joe: "low frequencies tend to need more depth to be
+# audible especially on mobile devices").
 HOLD = 8.0
+VIEW_ONLY = ["FFT Pickoff Point=Output"]   # a view setting: the preset is not marked modified by it
 
-# 1. Dark drone: lows on a square in quarters, mids on a sine in eighths, highs on a falling ramp in sixteenths.
-r = Reel("01 Dark drone", 90, 0, [("dark/mix.wav", 0)], [],
-         ["Low-Mid Crossover Freq=250", "Mid-High Crossover Freq=1800", "FFT Pickoff Point=Output",
-          "Waveshape Low Band=Square", "Depth Low Band=100", "Multiplier Low Band=1/4 Note", "Skew Low Band=40",
-          "Waveshape Mid Band=Sine", "Depth Mid Band=75", "Multiplier Mid Band=1/8 Note",
-          "Waveshape High Band=Ramp Down", "Depth High Band=80", "Multiplier High Band=1/16 Note"])
-r.bed = "dark"
-pl = Plan(r, "One held chord. Every pulse you hear is Tertiary.", "xo", intro=2 * 240 / 90)
-pl.change(HIGH, "Highs alone: a falling ramp on sixteenths", "high", "step", [("Solo High Band", 1)], hold=HOLD)
-pl.change(FULL, "All three bands", "xo", "step", [("Solo High Band", 0)], hold=HOLD)
-pl.change(MID, "Mids to triplets", "mid", "step", [("Multiplier Mid Band", MULT["1/8T"])], hold=HOLD)
-pl.change(LOW, "Lows alone: a square wave, full depth", "low", "step", [("Solo Low Band", 1)], hold=HOLD)
-r.plan = pl
-REELS.append(r)
-
-# 2. Bright shimmer: lows on a slow sine in halves, mids on a short square in eighths, highs on triangle triplets.
-r = Reel("02 Bright shimmer", 100, 0, [("bright/mix.wav", 0)], [],
-         ["Low-Mid Crossover Freq=260", "Mid-High Crossover Freq=2400", "FFT Pickoff Point=Output",
-          "Waveshape Low Band=Sine", "Depth Low Band=100", "Multiplier Low Band=1/2 Note",
-          "Waveshape Mid Band=Square", "Depth Mid Band=80", "Multiplier Mid Band=1/8 Note", "Skew Mid Band=30",
-          "Waveshape High Band=Triangle", "Depth High Band=85", "Multiplier High Band=1/8 Note Triplet"])
-r.bed = "bright"
-pl = Plan(r, "A held pad. Each band gets its own pulse.", "xo", intro=2 * 240 / 100)
-pl.change(MID, "Mids alone: a short square on eighths", "mid", "step", [("Solo Mid Band", 1)], hold=HOLD)
+# 1. Dark drone on "Alternating Chop": squares in eighths on all three bands, the mids inverted against the others.
+r = Reel("01 Dark drone", 90, 0, [("dark/mix.wav", 0)], [], VIEW_ONLY)
+r.bed, r.preset = "dark", "Alternating Chop"
+pl = Plan(r, "Factory preset: Alternating Chop. One held chord underneath.", "xo", intro=2 * 240 / 90)
+pl.change(MID, "Mids alone: inverted against the others", "mid", "step", [("Solo Mid Band", 1)], hold=HOLD)
 pl.change(FULL, "All three bands", "xo", "step", [("Solo Mid Band", 0)], hold=HOLD)
+pl.change(HIGH, "Highs to sixteenths", "high", "step", [("Multiplier High Band", MULT["1/16"])], hold=HOLD)
 pl.change(LOW, "Lows to quarter notes", "low", "step", [("Multiplier Low Band", MULT["1/4"])], hold=HOLD)
-pl.change(MID, "Mid band phase", "mid", "ramp", "Relative Phase Mid Band", 0, 180, 3.0, value=lambda v: f"{v:.0f}°", hold=HOLD)
 r.plan = pl
 REELS.append(r)
 
-# 3. Warm keys: lows on a triangle in quarters, mids on Hills in eighth triplets (a shuffle), highs on a square in 16ths.
-r = Reel("03 Warm keys", 84, 0, [("warm/mix.wav", 0)], [],
-         ["Low-Mid Crossover Freq=260", "Mid-High Crossover Freq=1600", "FFT Pickoff Point=Output",
-          "Waveshape Low Band=Triangle", "Depth Low Band=100", "Multiplier Low Band=1/4 Note",
-          "Waveshape Mid Band=Hills", "Depth Mid Band=75", "Multiplier Mid Band=1/8 Note Triplet",
-          "Waveshape High Band=Square", "Depth High Band=80", "Multiplier High Band=1/16 Note", "Skew High Band=30"])
-r.bed = "warm"
-pl = Plan(r, "Held chords on keys and a pad. The groove is Tertiary's.", "xo", intro=2 * 240 / 84)
-pl.change(LOW, "Lows alone: a triangle on quarters, full depth", "low", "step", [("Solo Low Band", 1)], hold=HOLD)
-pl.change(FULL, "All three bands", "xo", "step", [("Solo Low Band", 0)], hold=HOLD)
-pl.change(HIGH, "Highs to triplets", "high", "step", [("Multiplier High Band", MULT["1/8T"])], hold=HOLD)
-r.plan = pl
-REELS.append(r)
-
-# 4. Slow texture: lows on a rising ramp in halves, mids inverted on a sine in quarters, highs on Valleys in eighths.
-r = Reel("04 Slow texture", 76, 0, [("texture/mix.wav", 0)], [],
-         ["Low-Mid Crossover Freq=280", "Mid-High Crossover Freq=2000", "FFT Pickoff Point=Output",
-          "Waveshape Low Band=Ramp Up", "Depth Low Band=100", "Multiplier Low Band=1/2 Note",
-          "Waveshape Mid Band=Sine", "Depth Mid Band=80", "Multiplier Mid Band=1/4 Note", "Invert Mid Band=1",
-          "Waveshape High Band=Valleys", "Depth High Band=85", "Multiplier High Band=1/8 Note"])
-r.bed = "texture"
-pl = Plan(r, "A slow texture, held. Three bands, three pulses.", "xo", intro=2 * 240 / 76)
-pl.change(FREQ, "High crossover down", "xo", "ramp", "Mid-High Crossover Freq", 2000, 700, 3.0, value=hz, hold=HOLD)
-pl.change(HIGH, "Highs alone: Valleys on eighths", "high", "step", [("Solo High Band", 1)], hold=HOLD)
+# 2. Bright shimmer on "Rolling Triplets": eighth-note triplets, the bands a third of a cycle apart.
+r = Reel("02 Bright shimmer", 100, 0, [("bright/mix.wav", 0)], [], VIEW_ONLY)
+r.bed, r.preset = "bright", "Rolling Triplets"
+pl = Plan(r, "Factory preset: Rolling Triplets. A held pad, nothing played in time.", "xo", intro=2 * 240 / 100)
+pl.change(LOW, "Lows to full depth", "low", "ramp", "Depth Low Band", 85, 100, 2.5, value=lambda v: f"Depth {v:.0f}%", hold=HOLD)
+pl.change(HIGH, "Highs alone: triplets a third behind", "high", "step", [("Solo High Band", 1)], hold=HOLD)
 pl.change(FULL, "All three bands", "xo", "step", [("Solo High Band", 0)], hold=HOLD)
+pl.change(MID, "Mids to sixteenths", "mid", "step", [("Multiplier Mid Band", MULT["1/16"])], hold=HOLD)
+r.plan = pl
+REELS.append(r)
+
+# 3. Warm keys on "Three Rhythms": quarters in the lows, quarter triplets in the mids, eighths in the highs.
+r = Reel("03 Warm keys", 84, 0, [("warm/mix.wav", 0)], [], VIEW_ONLY)
+r.bed, r.preset = "warm", "Three Rhythms"
+pl = Plan(r, "Factory preset: Three Rhythms. Held chords on keys and a pad.", "xo", intro=2 * 240 / 84)
+pl.change(LOW, "Lows to full depth", "low", "ramp", "Depth Low Band", 80, 100, 2.5, value=lambda v: f"Depth {v:.0f}%", hold=HOLD)
+pl.change(MID, "Mids alone: quarter-note triplets", "mid", "step", [("Solo Mid Band", 1)], hold=HOLD)
+pl.change(FULL, "All three bands", "xo", "step", [("Solo Mid Band", 0)], hold=HOLD)
+r.plan = pl
+REELS.append(r)
+
+# 4. Slow texture on "Half-Time Sway": half notes, the lows and highs moving against each other.
+r = Reel("04 Slow texture", 76, 0, [("texture/mix.wav", 0)], [], VIEW_ONLY)
+r.bed, r.preset = "texture", "Half-Time Sway"
+pl = Plan(r, "Factory preset: Half-Time Sway. A slow texture, held.", "xo", intro=2 * 240 / 76)
+pl.change(FREQ, "High crossover up", "xo", "ramp", "Mid-High Crossover Freq", 1000, 3000, 3.0, value=hz, hold=HOLD)
+pl.change(LOW, "Lows alone: a half-note sway", "low", "step", [("Solo Low Band", 1)], hold=HOLD)
+pl.change(FULL, "All three bands", "xo", "step", [("Solo Low Band", 0)], hold=HOLD)
 r.plan = pl
 REELS.append(r)
 
@@ -510,6 +496,8 @@ def build(reel):
     sf.write(w / "in.wav", x.astype(np.float32), 48000, subtype="FLOAT")
     cmd = [RR, "--in", str(w / "in.wav"), "--out", str(w / "wet.wav"), "--bpm", str(reel.bpm),
            "--frames", str(w / "frames"), "--fps", str(FPS), "--scale", str(SCALE)]
+    if getattr(reel, "preset", None):
+        cmd += ["--preset", reel.preset]
     for s in reel.sets:
         cmd += ["--set", s]
     cmd += reel.args
