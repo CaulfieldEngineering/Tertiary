@@ -844,8 +844,13 @@ void section9(const juce::File& golden)
         b->setStateInformation(state.getData(), (int) state.getSize());
         render(*b, silence);
         auto d = maxDiff(render(*b, input), first);
-        check(b->getCurrentProgram() == 9 && d == 0.0f, "9 session remembers the preset (" + factory[9].name + ")",
-              "program " + juce::String(b->getCurrentProgram()) + ", render max diff " + juce::String(d));
+        // An Audio Unit reports a state loaded from a session as preset -1 (a custom state): that is how AU hosts
+        // work. The settings are what count (the render), and Tertiary's own bar keeps the name (unit-tested).
+        const bool au = description.pluginFormatName == "AudioUnit";
+        const int program = b->getCurrentProgram();
+        check((program == 9 || (au && program == -1)) && d == 0.0f, "9 session remembers the preset (" + factory[9].name + ")",
+              "program " + juce::String(program) + (au && program == -1 ? " (AU: a restored state is preset -1)" : "")
+              + ", render max diff " + juce::String(d));
     }
 
     // e. A session saved by Tertiary 1.0.2 loads with the same values
