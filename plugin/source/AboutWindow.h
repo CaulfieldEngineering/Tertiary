@@ -100,7 +100,13 @@ private:
     float pluginTitleOriginalAspect = 1.0f;
     float companyTitleOriginalAspect = 1.0f;
 
-    juce::HyperlinkButton mButtonWebsiteLink;
+    // [Claude 2026-10-29] The website link drawn by us on whole screen pixels; JUCE's HyperlinkButton drew its own text,
+    // which went soft at 125 / 150 % (Joe: "is the About window fixable?")
+    struct LinkButton : juce::HyperlinkButton
+    {
+        void paintButton(juce::Graphics& g, bool highlighted, bool down) override;
+    };
+    LinkButton mButtonWebsiteLink;
 
 	// [Claude 2026-10-29] The window rebuilt in the house style (Joe: "yes rebuild it"): its keys and fields drawn here
 	struct Look : juce::LookAndFeel_V4

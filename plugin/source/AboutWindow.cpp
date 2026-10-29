@@ -80,9 +80,11 @@ void AboutWindow::applyLook()
 
 	for (auto* e : { &mTextEditorEmailAddress, &mTextEditorSerialKey })
 	{
-		e->setFont(juce::Font(13.f));
+		// [Claude 2026-10-29] a whole-number font and indent, in fields that sit on a 4-pixel grid, so the typed text lands
+		// on whole screen pixels at 100 / 125 / 150 / 200 % (it was 13 px in fields at 146 and 178, soft when scaled)
+		e->setFont(juce::Font(12.f));
 		e->setJustification(juce::Justification::centredLeft);
-		e->setIndents(10, 0);
+		e->setIndents(12, 0);
 		e->setColour(juce::TextEditor::textColourId, juce::Colour(0xffd6d7dc));
 		e->setColour(juce::TextEditor::highlightColourId, juce::Colour(0xff3f9a5f).withAlpha(0.5f));
 		e->setColour(juce::CaretComponent::caretColourId, juce::Colour(0xffd6d7dc));
@@ -240,13 +242,15 @@ void AboutWindow::resized()
     const int x = 20, w = bounds.getWidth() - x * 2;
 
     mButtonClose.setBounds(bounds.getRight() - x - 18, 22, 18, 18);
-    mButtonWebsiteLink.setBounds(bounds.getX(), bounds.getBottom() - 30, bounds.getWidth(), 20);
+    mButtonWebsiteLink.setBounds(bounds.getX(), bounds.getBottom() - 32, bounds.getWidth(), 20);
 
     // the button and the status line sit in the same place activated or not, so nothing jumps (Joe)
-    mTextEditorEmailAddress.setBounds(x, 146, w, 26);
-    mTextEditorSerialKey.setBounds(x, 178, w, 26);
-    mActionButton.setBounds(x, 214, w, 28);
-    mLabelStatus.setBounds(x, 246, w, 28);
+    // [Claude 2026-10-29] every edge on a multiple of 4 (with the window itself placed on one), so it lands on whole
+    // screen pixels at 125 / 150 / 200 %
+    mTextEditorEmailAddress.setBounds(x, 144, w, 28);
+    mTextEditorSerialKey.setBounds(x, 176, w, 28);
+    mActionButton.setBounds(x, 212, w, 28);
+    mLabelStatus.setBounds(x, 244, w, 28);
 }
 
 
@@ -469,6 +473,13 @@ void AboutWindow::buttonClicked(juce::Button* button)
 
 // [Claude 2026-10-29] A hidden developer detail: Ctrl+Shift+click on the version line swaps it for the exact build
 // (commit, + if it had uncommitted changes, and when it was built), so Joe can check he is testing the build just made
+void AboutWindow::LinkButton::paintButton(juce::Graphics& g, bool highlighted, bool)
+{
+    g.setFont(juce::Font(12.f));
+    g.setColour(juce::Colour(highlighted ? 0xffc9cbd1 : 0xff8b8e97));
+    drawTextOnPixels(g, PixelGrid(g, this), getButtonText(), getLocalBounds().toFloat(), juce::Justification::centred);
+}
+
 void AboutWindow::mouseUp(const juce::MouseEvent& event)
 {
     const auto e = event.getEventRelativeTo(this);

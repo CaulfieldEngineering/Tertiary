@@ -279,8 +279,8 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
 
       auto aboutWidth = 360;   // [Claude 2026-10-29] the rebuilt panel; was 400 x 450
       auto aboutHeight = 300;
-      auto aboutX = bounds.getCentreX() - aboutWidth / 2;
-      auto aboutY = bounds.getCentreY() - aboutHeight / 2;
+      auto aboutX = (bounds.getCentreX() - aboutWidth / 2) / 4 * 4;   // [Claude 2026-10-29] on a 4-pixel grid, so the
+      auto aboutY = (bounds.getCentreY() - aboutHeight / 2) / 4 * 4;  // window lands on whole screen pixels when scaled
 
       aboutWindow.setBounds(aboutX, aboutY, aboutWidth, aboutHeight);
       aboutWindow.toFront(false);
