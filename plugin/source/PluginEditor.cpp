@@ -178,17 +178,12 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
           getLocalBounds().toFloat()));
       g.fillAll();
 
-      // [Claude 2026-10-29] Below the header the window is one plateau in the frames' own grey, so the frames of the
-      // displays and of the lower section join with no dark seam between them (Joe: "one monolithic plateaued frame")
-      g.setColour(ColorScheme::WindowBorders::getWindowBorderColor());
-      g.fillRect(getLocalBounds().withTrimmedTop(topBanner.getBottom()));
-
       // [Claude 2026-10-29] The strip between the scope and the crossover is the frames' platform grey, so the two
       // recesses sit in one surface (Joe: "restore the plateau on this section")
       const int x0 = wrapperOscilloscope.getRight(), x1 = wrapperFrequency.getX();
       if (x1 > x0)
       {
-          g.setColour(ColorScheme::WindowBorders::getWindowBorderColor());
+          g.setColour(juce::Colour(0xff242426));
           g.fillRect(x0 - 1, wrapperOscilloscope.getY(), x1 - x0 + 2, wrapperOscilloscope.getHeight());
       }
     }
