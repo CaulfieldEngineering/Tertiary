@@ -378,8 +378,8 @@ void ScopeChannel::paintWaveform(juce::Graphics& g)
     /* Stroke */
     g.setColour(isBandBypassed ? makeOutlineColor(getBypassBaseColor()): strokeColor);
     g.setOpacity(isBandFocused ? 1.f : 0.75f);
-    g.strokePath(lfoPath, isBandFocused?    juce::PathStrokeType(1.4f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded) :
-                                            juce::PathStrokeType(1.2f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded));
+    g.strokePath(lfoPath, isBandFocused?    juce::PathStrokeType(1.f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded) :
+                                            juce::PathStrokeType(0.85f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded));
 }
 
 /* Parent method to recalculate scope waveform points*/

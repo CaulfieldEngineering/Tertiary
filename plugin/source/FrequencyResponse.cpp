@@ -515,7 +515,7 @@ void FrequencyResponse::paintLowRegion(juce::Graphics& g, juce::Rectangle<float>
         {
             juce::Graphics::ScopedSaveState clip (g);
             g.reduceClipRegion(responseArea.toNearestInt());
-            g.strokePath(curve.line, juce::PathStrokeType(1.2f));
+            g.strokePath(curve.line, juce::PathStrokeType(0.85f));  // [Claude 2026-10-29] thinner (Joe); was 1.2
         }
     }
 }
@@ -560,7 +560,7 @@ void FrequencyResponse::paintMidRegion(juce::Graphics& g, juce::Rectangle<float>
         {
             juce::Graphics::ScopedSaveState clip (g);
             g.reduceClipRegion(responseArea.toNearestInt());
-            g.strokePath(curve.line, juce::PathStrokeType(1.2f));
+            g.strokePath(curve.line, juce::PathStrokeType(0.85f));  // [Claude 2026-10-29] thinner (Joe); was 1.2
         }
     }
 
@@ -602,7 +602,7 @@ void FrequencyResponse::paintHighRegion(juce::Graphics& g, juce::Rectangle<float
         {
             juce::Graphics::ScopedSaveState clip (g);
             g.reduceClipRegion(responseArea.toNearestInt());
-            g.strokePath(curve.line, juce::PathStrokeType(1.2f));
+            g.strokePath(curve.line, juce::PathStrokeType(0.85f));  // [Claude 2026-10-29] thinner (Joe); was 1.2
         }
     }
 }
