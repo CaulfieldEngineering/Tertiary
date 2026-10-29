@@ -181,27 +181,38 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
 
     // Input Gain Border
     // ==================================================================
-    paintBorderTight(g, windowBorderColor, border1);
+    // [Claude 2026-10-29] One continuous frame: the stepped bevel round the whole section, and between neighbouring
+    // sections a single shared wall stepped down to each side, instead of two boxes side by side (Joe: "make those
+    // bevels continuous")
+    {
+        const auto all = border1.getUnion(border6).toFloat();
+        paintBorderTight(g, windowBorderColor, all);
+        const float steps[] = { 0.35f, 0.7f, 1.f, 0.7f, 0.35f };
+        for (auto* b : { &border1, &border2, &border3, &border4, &border5 })
+        {
+            const float x = (float) b->getRight() - 2.5f;
+            for (int k = 0; k < 5; ++k)
+            {
+                g.setColour(windowBorderColor.withMultipliedBrightness(steps[k]));
+                g.fillRect(juce::Rectangle<float>(x + k, all.getY() + 2.f, 1.f, all.getHeight() - 4.f));
+            }
+        }
+    }
 
     // Text Labels Border
     // ==================================================================
-    paintBorderTight(g, windowBorderColor, border2);
     
     // Low-Band Border
     // ==================================================================
-    paintBorderTight(g, windowBorderColor, border3);
     
     // Mid-Band Border
     // ==================================================================
-    paintBorderTight(g, windowBorderColor, border4);
     
     // High-Band Border
     // ==================================================================
-    paintBorderTight(g, windowBorderColor, border5);
     
     // Output Gain Border
     // ==================================================================
-    paintBorderTight(g, windowBorderColor, border6);
 }
 
 void GlobalControls::paintBandLabels(juce::Graphics& g)
