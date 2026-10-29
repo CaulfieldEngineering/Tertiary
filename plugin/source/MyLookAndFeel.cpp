@@ -1157,12 +1157,10 @@ void MultComboLookAndFeel::drawComboBox ( juce::Graphics& g,
 
     drawLitKey(g, menuBounds.toFloat(), comboBox.isEnabled() ? baseColour : ColorScheme::BandColors::getBypassBaseColor());
     
-    for (int i = 0; i < 4; i++)
-    {
-        g.setColour(juce::Colours::darkgrey.withMultipliedAlpha(1.f/((i*i)+0.75f)));
-        g.drawRect(menuBounds.expanded(1));
-        menuBounds.reduce(1,1);
-    }
+    // [Claude 2026-10-29] one crisp dark outline, like the keys, in place of the stacked grey bevel (Joe: "Let's try it")
+    g.setColour(juce::Colours::black.withAlpha(0.75f));
+    g.drawRect(menuBounds, 1);
+    menuBounds.reduce(1, 1);
     
 	g.setColour(litKeyText);
     
@@ -1211,12 +1209,10 @@ void WaveComboLookAndFeel::drawComboBox ( juce::Graphics& g,
     
     drawLitKey(g, bounds.toFloat(), comboBox.isEnabled() ? baseColour : ColorScheme::BandColors::getBypassBaseColor());
     
-    for (int i = 0; i < 5; i++)
-    {
-        g.setColour(juce::Colours::darkgrey.withMultipliedAlpha(1.f/((i*i)+0.75f)));
-        g.drawRect(bounds.expanded(1), 1.f);
-        bounds.reduce(1,1);
-    }
+    // [Claude 2026-10-29] one crisp dark outline, like the keys, in place of the stacked grey bevel
+    g.setColour(juce::Colours::black.withAlpha(0.75f));
+    g.drawRect(bounds, 1);
+    bounds.reduce(1, 1);
     
 	g.setColour(litKeyText);
     
