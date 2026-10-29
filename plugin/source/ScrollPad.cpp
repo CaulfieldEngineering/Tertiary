@@ -238,36 +238,25 @@ void ScrollPad::paint(juce::Graphics& g)
 	// Establish Bounds
 	auto bounds = getLocalBounds().toFloat();
 
-	// Draw Slider Track
-	juce::Path track;
-	track.startNewSubPath(bounds.getCentreX() - maxWidth / 2.f, bounds.getCentreY());
-	track.lineTo(bounds.getCentreX() + maxWidth / 2.f, bounds.getCentreY());
-	g.setColour(juce::Colours::darkgrey.withMultipliedBrightness(0.4f));
-	g.strokePath(track, juce::PathStrokeType(6.f, juce::PathStrokeType::JointStyle::beveled,
-		juce::PathStrokeType::EndCapStyle::rounded));
+	// [Claude 2026-10-29] A subtle recessed slot and a crisp thumb (Joe: "sharpen up the slide/scrollbar ... Maybe a
+	// little recess or something. Just subtle."). Was a soft 6 px stroke with a glowing stack of strokes for the thumb.
+	const float h = 5.f, cy = bounds.getCentreY();
+	juce::Rectangle<float> slot { bounds.getCentreX() - maxWidth / 2.f, cy - h / 2.f, (float) maxWidth, h };
+	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff08090b), 0.f, slot.getY(), juce::Colour(0xff17181c), 0.f, slot.getBottom(), false));
+	g.fillRoundedRectangle(slot, h / 2.f);
+	g.setColour(juce::Colours::black.withAlpha(0.6f));
+	g.drawRoundedRectangle(slot, h / 2.f, 1.f);
+	g.setColour(juce::Colours::white.withAlpha(0.06f));
+	g.drawHorizontalLine((int) slot.getBottom(), slot.getX() + h / 2.f, slot.getRight() - h / 2.f);
 
-	// Draw Point-To-Point Range
 	juce::Path range;
-	range.startNewSubPath(point1, bounds.getCentreY());
-	range.lineTo(point2, bounds.getCentreY());
-    
-    float totalNumBorders = 6;
-    
-    for (int i = 0; i < (int)totalNumBorders; i++)
-    {
-        //g.setColour(getScrollPadBaseColor().withMultipliedAlpha(1.f/((i*i)+0.75f)));
-        
-
-        float multAlpha = juce::jmap((float)i*i, 0.f, (totalNumBorders*totalNumBorders), 0.1f, 0.95f);
-
-        g.setColour(getScrollPadBaseColor().withMultipliedAlpha(multAlpha));
-        g.strokePath(range, juce::PathStrokeType(6.f - i, juce::PathStrokeType::JointStyle::beveled,
-            juce::PathStrokeType::EndCapStyle::rounded));
-    }
-
-    g.setGradientFill(setScrollBarGradient(range.getBounds().toFloat()));
-
-    g.strokePath(range, juce::PathStrokeType(2.f, juce::PathStrokeType::JointStyle::beveled, juce::PathStrokeType::EndCapStyle::rounded));
+	range.startNewSubPath(point1, cy);
+	range.lineTo(point2, cy);
+	juce::Rectangle<float> thumb = juce::Rectangle<float>::leftTopRightBottom(juce::jmin(point1, point2), cy - 1.5f, juce::jmax(point1, point2), cy + 1.5f);
+	g.setGradientFill(setScrollBarGradient(range.getBounds().toFloat()));
+	g.fillRoundedRectangle(thumb, 1.5f);
+	g.setColour(juce::Colours::white.withAlpha(0.18f));
+	g.drawHorizontalLine((int) thumb.getY(), thumb.getX() + 1.5f, thumb.getRight() - 1.5f);
     
     
     

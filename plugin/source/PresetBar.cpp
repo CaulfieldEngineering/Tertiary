@@ -26,14 +26,7 @@ PresetBar::PresetBar(audio_plugin::AudioPluginAudioProcessor& p)
     : audioProcessor(p), presets(p.presets)
 {
     for (auto* b : { &mButtonPrevious, &mButtonNext })
-    {
-        b->setColour(juce::TextButton::buttonColourId, background);
-        b->setColour(juce::TextButton::textColourOffId, text);
-        b->setColour(juce::ComboBox::outlineColourId, outline);
         addAndMakeVisible(b);
-    }
-    mButtonPrevious.setButtonText("<");
-    mButtonNext.setButtonText(">");
     mButtonPrevious.setTooltip("Previous preset");
     mButtonNext.setTooltip("Next preset");
     mButtonPrevious.onClick = [this] { presets.loadPrevious(); changed(); };
@@ -46,24 +39,51 @@ PresetBar::~PresetBar()
 {
 }
 
+void PresetBar::ArrowKey::paintButton(juce::Graphics& g, bool highlighted, bool down)
+{
+    // a small raised grey key with a lit top edge, pressed darker, and a fine chevron
+    auto r = getLocalBounds().toFloat().reduced(0.5f);
+    const auto top = down ? juce::Colour(0xff26282e) : juce::Colour(0xff34363e);
+    const auto bot = down ? juce::Colour(0xff1f2126) : juce::Colour(0xff25272d);
+    g.setGradientFill(juce::ColourGradient(top, 0.f, r.getY(), bot, 0.f, r.getBottom(), false));
+    g.fillRoundedRectangle(r, 1.5f);
+    g.setColour(juce::Colours::white.withAlpha(highlighted ? 0.16f : 0.1f));
+    g.fillRect(r.withHeight(1.f).reduced(1.5f, 0.f));
+    g.setColour(juce::Colours::black.withAlpha(0.7f));
+    g.drawRoundedRectangle(r, 1.5f, 1.f);
+
+    const float cx = r.getCentreX(), cy = r.getCentreY(), w = 2.5f, h = 4.f;
+    juce::Path chevron;
+    chevron.startNewSubPath(cx + (isLeft ? w : -w) / 2.f, cy - h);
+    chevron.lineTo(cx - (isLeft ? w : -w) / 2.f, cy);
+    chevron.lineTo(cx + (isLeft ? w : -w) / 2.f, cy + h);
+    g.setColour(juce::Colour(highlighted ? 0xffd9dade : 0xffa9abb3));
+    g.strokePath(chevron, juce::PathStrokeType(1.3f, juce::PathStrokeType::mitered, juce::PathStrokeType::square));
+}
+
 void PresetBar::resized()
 {
     auto bounds = getLocalBounds();
-    mButtonPrevious.setBounds(bounds.removeFromLeft(getHeight()));
-    mButtonNext.setBounds(bounds.removeFromRight(getHeight()));
-    nameArea = bounds.reduced(3, 0);
+    mButtonPrevious.setBounds(bounds.removeFromLeft(getHeight() - 2).reduced(0, 1));
+    mButtonNext.setBounds(bounds.removeFromRight(getHeight() - 2).reduced(0, 1));
+    nameArea = bounds.reduced(4, 0);
 }
 
 void PresetBar::paint(juce::Graphics& g)
 {
-    auto area = nameArea.toFloat();
-    g.setColour(background);
-    g.fillRoundedRectangle(area, 3.f);
-    g.setColour(outline);
-    g.drawRoundedRectangle(area.reduced(0.5f), 3.f, 1.f);
+    // [Claude 2026-10-29] The name in a recessed well, in the header's text size (Joe: "let's restyle it")
+    auto area = nameArea.toFloat().reduced(0.5f);
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff0b0c0f), 0.f, area.getY(), juce::Colour(0xff15161a), 0.f, area.getBottom(), false));
+    g.fillRoundedRectangle(area, 1.5f);
+    g.setColour(juce::Colours::black.withAlpha(0.6f));
+    g.fillRect(area.withHeight(1.5f).reduced(1.5f, 0.f));
+    g.setColour(juce::Colours::white.withAlpha(0.06f));
+    g.fillRect(area.withTop(area.getBottom() - 1.f).reduced(1.5f, 0.f));
+    g.setColour(juce::Colours::black.withAlpha(0.7f));
+    g.drawRoundedRectangle(area, 1.5f, 1.f);
 
-    g.setColour(text);
-    g.setFont(juce::Font(14.0f));
+    g.setColour(juce::Colour(0xffd6d7dc));
+    g.setFont(juce::Font(12.5f));
     auto label = shownName + (shownModified ? " *" : "");
     g.drawFittedText(label, nameArea.reduced(6, 0).withTrimmedRight(12), juce::Justification::centredLeft, 1);
 
@@ -71,6 +91,7 @@ void PresetBar::paint(juce::Graphics& g)
     auto r = nameArea.withTrimmedLeft(nameArea.getWidth() - 14).toFloat().withSizeKeepingCentre(7.f, 4.f).translated(-4.f, 0.f);
     juce::Path arrow;
     arrow.addTriangle(r.getX(), r.getY(), r.getRight(), r.getY(), r.getCentreX(), r.getBottom());
+    g.setColour(juce::Colour(0xff6c6f78));
     g.fillPath(arrow);
 }
 

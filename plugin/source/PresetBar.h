@@ -36,7 +36,14 @@ private:
     audio_plugin::AudioPluginAudioProcessor& audioProcessor;
     PresetManager& presets;
 
-    juce::TextButton mButtonPrevious, mButtonNext;
+    // [Claude 2026-10-29] The arrows drawn as small keys in the header's style (Joe: "let's restyle it")
+    struct ArrowKey : juce::Button
+    {
+        ArrowKey(bool left) : juce::Button(left ? "<" : ">"), isLeft(left) {}
+        void paintButton(juce::Graphics&, bool highlighted, bool down) override;
+        bool isLeft;
+    };
+    ArrowKey mButtonPrevious { true }, mButtonNext { false };
     juce::Rectangle<int> nameArea;
 
     juce::String shownName;
