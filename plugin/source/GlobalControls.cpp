@@ -143,72 +143,34 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
     auto spacerHeightScale = 5.f / 250.f;
     auto spacerHeight = bounds.getHeight() * spacerHeightScale;
 
-    // Shape
-    // ==================================================================
-    auto shapeBorder = labelBorder;
-    shapeBorder.setY(lowBandControls.getWaveBounds().getY() - spacerHeight / 2);
-    paintBorder(g, dividerBorderColor, shapeBorder);
-    shapeBorder.setWidth(border2.getWidth());
-    g.setColour(controlLabelsFontColor);
-    g.setOpacity(controlLabelsFontTransparency);
-    g.setFont(myFont);
-    g.drawFittedText("Shape", shapeBorder.toNearestInt(), juce::Justification::centred, 1);
+    // [Claude 2026-10-29] One line between rows, running across the labels and the three bands, in place of a boxed
+    // cell per label (whose borders doubled up between rows); the label sits on its row's centre (Joe: "Don't need
+    // the double-borders ... match up these horizontal lines")
+    const auto top = (float) lowBandControls.getY();
+    const juce::Rectangle<int> rows[] = { lowBandControls.getWaveBounds(), lowBandControls.getSkewBounds(),
+                                          lowBandControls.getDepthBounds(), lowBandControls.getRhythmBounds(),
+                                          lowBandControls.getPhaseBounds(), lowBandControls.getGainBounds() };
+    const char* names[] = { "Shape", "Skew", "Depth", "Rhythm", "Phase", "Gain" };
+    const int n = 6;
+    const float pitch = (rows[n - 1].getCentreY() - rows[0].getCentreY()) / (float) (n - 1);
+    const float x0 = (float) border2.getX() + 3.f, x1 = (float) labelBorder.getRight() - 3.f;
 
-    // Skew
-    // ==================================================================
-    auto skewBorder = labelBorder;
-    skewBorder.setY(lowBandControls.getSkewBounds().getY() - spacerHeight / 2);
-    paintBorder(g, dividerBorderColor, skewBorder);
-    skewBorder.setWidth(border2.getWidth());
-    g.setColour(controlLabelsFontColor);
-    g.setOpacity(controlLabelsFontTransparency);
-    g.setFont(myFont);
-    g.drawFittedText("Skew", skewBorder.toNearestInt(), juce::Justification::centred, 1);
-    
-    // Depth
-    // ==================================================================
-    auto depthBorder = labelBorder;
-    depthBorder.setY(lowBandControls.getDepthBounds().getY() - spacerHeight / 2);
-    paintBorder(g, dividerBorderColor, depthBorder);
-    depthBorder.setWidth(border2.getWidth());
-    g.setColour(controlLabelsFontColor);
-    g.setOpacity(controlLabelsFontTransparency);
-    g.setFont(myFont);
-    g.drawFittedText("Depth", depthBorder.toNearestInt(), juce::Justification::centred, 1);
+    for (int i = 0; i < n; ++i)
+    {
+        const float yc = top + rows[i].getCentreY();
+        g.setColour(controlLabelsFontColor);
+        g.setOpacity(controlLabelsFontTransparency);
+        g.setFont(myFont);
+        g.drawFittedText(names[i], juce::Rectangle<float>((float) border2.getX(), yc - pitch / 2.f, (float) border2.getWidth(), pitch).toNearestInt(),
+                         juce::Justification::centred, 1);
 
-    // Rhythm
-    // ==================================================================
-    auto rhythmBorder = labelBorder;
-    rhythmBorder.setY(lowBandControls.getRhythmBounds().getY() - spacerHeight / 2);
-    paintBorder(g, dividerBorderColor, rhythmBorder);
-    rhythmBorder.setWidth(border2.getWidth());
-    g.setColour(controlLabelsFontColor);
-    g.setOpacity(controlLabelsFontTransparency);
-    g.setFont(myFont);
-    g.drawFittedText("Rhythm", rhythmBorder.toNearestInt(), juce::Justification::centred, 1);
-    
-    // Phase
-    // ==================================================================
-    auto phaseBorder = labelBorder;
-    phaseBorder.setY(lowBandControls.getPhaseBounds().getY() - spacerHeight / 2);
-    paintBorder(g, dividerBorderColor, phaseBorder);
-    phaseBorder.setWidth(border2.getWidth());
-    g.setColour(controlLabelsFontColor);
-    g.setOpacity(controlLabelsFontTransparency);
-    g.setFont(myFont);
-    g.drawFittedText("Phase", phaseBorder.toNearestInt(), juce::Justification::centred, 1);
+        const float yLine = yc + pitch / 2.f;
+        g.setColour(juce::Colours::black.withAlpha(0.55f));
+        g.fillRect(juce::Rectangle<float>(x0, yLine - 0.5f, x1 - x0, 1.f));
+        g.setColour(juce::Colours::white.withAlpha(0.04f));
+        g.fillRect(juce::Rectangle<float>(x0, yLine + 0.5f, x1 - x0, 1.f));
+    }
 
-    // Gain
-    // ==================================================================
-    auto gainBorder = labelBorder;
-    gainBorder.setY(lowBandControls.getGainBounds().getY() - spacerHeight / 2);
-    paintBorder(g, dividerBorderColor, gainBorder);
-    gainBorder.setWidth(border2.getWidth());
-    g.setColour(controlLabelsFontColor);
-    g.setOpacity(controlLabelsFontTransparency);
-    g.setFont(myFont);
-    g.drawFittedText("Gain", gainBorder.toNearestInt(), juce::Justification::centred, 1);
-    
     // Input Gain Border
     // ==================================================================
     paintBorder(g, windowBorderColor, border1);
