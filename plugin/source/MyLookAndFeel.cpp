@@ -678,11 +678,11 @@ static void drawValueLine(juce::Graphics& g, juce::Rectangle<float> r, float x, 
 static void drawEndShadow(juce::Graphics& g, juce::Rectangle<float> r, float x, int direction)
 {
 	if (x <= r.getX() + 0.5f || x >= r.getRight() - 0.5f) return;
-	const float w = 5.f, x2 = x + direction * w;
+	const float w = 2.5f, x2 = x + direction * w;  // a short, sharp shade (Joe: "make the edge sharper")
 	juce::ColourGradient sh(juce::Colours::black.withAlpha(0.45f), x, 0.f, juce::Colours::black.withAlpha(0.f), x2, 0.f, false);
 	g.setGradientFill(sh);
 	g.fillRect(juce::Rectangle<float>(juce::jmin(x, x2), r.getY(), w, r.getHeight()).getIntersection(r));
-	g.setColour(juce::Colours::black.withAlpha(0.6f));
+	g.setColour(juce::Colours::black.withAlpha(0.8f));
 	g.fillRect(juce::Rectangle<float>(x - 0.5f, r.getY(), 1.f, r.getHeight()));
 }
 
