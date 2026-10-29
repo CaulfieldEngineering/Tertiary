@@ -47,19 +47,6 @@ void paintBorder(juce::Graphics& g, juce::Colour baseColor, juce::Rectangle<floa
 	g.drawRoundedRectangle(border, 2.f, 2.f);
 }
 
-void paintRidge(juce::Graphics& g, juce::Rectangle<float> b)
-{
-	g.setColour(juce::Colours::black.withAlpha(0.8f));
-	g.drawRect(b, 1.f);
-	auto in = b.reduced(1.f);
-	g.setColour(juce::Colours::white.withAlpha(0.09f));
-	g.fillRect(in.withHeight(1.f));
-	g.fillRect(in.withWidth(1.f));
-	g.setColour(juce::Colours::black.withAlpha(0.45f));
-	g.fillRect(in.withTop(in.getBottom() - 1.f));
-	g.fillRect(in.withLeft(in.getRight() - 1.f));
-}
-
 /* Conditions All Font & Text Parameters */
 // ==================================================================
 void buildLabelFont(    juce::Label& label,

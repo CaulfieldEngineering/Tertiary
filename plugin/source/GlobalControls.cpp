@@ -176,27 +176,27 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
 
     // Input Gain Border
     // ==================================================================
-    paintRidge(g, border1.toFloat());
+    paintBorder(g, windowBorderColor, border1);
 
     // Text Labels Border
     // ==================================================================
-    paintRidge(g, border2.toFloat());
+    paintBorder(g, windowBorderColor, border2);
     
     // Low-Band Border
     // ==================================================================
-    paintRidge(g, border3.toFloat());
+    paintBorder(g, windowBorderColor, border3);
     
     // Mid-Band Border
     // ==================================================================
-    paintRidge(g, border4.toFloat());
+    paintBorder(g, windowBorderColor, border4);
     
     // High-Band Border
     // ==================================================================
-    paintRidge(g, border5.toFloat());
+    paintBorder(g, windowBorderColor, border5);
     
     // Output Gain Border
     // ==================================================================
-    paintRidge(g, border6.toFloat());
+    paintBorder(g, windowBorderColor, border6);
 }
 
 void GlobalControls::paintBandLabels(juce::Graphics& g)
