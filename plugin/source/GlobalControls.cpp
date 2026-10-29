@@ -130,6 +130,9 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
     // 35 % black), so the four columns match (Joe: "a different background than the 2nd column")
     g.setColour(juce::Colours::black.withAlpha(0.35f));
     g.fillRect(border2);
+    g.fillRect(border3);
+    g.fillRect(border4);
+    g.fillRect(border5);
     g.setGradientFill(BACKGROUND_GRADIENT(bounds));
 
     auto windowBorderColor = ColorScheme::WindowBorders::getWindowBorderColor();

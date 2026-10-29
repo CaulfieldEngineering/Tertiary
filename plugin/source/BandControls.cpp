@@ -46,7 +46,8 @@ BandControl::~BandControl()
 //============================================================
 void BandControl::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colours::transparentBlack.withAlpha(0.35f));
+    // [Claude 2026-10-29] the column's shade is painted by GlobalControls over the whole column now; filling only this
+    // inset area left a faint edge just inside the bevel (Joe: "Don't need them")
 }
 
 /* Called on resize */
