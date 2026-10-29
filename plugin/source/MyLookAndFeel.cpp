@@ -673,6 +673,19 @@ static void drawValueLine(juce::Graphics& g, juce::Rectangle<float> r, float x, 
 	g.fillRect(juce::Rectangle<float>(cx - 1.f, r.getY(), 2.f, r.getHeight()));
 }
 
+// A thin dark edge where the fill ends, with a little shadow falling onto the empty track, as in Joe's original
+// (Joe: "a little bit of a dark line or kind of recessed shadow where the end cap is")
+static void drawEndShadow(juce::Graphics& g, juce::Rectangle<float> r, float x, int direction)
+{
+	if (x <= r.getX() + 0.5f || x >= r.getRight() - 0.5f) return;
+	const float w = 5.f, x2 = x + direction * w;
+	juce::ColourGradient sh(juce::Colours::black.withAlpha(0.45f), x, 0.f, juce::Colours::black.withAlpha(0.f), x2, 0.f, false);
+	g.setGradientFill(sh);
+	g.fillRect(juce::Rectangle<float>(juce::jmin(x, x2), r.getY(), w, r.getHeight()).getIntersection(r));
+	g.setColour(juce::Colours::black.withAlpha(0.6f));
+	g.fillRect(juce::Rectangle<float>(x - 0.5f, r.getY(), 1.f, r.getHeight()));
+}
+
 void StandardSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int y, int width, int height,
 													float sliderPos, float minSliderPos, float maxSliderPos,
 													const juce::Slider::SliderStyle sliderStyle, juce::Slider& slider)
@@ -702,6 +715,7 @@ void StandardSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int 
 		g.setGradientFill(BASIC_SLIDER_GRADIENT_BYPASS(bounds));
 	g.fillRect(valueBar);
 	// no bright cap at the value: the fill simply ends, as in Joe's original (Joe: "I don't want that big bright cap")
+	drawEndShadow(g, bounds, valuePosition, -1);  // the shade falls back into the fill, where it shows
 }
 
 void StandardSliderLookAndFeel::setBandMode(int bandMode)
@@ -738,6 +752,8 @@ void CenterSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int y,
 	}
 	if (slider.isEnabled())
 		g.fillRect(valueBar);
+	if (std::abs(valuePosition - bounds.getCentreX()) >= 2.f)
+		drawEndShadow(g, bounds, valuePosition, valuePosition > bounds.getCentreX() ? -1 : +1);
 
 	// A fine centre mark in place of the old 7 px groove, then the value line on top
 	g.setColour(juce::Colours::white.withAlpha(0.14f));
