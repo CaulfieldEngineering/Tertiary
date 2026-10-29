@@ -20,15 +20,21 @@
 void paintBorder(juce::Graphics& g, juce::Colour baseColor, juce::Rectangle<float> bounds)
 {
 	// [Claude 2026-10-29] Joe's stepped bevel, tightened: the same four steps from the frame grey down into the recess,
-	// 1 px each instead of 2, and near-square corners (Joe: "revert the framing to its original state and just
-	// tighten it up", "a little thinner and sharper"). The boxes it frames are unchanged.
-	auto border = bounds.reduced(0.5f);
+	// 1 px each instead of 2 (Joe: "revert the framing to its original state and just tighten it up", "a little
+	// thinner and sharper"). The boxes it frames are unchanged.
+	// [Claude 2026-10-29] Each step is a square-cornered ring on whole pixels, not a rounded stroke on a half-pixel
+	// inset: the rounded corner left its apex pixel part-covered over black, a dark speck at every corner that read as
+	// a notch wherever two frames meet; and the band frames sit on fractional x (the band width is 203.67), so at 1x
+	// their strokes smeared over two pixels and the LOW/MID and MID/HIGH pillars came out uneven (Joe: "non-homogenous
+	// and black spots where the painting isn't hitting"). Snapped to the nearest pixel edges, neighbouring frames tile
+	// into one plateau of the frame grey.
+	auto border = bounds.toNearestIntEdges();
 	const float steps[] = { 1.f, 0.8f, 0.6f, 0.3f };
 	for (float k : steps)
 	{
 		g.setColour(baseColor.withMultipliedBrightness(k));
-		g.drawRoundedRectangle(border, 0.75f, 1.f);
-		border.reduce(1.f, 1.f);
+		g.drawRect(border, 1);
+		border.reduce(1, 1);
 	}
 }
 

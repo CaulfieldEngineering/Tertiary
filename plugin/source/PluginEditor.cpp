@@ -183,7 +183,9 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       const int x0 = wrapperOscilloscope.getRight(), x1 = wrapperFrequency.getX();
       if (x1 > x0)
       {
-          g.setColour(juce::Colour(0xff242426));
+          // [Claude 2026-10-29] the frame grey itself, not the second step's shade, so the strip and the two outer
+          // steps beside it are one even plateau rather than a lighter-darker-lighter ridge
+          g.setColour(ColorScheme::WindowBorders::getWindowBorderColor());
           g.fillRect(x0 - 1, wrapperOscilloscope.getY(), x1 - x0 + 2, wrapperOscilloscope.getHeight());
       }
     }

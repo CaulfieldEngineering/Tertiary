@@ -129,10 +129,11 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
     // [Claude 2026-10-29] The label column takes the same shade as the band columns (BandControls darkens itself by
     // 35 % black), so the four columns match (Joe: "a different background than the 2nd column")
     g.setColour(juce::Colours::black.withAlpha(0.35f));
-    g.fillRect(border2);
-    g.fillRect(border3);
-    g.fillRect(border4);
-    g.fillRect(border5);
+    // [Claude 2026-10-29] on whole pixels, as the frames now are (the band columns sit on fractional x)
+    g.fillRect(border2.toNearestIntEdges());
+    g.fillRect(border3.toNearestIntEdges());
+    g.fillRect(border4.toNearestIntEdges());
+    g.fillRect(border5.toNearestIntEdges());
     g.setGradientFill(BACKGROUND_GRADIENT(bounds));
 
     auto windowBorderColor = ColorScheme::WindowBorders::getWindowBorderColor();
