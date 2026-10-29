@@ -963,6 +963,26 @@ void ToggleLookAndFeel::drawToggleButton (  juce::Graphics& g, juce::ToggleButto
                     false, button.getState());
 }
 
+// [Claude 2026-10-29] Keys (Joe: "Buttons"): a lit key is the band colour lit from the top with a highlight along its top
+// edge and light text; an unlit key is a dark grey key, not pitch black. Shared by the toggles and the choice menus.
+static void drawLitKey(juce::Graphics& g, juce::Rectangle<float> r, juce::Colour c)
+{
+	g.setGradientFill(juce::ColourGradient(c.brighter(0.12f), 0.f, r.getY(), c.darker(0.28f), 0.f, r.getBottom(), false));
+	g.fillRect(r);
+	g.setColour(juce::Colours::white.withAlpha(0.22f));
+	g.fillRect(r.withHeight(1.f).reduced(1.f, 0.f));
+}
+
+static void drawDarkKey(juce::Graphics& g, juce::Rectangle<float> r)
+{
+	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff2b2d33), 0.f, r.getY(), juce::Colour(0xff1d1f24), 0.f, r.getBottom(), false));
+	g.fillRect(r);
+	g.setColour(juce::Colours::white.withAlpha(0.07f));
+	g.fillRect(r.withHeight(1.f).reduced(1.f, 0.f));
+}
+
+static const juce::Colour litKeyText { 0xfff4f5f7 }, darkKeyText { 0xffa9abb3 };
+
 void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& button,
                                         float x, float y, float w, float h,
                                         bool ticked, bool isEnabled,
@@ -989,23 +1009,12 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
 	else
           baseColor = ColorScheme::BandColors::getBypassBaseColor();
 
-    // Set background color based on ticked state
     if (ticked)
-    {
-        g.setColour(baseColor);
-    }
+        drawLitKey(g, bounds, baseColor);
     else
-    {
-        g.setColour(juce::Colours::black);
-    }
-    g.fillRect(bounds);
+        drawDarkKey(g, bounds);
 
-    // Set text color based on ticked state and enabled state
-
-    if (isEnabled)
-      g.setColour(ticked ? juce::Colours::black : juce::Colours::lightgrey);
-    else
-	  g.setColour(juce::Colours::lightgrey);
+    g.setColour(ticked ? litKeyText : darkKeyText);
 
     // Start with a font size based on height (INV)
 	// [Claude 2026-10-29] Button words as small spaced capitals, not big type (Joe: "Now the INV etc seem too large").
@@ -1121,8 +1130,7 @@ void MultComboLookAndFeel::drawComboBox ( juce::Graphics& g,
     else
 	    g.setGradientFill(OPTION_SLIDER_GRADIENT_BYPASS(bounds.toFloat()));
 
-    g.setColour(baseColour);
-    g.fillRect(menuBounds);
+    drawLitKey(g, menuBounds.toFloat(), comboBox.isEnabled() ? baseColour : ColorScheme::BandColors::getBypassBaseColor());
     
     for (int i = 0; i < 4; i++)
     {
@@ -1131,10 +1139,7 @@ void MultComboLookAndFeel::drawComboBox ( juce::Graphics& g,
         menuBounds.reduce(1,1);
     }
     
-	if (comboBox.isEnabled())
-      g.setColour(juce::Colours::black);
-    else
-	  g.setColour(juce::Colours::lightgrey);
+	g.setColour(litKeyText);
     
     juce::String selection = comboBox.getItemText(comboBox.getSelectedItemIndex());
     g.setFont(height * 0.56f);
@@ -1179,8 +1184,7 @@ void WaveComboLookAndFeel::drawComboBox ( juce::Graphics& g,
     else
 	    g.setGradientFill(OPTION_SLIDER_GRADIENT_BYPASS(bounds.toFloat()));
     
-    g.setColour(baseColour);
-    g.fillRect(bounds);
+    drawLitKey(g, bounds.toFloat(), comboBox.isEnabled() ? baseColour : ColorScheme::BandColors::getBypassBaseColor());
     
     for (int i = 0; i < 5; i++)
     {
@@ -1189,10 +1193,7 @@ void WaveComboLookAndFeel::drawComboBox ( juce::Graphics& g,
         bounds.reduce(1,1);
     }
     
-	if (comboBox.isEnabled())
-      g.setColour(juce::Colours::black);
-    else
-	  g.setColour(juce::Colours::lightgrey);
+	g.setColour(litKeyText);
     
     juce::String selection = comboBox.getItemText(comboBox.getSelectedItemIndex());
     g.setFont(height * 0.56f);
