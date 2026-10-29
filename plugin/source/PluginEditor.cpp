@@ -27,7 +27,7 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       
       /* Sets window size */
       float scale = 1.f;
-      setSize(750 * scale, 515 * scale);
+      setSize(750 * scale, 478 * scale);  // [Claude 2026-10-29] shorter, the padding taken out (Joe); was 515
 
       // Scope Channels listens to Band Controls
       globalControls.getLowControl().addActionListener(
@@ -257,8 +257,9 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       flexBox.flexWrap = FlexBox::Wrap::noWrap;
 
       //flexBox.items.add(FlexItem(topBanner).withHeight(50)); <<<<<<<<<<
-      flexBox.items.add(FlexItem(topBanner).withHeight(getHeight() * 0.1f));
-      flexBox.items.add(FlexItem(flexBoxRow).withHeight(getHeight() * 0.4f));
+      const float unit = getWidth() / 750.f;  // [Claude 2026-10-29] the header and the displays keep their size; only the controls area got shorter
+      flexBox.items.add(FlexItem(topBanner).withHeight(51.5f * unit));
+      flexBox.items.add(FlexItem(flexBoxRow).withHeight(206.f * unit));
       flexBox.items.add(FlexItem(globalControls).withFlex(1.f));
 
       flexBox.performLayout(bounds);

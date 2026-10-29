@@ -113,11 +113,14 @@ void BandControl::updateFlexBox()
 
     auto x = bounds.getHeight();
 
-    auto spacer = FlexItem().withHeight(bounds.getHeight() * spacerHeightScale);
+    // [Claude 2026-10-29] Rows sized from the window's width, not this column's height, and half the gap between them,
+    // so the window can be shorter without the controls shrinking (Joe: "reduce all of the padding a bit")
+    const float H = 250.f * (float) getTopLevelComponent()->getWidth() / 750.f;
+    auto spacer = FlexItem().withHeight(H * spacerHeightScale * 0.5f);
 
     // [Claude 2026-10-29] The sliders a little shorter than their row, centred in it, so the rows keep their spacing and
     // line up with the labels (Joe: "making the sliders slightly shorter in height")
-    const float rowH = bounds.getHeight() * columnItemHeightScale, sliderH = rowH * 0.72f;
+    const float rowH = H * columnItemHeightScale, sliderH = rowH * 0.72f;
     auto sliderItem = [&](juce::Component& c) { return FlexItem(c).withHeight(sliderH).withMargin(FlexItem::Margin((rowH - sliderH) / 2.f, 0.f, (rowH - sliderH) / 2.f, 0.f)); };
     // and the menus and keys the same way (Joe: "i meant the dropdowns (and buttons) too")
     auto sliderItemFlex = [&](juce::FlexBox& f, float h) { const float hh = h * 0.72f; return FlexItem(f).withHeight(hh).withMargin(FlexItem::Margin((h - hh) / 2.f, 0.f, (h - hh) / 2.f, 0.f)); };
@@ -134,7 +137,7 @@ void BandControl::updateFlexBox()
     componentColumn.items.add(spacer);
     componentColumn.items.add(sliderItem(mSliderBandGain));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(sliderItemFlex(buttonRow, bounds.getHeight() * buttonRowHeightScale));
+    componentColumn.items.add(sliderItemFlex(buttonRow, H * buttonRowHeightScale));
     
     componentColumn.performLayout(componentBounds);
 

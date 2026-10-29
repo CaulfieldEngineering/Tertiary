@@ -207,7 +207,8 @@ void GlobalControls::paintBandLabels(juce::Graphics& g)
     // Beware of Magic Numbers
     // ==================================
     // [Claude 2026-10-29] Text hierarchy (Joe: "Let's do the text hierarchy"): values plain and clear, labels quieter, band names small and spaced.
-    auto controlLabelsFontSize = 16.f * (getHeight() / 250.f);  // a step up again (Joe: "a little more emphasized")
+    const float unit = (float) getWidth() / 750.f;  // [Claude 2026-10-29] from the width, so a shorter window keeps the size
+    auto controlLabelsFontSize = 16.f * unit;  // a step up again (Joe: "a little more emphasized")
 
     auto controlLabelsFontStyle = juce::Font::FontStyleFlags::bold;
     auto controlLabelsFontColor = juce::Colours::white.withAlpha(0.58f);
@@ -219,7 +220,7 @@ void GlobalControls::paintBandLabels(juce::Graphics& g)
                                     controlLabelsFontStyle);
     
     int x = border3.getX();
-    int height = getHeight() * 0.155f;
+    int height = (int) (30.f * unit);  // the band names' strip, a little tighter (was 15.5 % of the height)
     int y = bounds.getBottom() - height;
     int width = border3.getWidth();
 
