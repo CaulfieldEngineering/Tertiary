@@ -1042,7 +1042,7 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
 	// [Claude 2026-10-29] Button words as small spaced capitals, not big type (Joe: "Now the INV etc seem too large").
 	if (mLabel == "INV")
 	{
-		float fontSize = bounds.getHeight() * 0.43f;
+		float fontSize = bounds.getHeight() * 0.6f;
 		// a touch lighter: the font's semibold face where there is one, else plain (Joe: "a little less bold")
 		g.setFont(buttonWordFont(fontSize).withExtraKerningFactor(0.12f));
 
@@ -1059,7 +1059,7 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
 
     // Adjust the font size if the text width exceeds the bounds width (Byp, Solo, Mute buttons)
     if (mLabel != "INV") {
-		float fontSize = bounds.getHeight() * 0.37f;
+		float fontSize = bounds.getHeight() * 0.51f;
 		g.setFont(buttonWordFont(fontSize).withExtraKerningFactor(0.12f));
     }
 
@@ -1154,7 +1154,7 @@ void MultComboLookAndFeel::drawComboBox ( juce::Graphics& g,
 	g.setColour(litKeyText);
     
     juce::String selection = comboBox.getItemText(comboBox.getSelectedItemIndex());
-    g.setFont(height * 0.56f);
+    g.setFont(height * 0.78f);  // the same size as before the menus got shorter
     g.drawFittedText(selection, menuBounds, juce::Justification::centred, 1);
 }
 
@@ -1206,7 +1206,7 @@ void WaveComboLookAndFeel::drawComboBox ( juce::Graphics& g,
 	g.setColour(litKeyText);
     
     juce::String selection = comboBox.getItemText(comboBox.getSelectedItemIndex());
-    g.setFont(height * 0.56f);
+    g.setFont(height * 0.78f);  // the same size as before the menus got shorter
     g.drawFittedText(selection, bounds, juce::Justification::centred, 1);
     
 }

@@ -119,20 +119,22 @@ void BandControl::updateFlexBox()
     // line up with the labels (Joe: "making the sliders slightly shorter in height")
     const float rowH = bounds.getHeight() * columnItemHeightScale, sliderH = rowH * 0.72f;
     auto sliderItem = [&](juce::Component& c) { return FlexItem(c).withHeight(sliderH).withMargin(FlexItem::Margin((rowH - sliderH) / 2.f, 0.f, (rowH - sliderH) / 2.f, 0.f)); };
+    // and the menus and keys the same way (Joe: "i meant the dropdowns (and buttons) too")
+    auto sliderItemFlex = [&](juce::FlexBox& f, float h) { const float hh = h * 0.72f; return FlexItem(f).withHeight(hh).withMargin(FlexItem::Margin((h - hh) / 2.f, 0.f, (h - hh) / 2.f, 0.f)); };
 
-    componentColumn.items.add(FlexItem(waveShapeRow).withHeight(bounds.getHeight() * columnItemHeightScale));
+    componentColumn.items.add(sliderItemFlex(waveShapeRow, rowH));
     componentColumn.items.add(spacer);
     componentColumn.items.add(sliderItem(mSliderSkew));
     componentColumn.items.add(spacer);
     componentColumn.items.add(sliderItem(mSliderDepth));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(*placeholder).withHeight(bounds.getHeight() * columnItemHeightScale));
+    componentColumn.items.add(sliderItem(*placeholder));
     componentColumn.items.add(spacer);
     componentColumn.items.add(sliderItem(mSliderPhase));
     componentColumn.items.add(spacer);
     componentColumn.items.add(sliderItem(mSliderBandGain));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(buttonRow).withHeight(bounds.getHeight() * buttonRowHeightScale));
+    componentColumn.items.add(sliderItemFlex(buttonRow, bounds.getHeight() * buttonRowHeightScale));
     
     componentColumn.performLayout(componentBounds);
 
