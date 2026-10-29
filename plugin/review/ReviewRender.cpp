@@ -140,6 +140,16 @@ int main (int argc, char* argv[])
     proc->prepareToPlay (rate, block);
     proc->setNonRealtime (true);
 
+    // --preset <name>: a factory or user preset by name, through the host's program list, before any --set
+    if (opt ("--preset").isNotEmpty())
+    {
+        int found = -1;
+        for (int p = 0; p < proc->getNumPrograms(); ++p)
+            if (proc->getProgramName (p) == opt ("--preset")) found = p;
+        if (found < 0) { std::cerr << "no preset " << opt ("--preset") << "\n"; return 2; }
+        proc->setCurrentProgram (found);
+    }
+
     std::vector<Ramp> ramps;
     for (int i = 0; i < args.size(); ++i)
     {
@@ -181,8 +191,28 @@ int main (int argc, char* argv[])
     double nextFrame = 0;
     float peak = 0;
     double sumSq = 0;
+    // --report-at t1,t2,... --report-out file.json: every parameter read back from the plugin at those times (seconds
+    // into the render), with the loaded preset's name, for the promo's first-frame and after-change checks.
+    juce::StringArray reportAt;
+    reportAt.addTokens (opt ("--report-at"), ",", "");
+    reportAt.removeEmptyStrings();
+    int nextReport = 0;
+    juce::Array<juce::var> reports;
     for (int pos = 0, n = 0; pos < total; pos += n)
     {
+        while (nextReport < reportAt.size() && pos / rate >= reportAt[nextReport].getDoubleValue())
+        {
+            auto* snap = new juce::DynamicObject();
+            snap->setProperty ("t", pos / rate);
+            snap->setProperty ("preset", proc->getProgramName (proc->getCurrentProgram()));
+            auto* values = new juce::DynamicObject();
+            for (auto* prm : proc->getParameters())
+                if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (prm))
+                    values->setProperty (rp->getParameterID(), rp->getCurrentValueAsText());
+            snap->setProperty ("values", juce::var (values));
+            reports.add (juce::var (snap));
+            ++nextReport;
+        }
         n = juce::jmin (varBlock ? varSizes[varIndex++ % 10] : block, total - pos); // [Claude 2026-10-27] --block var
         const double t = pos / rate;
         for (auto& r : ramps)
@@ -224,6 +254,8 @@ int main (int argc, char* argv[])
         }
     }
 
+    if (opt ("--report-out").isNotEmpty())
+        juce::File (opt ("--report-out")).replaceWithText (juce::JSON::toString (juce::var (reports)));
     out.deleteFile();
     juce::WavAudioFormat wav;
     std::unique_ptr<juce::AudioFormatWriter> w (wav.createWriterFor (new juce::FileOutputStream (out), rate, (unsigned) result.getNumChannels(), bits, {}, 0));
