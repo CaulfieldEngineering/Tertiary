@@ -701,8 +701,7 @@ void StandardSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int 
 	else
 		g.setGradientFill(BASIC_SLIDER_GRADIENT_BYPASS(bounds));
 	g.fillRect(valueBar);
-
-	drawValueLine(g, bounds, valuePosition, bandColourFor(mode, slider.isEnabled()));
+	// no bright cap at the value: the fill simply ends, as in Joe's original (Joe: "I don't want that big bright cap")
 }
 
 void StandardSliderLookAndFeel::setBandMode(int bandMode)
@@ -743,7 +742,9 @@ void CenterSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int y,
 	// A fine centre mark in place of the old 7 px groove, then the value line on top
 	g.setColour(juce::Colours::white.withAlpha(0.14f));
 	g.fillRect(juce::Rectangle<float>(bounds.getCentreX() - 0.5f, bounds.getY(), 1.f, bounds.getHeight()));
-	drawValueLine(g, bounds, valuePosition, bandColourFor(mode, slider.isEnabled()));
+	// the marker only where there is no fill to show the value, at the centre; otherwise the fill ends plainly
+	if (std::abs(valuePosition - bounds.getCentreX()) < 2.f)
+		drawValueLine(g, bounds, valuePosition, bandColourFor(mode, slider.isEnabled()));
 }
 
 void CenterSliderLookAndFeel::setBandMode(int bandMode)
