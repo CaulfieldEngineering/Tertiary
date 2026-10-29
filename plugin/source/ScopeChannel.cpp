@@ -306,7 +306,7 @@ void ScopeChannel::paintGridLines(juce::Graphics& g)
         {
             // [Claude 2026-10-29] The crossover's grid: one quiet grey for every beat, the origin a step brighter
             // (Joe: "make the gridlines the same style as the crossover"). Was dark and light grey alternating at 35 %.
-            g.setColour(juce::Colours::lightgrey.withAlpha(num == 0 ? 0.2f : 0.12f));
+            g.setColour(juce::Colours::lightgrey.withAlpha(0.12f));  // the origin too (Joe: "match the center one too")
             
             // Draw Twice as Many Gridlines to Account for Panning
             rightGridLine = c + num * beatSpacing;
@@ -318,7 +318,8 @@ void ScopeChannel::paintGridLines(juce::Graphics& g)
             leftGridLine = c - num * beatSpacing;
             verticalAxis.setStart(leftGridLine, bounds.getY());
             verticalAxis.setEnd(leftGridLine, bounds.getBottom());
-            g.drawLine(verticalAxis, 1.f);
+            if (num > 0)    // at the origin both lines fall on one place and drew it twice as bright
+                g.drawLine(verticalAxis, 1.f);
 
             // Calculate Left-Most Onscreen Valid (Even) Marker
 
