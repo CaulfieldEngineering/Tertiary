@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include <cstdlib>
 #include "PluginProcessor.h"
 
 namespace audio_plugin {
@@ -86,6 +87,8 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
 	  if (!fullScreenScope) {
             addAndMakeVisible(aboutWindow);
             aboutWindow.setVisible(false);
+            // [Claude 2026-10-29] review renders only: WLA_FOCUS=ABOUT shows the About window, for a still
+            if (const char* f = std::getenv("WLA_FOCUS")) if (juce::String(f).contains("ABOUT")) aboutWindow.setVisible(true);
       }
 
       // [Claude 2026-10-27] Presets, over the left of the banner
