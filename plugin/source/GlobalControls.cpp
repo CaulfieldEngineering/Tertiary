@@ -220,8 +220,13 @@ void GlobalControls::paintBandLabels(juce::Graphics& g)
                                     controlLabelsFontStyle);
     
     int x = border3.getX();
-    int height = (int) (30.f * unit);  // the band names' strip, a little tighter (was 15.5 % of the height)
-    int y = bounds.getBottom() - height;
+    // [Claude 2026-10-29] The names centred in the space between the keys and the bottom of the column (Joe: "fix the
+    // asymmetrical spacing on the LOW MID HIGH labels"); the extra letter spacing is taken off the right so the word
+    // sits in the middle too
+    const int keysBottom = lowBandControls.getY() + lowBandControls.getButtonRowBounds().getBottom();
+    const int columnBottom = border3.getBottom() - (int) (4.f * unit);
+    int y = keysBottom;
+    int height = juce::jmax(1, columnBottom - keysBottom);
     int width = border3.getWidth();
 
     
@@ -229,17 +234,17 @@ void GlobalControls::paintBandLabels(juce::Graphics& g)
     g.setFont(titleFont);
     g.setColour(controlLabelsFontColor);
     
-    auto lowLabelBounds = juce::Rectangle<int>{x, y, width, height};
+    auto lowLabelBounds = juce::Rectangle<int>{x + (int) (titleFont.getHeight() * 0.18f / 2.f), y, width, height};
     g.drawFittedText("LOW", lowLabelBounds, juce::Justification::centred, 1);
     
     x = border4.getX();
     
-    auto midLabelBounds = juce::Rectangle<int>{x, y, width, height};
+    auto midLabelBounds = juce::Rectangle<int>{x + (int) (titleFont.getHeight() * 0.18f / 2.f), y, width, height};
     g.drawFittedText("MID", midLabelBounds, juce::Justification::centred, 1);
     
     x = border5.getX();
     
-    auto highLabelBounds = juce::Rectangle<int>{x, y, width, height};
+    auto highLabelBounds = juce::Rectangle<int>{x + (int) (titleFont.getHeight() * 0.18f / 2.f), y, width, height};
     g.drawFittedText("HIGH", highLabelBounds, juce::Justification::centred, 1);
 }
 
