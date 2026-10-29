@@ -69,8 +69,11 @@ void TopBanner::paint(juce::Graphics& g)
     g.fillRect(bounds);
     g.setColour(juce::Colours::white.withAlpha(0.07f));
     g.drawHorizontalLine(0, 0.f, bounds.getRight());
-    g.setColour(juce::Colours::black);
+    // [Claude 2026-10-29] a soft seam under the header, like the bevels below it, not a hard black line
+    g.setColour(juce::Colours::black.withAlpha(0.45f));
     g.drawHorizontalLine((int) bounds.getBottom() - 1, 0.f, bounds.getRight());
+    g.setColour(juce::Colours::black.withAlpha(0.2f));
+    g.drawHorizontalLine((int) bounds.getBottom() - 2, 0.f, bounds.getRight());
 
     const float cy = bounds.getCentreY();
 

@@ -9,6 +9,8 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       audioProcessor(p),
       aboutWindow(audioProcessor, *this)  // <-- added here explicitly
 {
+      // [Claude 2026-10-29] every font that does not name a family uses the house typeface
+      juce::LookAndFeel::getDefaultLookAndFeel().setDefaultSansSerifTypefaceName(houseTypeface());
     checkForSerialKeyOnStartup();
 
 

@@ -994,6 +994,7 @@ void ToggleLookAndFeel::drawToggleButton (  juce::Graphics& g, juce::ToggleButto
 // edge and light text; an unlit key is a dark grey key, not pitch black. Shared by the toggles and the choice menus.
 static void drawLitKey(juce::Graphics& g, juce::Rectangle<float> r, juce::Colour c)
 {
+	c = ColorScheme::BandColors::matchLuminance(c, ColorScheme::BandColors::getHighBandBaseColor());  // [Claude 2026-10-29] even bands
 	g.setGradientFill(juce::ColourGradient(c.brighter(0.12f), 0.f, r.getY(), c.darker(0.28f), 0.f, r.getBottom(), false));
 	g.fillRect(r);
 	g.setColour(juce::Colours::white.withAlpha(0.22f));
