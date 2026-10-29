@@ -19,6 +19,10 @@
 
 void paintBorder(juce::Graphics& g, juce::Colour baseColor, juce::Rectangle<float> bounds);
 
+// [Claude 2026-10-29] The same stepped bevel, tightened: three 1 px steps instead of four 2 px ones (Joe: "keep the
+// current approach but just tighten up the bevels")
+void paintBorderTight(juce::Graphics& g, juce::Colour baseColor, juce::Rectangle<float> bounds);
+
 void buildLabelFont(    juce::Label& label,
                         juce::Justification justification,
                         juce::String typeface,
