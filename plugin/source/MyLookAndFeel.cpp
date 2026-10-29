@@ -43,14 +43,9 @@ void CustomSlider::resized()
 void CustomSlider::paintOverChildren(juce::Graphics& g)
 {
     auto bounds = slider.getLocalBounds();
-    /* Provide a "Recessed" appearance */
-    
-    for (int i = 0; i < 4; i++)
-    {
-        g.setColour(juce::Colours::darkgrey.withMultipliedAlpha(1.f/((i*i)+0.75f)));
-        g.drawRect(bounds.toFloat(), 1.f);
-        bounds.reduce(1,1);
-    }
+    // [Claude 2026-10-29] one crisp dark outline on every key, menu and slider (Joe chose it over the grey frames)
+    g.setColour(juce::Colours::black.withAlpha(0.75f));
+    g.drawRect(bounds.toFloat(), 1.f);
     
 //    g.setColour(juce::Colours::hotpink);
 //    g.fillRect(label.getBounds());
@@ -1069,17 +1064,9 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
     // Draw the text centered within the bounds
     g.drawFittedText(mLabel, bounds.toNearestInt(), juce::Justification::centred, 1);
 
-    // Draw the border
-    g.setColour(juce::Colours::grey);
+    // [Claude 2026-10-29] one crisp dark outline, as on the menus and sliders
+    g.setColour(juce::Colours::black.withAlpha(0.75f));
     g.drawRect(bounds, 1.f);
-
-    // Provide a "Recessed" appearance
-    for (int i = 0; i < 4; i++)
-    {
-        g.setColour(juce::Colours::darkgrey.withMultipliedAlpha(1.f/((i*i)+0.75f)));
-        g.drawRect(bounds.toFloat(), 1.f);
-        bounds.reduce(1, 1);
-    }
 }
 
 void ToggleLookAndFeel::setBandMode(int bandMode, juce::String label)
