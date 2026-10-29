@@ -51,13 +51,11 @@ void paintRidge(juce::Graphics& g, juce::Rectangle<float> b)
 {
 	g.setColour(juce::Colours::black.withAlpha(0.8f));
 	g.drawRect(b, 1.f);
-	// lit as a recess: shade along the top and left inside the edge, light along the bottom and right (Joe: the other
-	// way round read as raised)
 	auto in = b.reduced(1.f);
-	g.setColour(juce::Colours::black.withAlpha(0.5f));
-	g.fillRect(in.withHeight(1.5f));
-	g.fillRect(in.withWidth(1.5f));
-	g.setColour(juce::Colours::white.withAlpha(0.08f));
+	g.setColour(juce::Colours::white.withAlpha(0.09f));
+	g.fillRect(in.withHeight(1.f));
+	g.fillRect(in.withWidth(1.f));
+	g.setColour(juce::Colours::black.withAlpha(0.45f));
 	g.fillRect(in.withTop(in.getBottom() - 1.f));
 	g.fillRect(in.withLeft(in.getRight() - 1.f));
 }
