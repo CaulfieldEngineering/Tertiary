@@ -2,6 +2,26 @@
 #include <cstdlib>
 #include "PluginProcessor.h"
 
+// [Claude 2026-10-29] Review renders only (WLA_FOCUS=MENU): pop-up menus open in their own window, which an offline
+// render cannot capture, so this draws the ☰ menu's items in place with the same look, for a still
+struct MenuPreview : juce::Component
+{
+  juce::StringArray items; juce::Array<bool> active;
+  void paint(juce::Graphics& g) override
+  {
+    auto& look = HouseMenuLookAndFeel::get();
+    look.drawPopupMenuBackground(g, getWidth(), getHeight());
+    int y = 4;
+    for (int i = 0; i < items.size(); ++i)
+    {
+      const bool sep = items[i].isEmpty();
+      const int h = sep ? 9 : 22;
+      look.drawPopupMenuItem(g, { 4, y, getWidth() - 8, h }, sep, active[i], i == 0, false, false, items[i], {}, nullptr, nullptr);
+      y += h;
+    }
+  }
+};
+
 namespace audio_plugin {
 
 AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudioProcessor& p)
@@ -99,7 +119,18 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
         // [Claude 2026-10-29] Activate and the menu in the new header open the About window, where activation is
         topBanner.onActivate = [this] { aboutWindow.setVisible(true); aboutWindow.toFront(false); };
         aboutWindow.toFront(false);   // [Claude 2026-10-29] above the preset bar, which was added after it
-        topBanner.onMenu = [this] { aboutWindow.setVisible(! aboutWindow.isVisible()); };
+        topBanner.onMenu = [this] { showMainMenu(); };   // [Claude 2026-10-29] a real menu (was: toggle the About window)
+        if (const char* f = std::getenv("WLA_FOCUS")) if (juce::String(f).contains("MENU"))
+        {
+          auto* m = new MenuPreview();
+          mMenuPreview.reset(m);
+          m->items = { audioProcessor.getDemoState() ? "Activate Tertiary..." : "About Tertiary...",
+                       "Tertiary " + juce::String(JucePlugin_VersionString) + " is up to date", "Open presets folder", "", "WonderlandAudio.com" };
+          m->active = { true, false, true, true, true };
+          m->setBounds(750 - 14 - 200, 44, 200, 4 + 22 * 4 + 9 + 4);
+          addAndMakeVisible(m);   // a still only
+          m->toFront(false);
+        }
 
       // [Claude 2026-10-27] Weekly serial-key re-check and update check, on the processor's own thread
       audioProcessor.licenseCheck.addChangeListener(this);
@@ -280,6 +311,46 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
 	  	if (fullScreenScope)
 		  wrapperOscilloscope.setBounds(getLocalBounds());
 
+    }
+
+    // [Claude 2026-10-29] The ☰ menu: only what Tertiary can back today (Joe: "yeah let's update it")
+    //==============================================================================
+    juce::PopupMenu AudioPluginAudioProcessorEditor::buildMainMenu()
+    {
+      juce::PopupMenu menu;
+      menu.setLookAndFeel(&HouseMenuLookAndFeel::get());
+      const bool demo = audioProcessor.getDemoState();
+      menu.addItem(1, demo ? "Activate Tertiary..." : "About Tertiary...");
+      const auto result = audioProcessor.licenseCheck.getResult();
+      if (result.newVersion.isNotEmpty())
+        menu.addItem(2, "Get version " + result.newVersion + "...");
+      else
+        menu.addItem(2, "Tertiary " + juce::String(JucePlugin_VersionString) + " is up to date", false);
+     #if ! JUCE_EMSCRIPTEN
+      menu.addItem(3, "Open presets folder");
+     #endif
+      menu.addSeparator();
+      menu.addItem(4, "WonderlandAudio.com");
+      return menu;
+    }
+
+    void AudioPluginAudioProcessorEditor::showMainMenu()
+    {
+      juce::Component::SafePointer<AudioPluginAudioProcessorEditor> safeThis(this);
+      buildMainMenu().showMenuAsync(juce::PopupMenu::Options().withTargetScreenArea(localAreaToGlobal(topBanner.getBounds().removeFromRight(40)))
+                                                               .withMinimumWidth(190),
+        [safeThis](int item)
+        {
+          if (safeThis == nullptr || item == 0) return;
+          auto& self = *safeThis;
+          if (item == 1) { self.aboutWindow.setVisible(true); self.aboutWindow.toFront(false); }
+          else if (item == 2 || item == 4) juce::URL("https://www.wonderlandaudio.com").launchInDefaultBrowser();
+          else if (item == 3)
+          {
+            self.audioProcessor.presets.getUserFolder().createDirectory();
+            self.audioProcessor.presets.getUserFolder().startAsProcess();
+          }
+        });
     }
 
     /* Temporary Double-Click Callback*/

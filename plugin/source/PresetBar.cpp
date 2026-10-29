@@ -11,6 +11,7 @@
 */
 
 #include "PresetBar.h"
+#include "MyLookAndFeel.h"
 
 namespace
 {
@@ -125,6 +126,7 @@ void PresetBar::showMenu()
     presets.refreshUserPresets();   // presets saved by another copy of Tertiary show up too
 
     juce::PopupMenu menu;
+    menu.setLookAndFeel(&HouseMenuLookAndFeel::get());   // [Claude 2026-10-29]
     const int current = presets.getCurrentIndex();
     const int numFactory = (int) PresetManager::getFactoryPresets().size();
 

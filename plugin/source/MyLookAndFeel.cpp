@@ -1221,3 +1221,81 @@ void WaveComboLookAndFeel::setMode(int bandMode)
 {
     mode = bandMode;
 }
+
+
+/* =========================================================================== */
+// [Claude 2026-10-29] The house menu look
+void HouseMenuLookAndFeel::drawPopupMenuBackground(juce::Graphics& g, int width, int height)
+{
+	juce::Rectangle<float> r { 0.f, 0.f, (float) width, (float) height };
+	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff26282f), 0.f, 0.f, juce::Colour(0xff1d1f25), 0.f, r.getBottom(), false));
+	g.fillRect(r);
+	g.setColour(juce::Colours::white.withAlpha(0.08f));
+	g.fillRect(r.withHeight(1.f).reduced(1.f, 0.f));
+	g.setColour(juce::Colours::black.withAlpha(0.85f));
+	g.drawRect(r, 1.f);
+}
+
+void HouseMenuLookAndFeel::getIdealPopupMenuItemSize(const juce::String& text, bool isSeparator, int, int& idealWidth, int& idealHeight)
+{
+	if (isSeparator) { idealWidth = 50; idealHeight = 9; return; }
+	idealHeight = 22;
+	idealWidth = getPopupMenuFont().getStringWidth(text) + 44;
+}
+
+void HouseMenuLookAndFeel::drawPopupMenuSectionHeader(juce::Graphics& g, const juce::Rectangle<int>& area, const juce::String& name)
+{
+	auto f = juce::Font(10.f, juce::Font::bold).withExtraKerningFactor(0.12f);
+	g.setFont(f);
+	g.setColour(juce::Colour(0xff6c6f78));
+	g.drawText(name.toUpperCase(), area.withTrimmedLeft(10).withTrimmedTop(4), juce::Justification::centredLeft, false);
+}
+
+void HouseMenuLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectangle<int>& area, bool isSeparator, bool isActive,
+                                             bool isHighlighted, bool isTicked, bool hasSubMenu, const juce::String& text,
+                                             const juce::String& shortcutKeyText, const juce::Drawable*, const juce::Colour*)
+{
+	auto r = area.toFloat();
+	if (isSeparator)
+	{
+		const float y = std::floor(r.getCentreY());
+		g.setColour(juce::Colours::black.withAlpha(0.55f));
+		g.fillRect(juce::Rectangle<float>(r.getX() + 6.f, y, r.getWidth() - 12.f, 1.f));
+		g.setColour(juce::Colours::white.withAlpha(0.05f));
+		g.fillRect(juce::Rectangle<float>(r.getX() + 6.f, y + 1.f, r.getWidth() - 12.f, 1.f));
+		return;
+	}
+	if (isHighlighted && isActive)
+	{
+		g.setColour(juce::Colours::white.withAlpha(0.08f));
+		g.fillRect(r.reduced(2.f, 0.f));
+	}
+	if (isTicked)
+	{
+		const float x = r.getX() + 12.f, y = r.getCentreY();
+		juce::Path tick;
+		tick.startNewSubPath(x - 3.f, y);
+		tick.lineTo(x - 1.f, y + 2.f);
+		tick.lineTo(x + 3.f, y - 2.5f);
+		g.setColour(juce::Colour(0xffe3e4e8));
+		g.strokePath(tick, juce::PathStrokeType(1.25f, juce::PathStrokeType::mitered, juce::PathStrokeType::square));
+	}
+	g.setFont(getPopupMenuFont());
+	g.setColour(! isActive ? juce::Colour(0xff5d606a) : isHighlighted ? juce::Colour(0xfff0f1f4) : juce::Colour(0xffc9cbd1));
+	g.drawText(text, r.withTrimmedLeft(24.f).withTrimmedRight(12.f), juce::Justification::centredLeft, true);
+	if (shortcutKeyText.isNotEmpty())
+	{
+		g.setColour(juce::Colour(0xff6c6f78));
+		g.drawText(shortcutKeyText, r.withTrimmedRight(10.f), juce::Justification::centredRight, false);
+	}
+	if (hasSubMenu)
+	{
+		const float cx = r.getRight() - 10.f, cy = r.getCentreY();
+		juce::Path chev;
+		chev.startNewSubPath(cx - 1.5f, cy - 3.f);
+		chev.lineTo(cx + 1.5f, cy);
+		chev.lineTo(cx - 1.5f, cy + 3.f);
+		g.setColour(juce::Colour(0xff8b8e97));
+		g.strokePath(chev, juce::PathStrokeType(1.2f));
+	}
+}

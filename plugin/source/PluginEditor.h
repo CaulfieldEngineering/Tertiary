@@ -89,7 +89,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
         AboutWindow aboutWindow;
 
-        PresetBar presetBar{audioProcessor};   // [Claude 2026-10-27] top left of the banner
+        PresetBar presetBar{audioProcessor};
+        // [Claude 2026-10-29] the ☰ menu
+        juce::PopupMenu buildMainMenu();
+        void showMainMenu();
+        std::unique_ptr<juce::Component> mMenuPreview;   // review renders only   // [Claude 2026-10-27] top left of the banner
 
         /* Header displayed in top corner */
         juce::Label companyTitle;

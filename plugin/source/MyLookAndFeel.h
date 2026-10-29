@@ -134,6 +134,22 @@ struct CrossoverLookAndFeel : juce::LookAndFeel_V4
                            float rotaryEndAngle, juce::Slider&) override;
 };
 
+// [Claude 2026-10-29] Pop-up menus in the house style, like the Options dropdown: the header's grey, sharp corners,
+// a light row under the mouse, a check for the chosen item (Joe: the new ☰ menu, "yeah let's update it")
+struct HouseMenuLookAndFeel : juce::LookAndFeel_V4
+{
+	void drawPopupMenuBackground(juce::Graphics&, int width, int height) override;
+	void drawPopupMenuItem(juce::Graphics&, const juce::Rectangle<int>& area, bool isSeparator, bool isActive,
+	                       bool isHighlighted, bool isTicked, bool hasSubMenu, const juce::String& text,
+	                       const juce::String& shortcutKeyText, const juce::Drawable* icon, const juce::Colour* textColour) override;
+	void drawPopupMenuSectionHeader(juce::Graphics&, const juce::Rectangle<int>& area, const juce::String& sectionName) override;
+	juce::Font getPopupMenuFont() override { return juce::Font(12.5f); }
+	int getPopupMenuBorderSize() override { return 4; }
+	void getIdealPopupMenuItemSize(const juce::String& text, bool isSeparator, int standardMenuItemHeight, int& idealWidth, int& idealHeight) override;
+
+	static HouseMenuLookAndFeel& get() { static HouseMenuLookAndFeel look; return look; }
+};
+
 struct ButtonOptionsLookAndFeel : juce::LookAndFeel_V4
 {
 	void drawButtonBackground(	juce::Graphics& g, 
