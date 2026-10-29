@@ -107,7 +107,11 @@ void TopBanner::paint(juce::Graphics& g)
         const int pw = juce::roundToInt(logoW * scale), ph = juce::roundToInt(logoH * scale);
         if (scaledCompanyTitle.isNull() || scaledCompanyTitle.getWidth() != pw || scaledCompanyTitle.getHeight() != ph)
             scaledCompanyTitle = applyResize(imageCompanyTitle, pw, ph);
-        g.drawImage(scaledCompanyTitle, juce::Rectangle<float>(x - logoW, cy - logoH / 2.f, logoW, logoH));
+        // drawn one picture pixel to one screen pixel, on whole screen pixels: a fractional position smeared it at
+        // 100 / 125 / 150 % (Joe: "125 and 100 look a little teensy bit blurry"). The banner sits at the window's origin.
+        const float left = std::round((x - logoW) * scale) / scale, top = std::round((cy - logoH / 2.f) * scale) / scale;
+        g.setImageResamplingQuality(juce::Graphics::lowResamplingQuality);
+        g.drawImage(scaledCompanyTitle, juce::Rectangle<float>(left, top, pw / scale, ph / scale));
         x -= logoW + gap;
     }
 

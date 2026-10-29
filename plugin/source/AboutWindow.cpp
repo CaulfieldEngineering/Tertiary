@@ -185,7 +185,11 @@ void AboutWindow::paint(juce::Graphics& g)
         const int pw = juce::roundToInt(w * sc), ph = juce::roundToInt(h * sc);
         if (scaledCompanyTitle.isNull() || scaledCompanyTitle.getWidth() != pw || scaledCompanyTitle.getHeight() != ph)
             scaledCompanyTitle = applyResize(imageCompanyTitle, pw, ph);
-        g.drawImage(scaledCompanyTitle, juce::Rectangle<float>(r.getRight() - x - 26.f - w, 25.f, w, h));
+        // one picture pixel to one screen pixel, on whole screen pixels (this window sits inside the scaled content, whose
+        // origin is the window's, so its own position is counted); a fractional position smeared it (Joe)
+        const auto snap = [&](float v, int origin) { return std::round((origin + v) * sc) / sc - origin; };
+        g.setImageResamplingQuality(juce::Graphics::lowResamplingQuality);
+        g.drawImage(scaledCompanyTitle, juce::Rectangle<float>(snap(r.getRight() - x - 26.f - w, getX()), snap(25.f, getY()), pw / sc, ph / sc));
     }
 
     g.setColour(juce::Colours::black.withAlpha(0.5f));

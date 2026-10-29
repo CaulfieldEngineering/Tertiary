@@ -121,6 +121,10 @@ struct InOutLookAndFeel : juce::LookAndFeel_V4
 							float sliderPos, float minSliderPos, float maxSliderPos,
 							const juce::Slider::SliderStyle sliderStyle, juce::Slider& slider) override;
 
+	// [Claude 2026-10-29] half the cap's height: the cap's centre travels to within this of each end of the slot, so
+	// the cap reaches the top and bottom (Joe: "The fader's don't scroll all the way up to the top and bottom")
+	int getSliderThumbRadius(juce::Slider& slider) override { return juce::roundToInt(slider.getWidth() * 0.31f) + 1; }
+
 private:
 	juce::Image imageFader;
 };
@@ -228,7 +232,7 @@ private:
 
 };
 
-struct MultComboLookAndFeel : juce::LookAndFeel_V4
+struct MultComboLookAndFeel : HouseMenuLookAndFeel   // [Claude 2026-10-29] its pop-up in the house menu style (Joe: "can we style these dropdowns?")
 {
     MultComboLookAndFeel();
     
@@ -247,7 +251,7 @@ private:
     
 };
 
-struct WaveComboLookAndFeel : juce::LookAndFeel_V4
+struct WaveComboLookAndFeel : HouseMenuLookAndFeel   // [Claude 2026-10-29] its pop-up in the house menu style
 {
     void drawComboBox (juce::Graphics& g, int width, int height, bool isButtonDown,
                        int buttonX, int buttonY, int buttonW, int buttonH,

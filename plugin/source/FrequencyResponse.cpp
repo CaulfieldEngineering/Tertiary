@@ -802,12 +802,17 @@ void FrequencyResponse::updateResponse()
     // gains it follows the louder band's curve, so it always sits on a line you can see (Joe: "Their position is
     // based on whatever band moved last ... Are they supposed to be at the intersection")
     const auto lr4 = [](float f, float cut, bool high) { return -20.f * std::log10(1.f + std::pow(high ? cut / f : f / cut, 4.f)); };
-    const float atLM = juce::jmax(mLowGain + lr4(mLowMidCutoff, mLowMidCutoff, false),
-                                  mMidGain + lr4(mLowMidCutoff, mLowMidCutoff, true) + lr4(mLowMidCutoff, mMidHighCutoff, false));
-    const float atMH = juce::jmax(mMidGain + lr4(mMidHighCutoff, mLowMidCutoff, true) + lr4(mMidHighCutoff, mMidHighCutoff, false),
-                                  mHighGain + lr4(mMidHighCutoff, mMidHighCutoff, true));
-    newCursorLM.setMarkerY(yAtDb(atLM) - newCursorLM.getY());
-    newCursorMH.setMarkerY(yAtDb(atMH) - newCursorMH.getY());
+    // Only bands that are showing count: soloed or muted bands are not drawn, so a ring on them floated in the air
+    // (Joe: "when you solo, the circles don't update positions"). With neither band showing, the ring goes away.
+    const float hidden = -1000.f;
+    const float lowAtLM  = showLowBand  ? mLowGain + lr4(mLowMidCutoff, mLowMidCutoff, false) : hidden;
+    const float midAtLM  = showMidBand  ? mMidGain + lr4(mLowMidCutoff, mLowMidCutoff, true) + lr4(mLowMidCutoff, mMidHighCutoff, false) : hidden;
+    const float midAtMH  = showMidBand  ? mMidGain + lr4(mMidHighCutoff, mLowMidCutoff, true) + lr4(mMidHighCutoff, mMidHighCutoff, false) : hidden;
+    const float highAtMH = showHighBand ? mHighGain + lr4(mMidHighCutoff, mMidHighCutoff, true) : hidden;
+    const float atLM = juce::jmax(lowAtLM, midAtLM), atMH = juce::jmax(midAtMH, highAtMH);
+    const float offScreen = 1.0e6f;   // drawn far below the display, so clipped away
+    newCursorLM.setMarkerY(atLM > hidden ? yAtDb(atLM) - newCursorLM.getY() : offScreen);
+    newCursorMH.setMarkerY(atMH > hidden ? yAtDb(atMH) - newCursorMH.getY() : offScreen);
 
     // [Claude 2026-10-29] Review renders only: WLA_FOCUS=LM, MH or MID shows that handle as if hovered, so a still can
     // show what emerges on hover. Never set in a release.

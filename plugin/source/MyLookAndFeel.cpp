@@ -878,13 +878,15 @@ void InOutLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int wid
 	auto faderWidth = bounds.getWidth();
 	auto faderHeight = faderWidth*2.f;
 
-	auto sliderPosScaled = (sliderPos - bounds.getY()) / bounds.getHeight();
+	// [Claude 2026-10-29] the cap sits right at JUCE's position, which already runs the length of the slot less half a
+	// cap at each end (getSliderThumbRadius); it stopped 25 px short of both ends before
+	auto faderRange = sliderPos;
 
-	auto faderRange = juce::jmap(sliderPosScaled, bounds.getY() + 25, bounds.getBottom() - 25);
-
+	// the track runs the whole slot
+	const auto whole = slider.getLocalBounds().toFloat();
 	juce::Path track;
-	track.startNewSubPath(bounds.getCentreX(), bounds.getY() + 10);
-	track.lineTo(bounds.getCentreX(), bounds.getBottom() - 10);
+	track.startNewSubPath(bounds.getCentreX(), whole.getY() + 3.f);
+	track.lineTo(bounds.getCentreX(), whole.getBottom() - 3.f);
 	g.setColour(juce::Colours::black.withAlpha(0.85f));
 	g.strokePath(track, juce::PathStrokeType(	3.f, juce::PathStrokeType::JointStyle::beveled, 
 												juce::PathStrokeType::EndCapStyle::rounded));
@@ -992,6 +994,23 @@ void ToggleLookAndFeel::drawToggleButton (  juce::Graphics& g, juce::ToggleButto
 
 // [Claude 2026-10-29] Keys (Joe: "Buttons"): a lit key is the band colour lit from the top with a highlight along its top
 // edge and light text; an unlit key is a dark grey key, not pitch black. Shared by the toggles and the choice menus.
+// [Claude 2026-10-29] Text centred on a whole-pixel baseline and left edge. Centring by itself put small text on half
+// pixels, which smeared it a pixel up and down (Joe: "the word "Square" on the blue dropdown menu" looked blurry at
+// 100 %). Falls back to fitting when the text is wider than its box.
+static void drawCrispText(juce::Graphics& g, const juce::String& text, juce::Rectangle<int> r)
+{
+	const auto font = g.getCurrentFont();
+	const float w = font.getStringWidthFloat(text);
+	if (w > (float) r.getWidth())
+	{
+		g.drawFittedText(text, r, juce::Justification::centred, 1);
+		return;
+	}
+	const float baseline = std::round((float) r.getY() + ((float) r.getHeight() + font.getAscent() - font.getDescent()) / 2.f);
+	const float left = std::round((float) r.getCentreX() - w / 2.f);
+	g.drawSingleLineText(text, juce::roundToInt(left), juce::roundToInt(baseline));
+}
+
 static void drawLitKey(juce::Graphics& g, juce::Rectangle<float> r, juce::Colour c)
 {
 	c = ColorScheme::BandColors::matchLuminance(c, ColorScheme::BandColors::getHighBandBaseColor());  // [Claude 2026-10-29] even bands
@@ -1070,7 +1089,7 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
     }
 
     // Draw the text centered within the bounds
-    g.drawFittedText(mLabel, bounds.toNearestInt(), juce::Justification::centred, 1);
+    drawCrispText(g, mLabel, bounds.toNearestInt());
 
     // [Claude 2026-10-29] one crisp dark outline, as on the menus and sliders
     g.setColour(juce::Colours::black.withAlpha(0.75f));
@@ -1160,8 +1179,8 @@ void MultComboLookAndFeel::drawComboBox ( juce::Graphics& g,
 	g.setColour(litKeyText);
     
     juce::String selection = comboBox.getItemText(comboBox.getSelectedItemIndex());
-    g.setFont(height * 0.78f);  // the same size as before the menus got shorter
-    g.drawFittedText(selection, menuBounds, juce::Justification::centred, 1);
+    g.setFont((float) juce::roundToInt(height * 0.78f));  // the same size as before the menus got shorter, on a whole pixel
+    drawCrispText(g, selection, menuBounds);
 }
 
 void MultComboLookAndFeel::setMode(int bandMode)
@@ -1212,8 +1231,8 @@ void WaveComboLookAndFeel::drawComboBox ( juce::Graphics& g,
 	g.setColour(litKeyText);
     
     juce::String selection = comboBox.getItemText(comboBox.getSelectedItemIndex());
-    g.setFont(height * 0.78f);  // the same size as before the menus got shorter
-    g.drawFittedText(selection, bounds, juce::Justification::centred, 1);
+    g.setFont((float) juce::roundToInt(height * 0.78f));  // the same size as before the menus got shorter, on a whole pixel
+    drawCrispText(g, selection, bounds);
     
 }
 

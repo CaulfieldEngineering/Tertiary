@@ -403,7 +403,7 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
     void AudioPluginAudioProcessorEditor::showMainMenu()
     {
       juce::Component::SafePointer<AudioPluginAudioProcessorEditor> safeThis(this);
-      buildMainMenu().showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&topBanner).withTargetScreenArea(localAreaToGlobal(topBanner.getBounds().removeFromRight(40)))
+      buildMainMenu().showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&topBanner).withTargetScreenArea(topBanner.localAreaToGlobal(topBanner.getLocalBounds().removeFromRight(40)))   /* [Claude 2026-10-29] through the banner, so the window's scale is counted (it opened in the 100 % spot) */
                                                                .withMinimumWidth(190),
         [safeThis](int item)
         {

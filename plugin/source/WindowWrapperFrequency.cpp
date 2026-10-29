@@ -170,10 +170,8 @@ void WindowWrapperFrequency::paintFFT(juce::Graphics& g, juce::Rectangle<float> 
     g.setOpacity(0.9f);
     g.fillPath(f);
 
-    // Fill FFT Outline
-    g.setColour(juce::Colours::darkgrey);
-    g.setOpacity(0.95f);
-    g.strokePath(f, juce::PathStrokeType(0.5f));
+    // [Claude 2026-10-29] No outline: it ran round the whole closed shape, so its flat bottom and sides showed as
+    // stray lines along the crossover's floor (Joe: "some weird lines being painted down here")
 
 }
 

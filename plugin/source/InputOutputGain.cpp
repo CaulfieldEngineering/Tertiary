@@ -24,8 +24,9 @@ InputOutputGain::InputOutputGain(audio_plugin::AudioPluginAudioProcessor& p) :
 	addAndMakeVisible(sliderGain);
 
 	startTimerHz(30);
-    setOpaque(true);
-	setBufferedToImage(true);
+    // [Claude 2026-10-29] not opaque and not cached: at a scaled window size (125 %, 150 %) the edges fall between
+    // screen pixels, so an opaque, cached meter left stray pixels round its label (Joe: "little singular pixel
+    // artifacts behind the input and output gain labels")
 
 }
 
@@ -117,9 +118,8 @@ void InputOutputGain::resized()
 
 	// Place The Slider
 	// ===========================================================
-	sliderGain.setSize(getWidth(), getHeight() * 0.95f);
-	//sliderGain.setCentreRelative(0.5f, 0.465f);
-    sliderGain.setTopLeftPosition(0, bounds.getHeight() * 0.01f);
+	// [Claude 2026-10-29] the slider covers the whole meter slot above the value, so the cap can reach both ends
+	sliderGain.setBounds(grillBounds.toNearestInt());
 }
 
 juce::ColourGradient InputOutputGain::makeMeterGradient(juce::Rectangle<float> bounds, float brightness)
