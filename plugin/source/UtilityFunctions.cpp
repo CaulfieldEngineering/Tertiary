@@ -19,32 +19,17 @@
 // ==================================================================
 void paintBorder(juce::Graphics& g, juce::Colour baseColor, juce::Rectangle<float> bounds)
 {
-	using namespace juce;
-
-	//auto baseColor = juce::Colours::purple;
-
-	//color = juce::Colours::purple;
-
-	// DRAW BORDER 1 ====================
-	juce::Rectangle<float> border;
-	border.setBounds(bounds.getTopLeft().x, bounds.getTopLeft().y, bounds.getWidth(), bounds.getHeight());
-	g.setColour(baseColor);
-	g.drawRoundedRectangle(border, 1.f, 2.f);
-
-	// DRAW BORDER 2 =====
-	border.reduce(1, 1);
-	g.setColour(baseColor.withMultipliedBrightness(0.8f));
-	g.drawRoundedRectangle(border, 2.f, 2.f);
-
-	// DRAW BORDER 3 =====
-	border.reduce(1, 1);
-	g.setColour(baseColor.withMultipliedBrightness(0.6f));
-	g.drawRoundedRectangle(border, 2.f, 2.f);
-
-	// DRAW BORDER 4 =====
-	border.reduce(1, 1);
-	g.setColour(baseColor.withMultipliedBrightness(0.3f));
-	g.drawRoundedRectangle(border, 2.f, 2.f);
+	// [Claude 2026-10-29] Joe's stepped bevel, tightened: the same four steps from the frame grey down into the recess,
+	// 1 px each instead of 2, and near-square corners (Joe: "revert the framing to its original state and just
+	// tighten it up", "a little thinner and sharper"). The boxes it frames are unchanged.
+	auto border = bounds.reduced(0.5f);
+	const float steps[] = { 1.f, 0.8f, 0.6f, 0.3f };
+	for (float k : steps)
+	{
+		g.setColour(baseColor.withMultipliedBrightness(k));
+		g.drawRoundedRectangle(border, 0.75f, 1.f);
+		border.reduce(1.f, 1.f);
+	}
 }
 
 /* Conditions All Font & Text Parameters */
