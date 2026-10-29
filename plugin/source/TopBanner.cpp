@@ -123,11 +123,18 @@ void TopBanner::paint(juce::Graphics& g)
         auto tagFont = juce::Font(10.f, juce::Font::bold);
         tagFont.setExtraKerningFactor(0.15f);
         g.setFont(tagFont);
-        const float tagW = 46.f;
+        const juce::String tagText = mDemoBypassed ? juce::String("BYPASSED") : juce::String("DEMO");  // the tag itself says why
+        const float tagW = mDemoBypassed ? 78.f : 46.f;
         juce::Rectangle<float> tag { x - tagW, cy - 9.f, tagW, 18.f };
         g.setColour(juce::Colour(0xffc886dd));
+        if (mDemoBypassed)
+        {
+            g.setColour(juce::Colour(0xffc886dd).withAlpha(0.15f));
+            g.fillRoundedRectangle(tag, 2.f);
+            g.setColour(juce::Colour(0xffc886dd));
+        }
         g.drawRoundedRectangle(tag.reduced(0.5f), 2.f, 1.f);
-        g.drawText("DEMO", tag, juce::Justification::centred, false);
+        g.drawText(tagText, tag, juce::Justification::centred, false);
     }
 }
 

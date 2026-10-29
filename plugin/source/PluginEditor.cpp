@@ -119,7 +119,13 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
         // [Claude 2026-10-29] Activate and the menu in the new header open the About window, where activation is
         topBanner.onActivate = [this] { aboutWindow.setVisible(true); aboutWindow.toFront(false); };
         aboutWindow.toFront(false);   // [Claude 2026-10-29] above the preset bar, which was added after it
-        topBanner.onMenu = [this] { showMainMenu(); };   // [Claude 2026-10-29] a real menu (was: toggle the About window)
+        topBanner.onMenu = [this] { showMainMenu(); };
+        globalControls.onDemoBypassChanged = [this](bool bypassed)   // [Claude 2026-10-29] one bypassed state for the whole window
+        {
+          wrapperOscilloscope.setAlpha(bypassed ? 0.35f : 1.f);
+          wrapperFrequency.setAlpha(bypassed ? 0.35f : 1.f);
+          topBanner.setDemoBypassed(bypassed);
+        };   // [Claude 2026-10-29] a real menu (was: toggle the About window)
         if (const char* f = std::getenv("WLA_FOCUS")) if (juce::String(f).contains("MENU"))
         {
           auto* m = new MenuPreview();
@@ -306,7 +312,7 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       // [Claude 2026-10-27] The preset bar sits on the left of the banner; the line under it is the
       // banner's own (the demo note, or the update link)
       // [Claude 2026-10-29] the preset sits in the middle of the new header
-      presetBar.setBounds(topBanner.getX() + 248, topBanner.getY() + (topBanner.getHeight() - 22) / 2, 170, 22);
+      presetBar.setBounds(topBanner.getX() + 248, topBanner.getY() + (topBanner.getHeight() - 22) / 2, 160, 22);
 
 	  	if (fullScreenScope)
 		  wrapperOscilloscope.setBounds(getLocalBounds());

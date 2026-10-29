@@ -67,34 +67,35 @@ GlobalControls::GlobalControls(audio_plugin::AudioPluginAudioProcessor& p)
 
 }
 
+// [Claude 2026-10-29] The demo's bypass: the band controls fade evenly and keep their colours (and stop taking the mouse)
+// instead of being disabled, which drew them as bright grey keys that looked lit (Joe: "green lit for your proposal")
+void GlobalControls::showBypass(bool bypassed)
+{
+    if (bypassed == mShowingBypass)
+        return;
+    mShowingBypass = bypassed;
+    for (auto* c : { (juce::Component*) &lowBandControls, (juce::Component*) &midBandControls, (juce::Component*) &highBandControls,
+                     (juce::Component*) &inputGain, (juce::Component*) &outputGain })
+    {
+        c->setAlpha(bypassed ? 0.35f : 1.f);
+        c->setInterceptsMouseClicks(! bypassed, ! bypassed);
+    }
+    if (onDemoBypassChanged)
+        onDemoBypassChanged(bypassed);
+}
+
 void GlobalControls::timerCallback()
 {
-    //#ifdef DEMO_VERSION
-	if (mIsDemoVersion)
-	{
-        auto isEnabled = audioProcessor.getIsDemoModeEnabled();
+    // the demo bypasses for 10 s of every minute; the activated version never does
+    showBypass(mIsDemoVersion && ! audioProcessor.getIsDemoModeEnabled());
 
-        if (!isEnabled)
-        {
-              lowBandControls.setEnabled(false);
-              midBandControls.setEnabled(false);
-              highBandControls.setEnabled(false);
-        }
-        else
-        {
-              lowBandControls.setEnabled(true);
-              midBandControls.setEnabled(true);
-              highBandControls.setEnabled(true);
-        }
-    }
-    else if (!lowBandControls.isEnabled())
+    if (! lowBandControls.isEnabled())
     {
         // [Claude 2026-10-27] Activated during the demo's silent gap: the controls stayed greyed out until reload
         lowBandControls.setEnabled(true);
         midBandControls.setEnabled(true);
         highBandControls.setEnabled(true);
     }
-    //#endif
 }
 
 void GlobalControls::paint(juce::Graphics& g)

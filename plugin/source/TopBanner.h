@@ -23,6 +23,9 @@ public:
 	/* Tells this class whether or not the app is in Demo Version */
 	void setDemoState(bool demoState) {mIsDemoVersion = demoState; updateVersionLink();}
 
+	/* [Claude 2026-10-29] While the demo's bypass runs, the DEMO tag says so */
+	void setDemoBypassed(bool b) { if (b != mDemoBypassed) { mDemoBypassed = b; repaint(); } }
+
 	/* [Claude 2026-10-27] Shows a quiet "Version X is available" link (full version only). Empty hides it. */
 	void setUpdateVersion(const juce::String& version);
 
@@ -58,6 +61,7 @@ private:
 	bool mIsDemoVersion {true};
 
 	bool mIsMouseOver { false };
+	bool mDemoBypassed { false };
 
 	juce::Rectangle<float> mActivateArea, mMenuArea;
 
