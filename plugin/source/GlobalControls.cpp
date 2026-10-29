@@ -156,7 +156,6 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
     const char* names[] = { "Shape", "Skew", "Depth", "Rhythm", "Phase", "Gain" };
     const int n = 6;
     const float pitch = (rows[n - 1].getCentreY() - rows[0].getCentreY()) / (float) (n - 1);
-    const float x0 = (float) border2.getX() + 3.f, x1 = (float) labelBorder.getRight() - 3.f;
 
     for (int i = 0; i < n; ++i)
     {
@@ -167,11 +166,17 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
         g.drawFittedText(names[i], juce::Rectangle<float>((float) border2.getX(), yc - pitch / 2.f, (float) border2.getWidth(), pitch).toNearestInt(),
                          juce::Justification::centred, 1);
 
+        // drawn inside each column only, so the columns' frames run unbroken top to bottom (Joe: "split sections
+        // instead of a continuous frame")
         const float yLine = yc + pitch / 2.f;
-        g.setColour(juce::Colours::black.withAlpha(0.55f));
-        g.fillRect(juce::Rectangle<float>(x0, yLine - 0.5f, x1 - x0, 1.f));
-        g.setColour(juce::Colours::white.withAlpha(0.04f));
-        g.fillRect(juce::Rectangle<float>(x0, yLine + 0.5f, x1 - x0, 1.f));
+        for (auto col : { border2, border3, border4, border5 })
+        {
+            const auto c = col.toFloat().reduced(3.f, 0.f);
+            g.setColour(juce::Colours::black.withAlpha(0.55f));
+            g.fillRect(juce::Rectangle<float>(c.getX(), yLine - 0.5f, c.getWidth(), 1.f));
+            g.setColour(juce::Colours::white.withAlpha(0.04f));
+            g.fillRect(juce::Rectangle<float>(c.getX(), yLine + 0.5f, c.getWidth(), 1.f));
+        }
     }
 
     // Input Gain Border
