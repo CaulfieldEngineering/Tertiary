@@ -31,6 +31,7 @@ struct InputOutputGain : juce::Component, juce::Timer, juce::Slider::Listener
 
 	InOutLookAndFeel inOutLookAndFeel;
 
+	int leftLedEdge { 0 }, rightLedEdge { 0 };  // [Claude 2026-10-29] where the two LED columns' holes end and begin
 	void buildGrill(juce::Rectangle<float> bounds);
     
 	void getLevels();

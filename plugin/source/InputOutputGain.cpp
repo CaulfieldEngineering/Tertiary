@@ -241,11 +241,17 @@ void InputOutputGain::buildGrill(juce::Rectangle<float> bounds)
 
 				// Provide transparency in the image
 				grill.clear(ledArea.toNearestInt(), juce::Colours::hotpink.withAlpha(0.f));
+				if (z == 0 && y == 0)
+					(x == 0 ? leftLedEdge : rightLedEdge) = (x == 0 ? ledArea.toNearestInt().getRight() : ledArea.toNearestInt().getX());
 			}
 
 
 		}
 	}
+
+	// [Claude 2026-10-29] The LED holes are cut on whole pixels, so their gap can sit half a pixel off the component's
+	// centre; the fader is drawn on the gap itself (Joe: "the track is to the left of center on the meter")
+	sliderGain.getProperties().set("ledCentreX", (leftLedEdge + rightLedEdge) / 2.0);
 
 	// Sort LED Y values in Ascending Fashion
 	ledThresholds.sort();
