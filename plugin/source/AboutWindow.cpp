@@ -20,7 +20,8 @@
 //==============================================================================
 void AboutWindow::Look::drawButtonBackground(juce::Graphics& g, juce::Button& b, const juce::Colour&, bool highlighted, bool down)
 {
-	auto r = b.getLocalBounds().toFloat().reduced(0.5f);
+	const PixelGrid grid(g, &b);   // [Claude 2026-10-29] edges and highlight on whole screen pixels
+	auto r = grid.strokeRect(b.getLocalBounds().toFloat());
 	const bool primary = b.getProperties()["primary"];
 	juce::Colour top = primary ? juce::Colour(0xff5bbd7d) : juce::Colour(0xff34363e);
 	juce::Colour bot = primary ? juce::Colour(0xff3f9a5f) : juce::Colour(0xff25272d);
@@ -29,9 +30,9 @@ void AboutWindow::Look::drawButtonBackground(juce::Graphics& g, juce::Button& b,
 	g.setGradientFill(juce::ColourGradient(top, 0.f, r.getY(), bot, 0.f, r.getBottom(), false));
 	g.fillRoundedRectangle(r, 1.5f);
 	g.setColour(juce::Colours::white.withAlpha(primary ? 0.25f : 0.1f));
-	g.fillRect(r.withHeight(1.f).reduced(1.5f, 0.f));
+	fillHLine(g, grid, r.getY() + grid.rulePx() / 2.f, r.getX() + 1.5f, r.getRight() - 1.5f);
 	g.setColour(juce::Colours::black.withAlpha(0.7f));
-	g.drawRoundedRectangle(r, 1.5f, 1.f);
+	g.drawRoundedRectangle(r, 1.5f, grid.rulePx());
 }
 
 void AboutWindow::Look::drawButtonText(juce::Graphics& g, juce::TextButton& b, bool highlighted, bool)
@@ -48,24 +49,26 @@ void AboutWindow::Look::drawButtonText(juce::Graphics& g, juce::TextButton& b, b
 	}
 	g.setColour(primary ? juce::Colour(0xff0f1a12) : juce::Colour(highlighted ? 0xffd9dade : 0xffb4b6bc));
 	g.setFont(juce::Font(13.f));
-	g.drawText(b.getButtonText(), b.getLocalBounds(), juce::Justification::centred, false);
+	drawTextOnPixels(g, PixelGrid(g, &b), b.getButtonText(), b.getLocalBounds().toFloat(), juce::Justification::centred);   // [Claude 2026-10-29]
 }
 
-void AboutWindow::Look::fillTextEditorBackground(juce::Graphics& g, int w, int h, juce::TextEditor&)
+void AboutWindow::Look::fillTextEditorBackground(juce::Graphics& g, int w, int h, juce::TextEditor& e)
 {
-	juce::Rectangle<float> r { 0.5f, 0.5f, (float) w - 1.f, (float) h - 1.f };
+	const PixelGrid grid(g, &e);   // [Claude 2026-10-29]
+	auto r = grid.strokeRect(juce::Rectangle<float>(0.f, 0.f, (float) w, (float) h));
 	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff0b0c0f), 0.f, r.getY(), juce::Colour(0xff15161a), 0.f, r.getBottom(), false));
 	g.fillRoundedRectangle(r, 1.5f);
 	g.setColour(juce::Colours::black.withAlpha(0.6f));
-	g.fillRect(r.withHeight(1.5f).reduced(1.5f, 0.f));
+	fillHLine(g, grid, r.getY(), r.getX() + 1.5f, r.getRight() - 1.5f, grid.thick(1.5f));
 }
 
 void AboutWindow::Look::drawTextEditorOutline(juce::Graphics& g, int w, int h, juce::TextEditor& e)
 {
+	const PixelGrid grid(g, &e);   // [Claude 2026-10-29]
 	g.setColour(e.hasKeyboardFocus(true) ? juce::Colour(0xff5bbd7d).withAlpha(0.7f) : juce::Colours::black.withAlpha(0.7f));
-	g.drawRoundedRectangle(juce::Rectangle<float>(0.5f, 0.5f, (float) w - 1.f, (float) h - 1.f), 1.5f, 1.f);
+	g.drawRoundedRectangle(grid.strokeRect(juce::Rectangle<float>(0.f, 0.f, (float) w, (float) h)), 1.5f, grid.rulePx());
 	g.setColour(juce::Colours::white.withAlpha(0.06f));
-	g.fillRect(juce::Rectangle<float>(2.f, (float) h - 1.f, (float) w - 4.f, 1.f));
+	fillHLine(g, grid, (float) h - grid.rulePx(), 2.f, (float) w - 2.f);
 }
 
 void AboutWindow::applyLook()
@@ -104,6 +107,7 @@ void AboutWindow::applyLook()
 	mButtonWebsiteLink.setColour(juce::HyperlinkButton::textColourId, juce::Colour(0xff8b8e97));
 	mLabelStatus.setFont(juce::Font(12.f, juce::Font::italic));
 	mLabelStatus.setColour(juce::Label::textColourId, juce::Colour(0xffa9abb3));
+	mLabelStatus.setLookAndFeel(&HouseLabelLookAndFeel::get());   // [Claude 2026-10-29] its text on whole screen pixels
 	resized();
 	repaint();
 }
@@ -145,6 +149,7 @@ AboutWindow::~AboutWindow()
 	for (juce::Component* c : { (juce::Component*) &mButtonClose, (juce::Component*) &mActionButton,
 	                            (juce::Component*) &mTextEditorEmailAddress, (juce::Component*) &mTextEditorSerialKey })
 		c->setLookAndFeel(nullptr);
+	mLabelStatus.setLookAndFeel(nullptr);   // [Claude 2026-10-29]
 
 }
 
@@ -153,12 +158,13 @@ void AboutWindow::paint(juce::Graphics& g)
     // [Claude 2026-10-29] A panel in the header's style: top-lit grey, a thin border, the wordmark and version at the
     // top, then the licence state (Joe: "yes rebuild it"). Was the title pictures on black in a thick grey frame.
     auto r = getLocalBounds().toFloat();
+    const PixelGrid grid(g, this);   // [Claude 2026-10-29] hairlines and text on whole screen pixels at every window size
     g.setGradientFill(juce::ColourGradient(juce::Colour(0xff222329), 0.f, 0.f, juce::Colour(0xff17181c), 0.f, r.getBottom(), false));
     g.fillRect(r);
     g.setColour(juce::Colours::white.withAlpha(0.08f));
-    g.fillRect(r.withHeight(1.f).reduced(1.f, 0.f));
+    fillHLine(g, grid, r.getY(), r.getX() + 1.f, r.getRight() - 1.f);
     g.setColour(juce::Colours::black);
-    g.drawRect(r, 1.f);
+    g.drawRect(grid.snap(r), grid.rulePx());
 
     const float x = 20.f;
 
@@ -169,12 +175,12 @@ void AboutWindow::paint(juce::Graphics& g)
     g.setColour(juce::Colour(0xffe9e9ec));
     const juce::String name("TERTIARY");
     const float nameW = (float) nameFont.getStringWidth(name);
-    g.drawText(name, juce::Rectangle<float>(x, 20.f, nameW + 8.f, 22.f), juce::Justification::centredLeft, false);
+    drawTextOnPixels(g, grid, name, juce::Rectangle<float>(x, 20.f, nameW + 8.f, 22.f), juce::Justification::centredLeft);
     g.setFont(juce::Font(12.5f));
     g.setColour(juce::Colour(0xff8b8e97));
-    g.drawText("Multiband Tremolo", juce::Rectangle<float>(x, 44.f, 200.f, 16.f), juce::Justification::centredLeft, false);
-    g.drawText("Version " + juce::String(JucePlugin_VersionString), juce::Rectangle<float>(x + 150.f, 44.f, r.getWidth() - x * 2.f - 150.f, 16.f),
-               juce::Justification::centredRight, false);
+    drawTextOnPixels(g, grid, "Multiband Tremolo", juce::Rectangle<float>(x, 44.f, 200.f, 16.f), juce::Justification::centredLeft);
+    drawTextOnPixels(g, grid, "Version " + juce::String(JucePlugin_VersionString), juce::Rectangle<float>(x + 150.f, 44.f, r.getWidth() - x * 2.f - 150.f, 16.f),
+                     juce::Justification::centredRight);
 
     // the logo, small, at the top right beside the close key
     if (! imageCompanyTitle.isNull())
@@ -193,9 +199,10 @@ void AboutWindow::paint(juce::Graphics& g)
     }
 
     g.setColour(juce::Colours::black.withAlpha(0.5f));
-    g.fillRect(juce::Rectangle<float>(x, 72.f, r.getWidth() - x * 2.f, 1.f));
+    const auto rule = grid.hLine(72.f, x, r.getRight() - x);
+    g.fillRect(rule);
     g.setColour(juce::Colours::white.withAlpha(0.05f));
-    g.fillRect(juce::Rectangle<float>(x, 73.f, r.getWidth() - x * 2.f, 1.f));
+    g.fillRect(rule.translated(0.f, rule.getHeight()));
 
     // the licence state
     auto line = juce::Rectangle<float>(x, 86.f, r.getWidth() - x * 2.f, 18.f);
@@ -203,20 +210,25 @@ void AboutWindow::paint(juce::Graphics& g)
     {
         g.setColour(juce::Colour(0xffc886dd));
         g.setFont(juce::Font(12.f, juce::Font::bold).withExtraKerningFactor(0.12f));
-        g.drawText("DEMO", line, juce::Justification::centredLeft, false);
+        drawTextOnPixels(g, grid, "DEMO", line, juce::Justification::centredLeft);
         g.setColour(juce::Colour(0xffa9abb3));
         g.setFont(juce::Font(12.5f));
-        g.drawFittedText("The effect bypasses for 10 seconds of every minute.\nActivate with the email and serial key from your purchase.",
-                         line.translated(0.f, 20.f).withHeight(34.f).toNearestInt(), juce::Justification::topLeft, 2);
+        // two lines, one font height apart, each on whole screen pixels
+        auto row = line.translated(0.f, 20.f).withHeight(g.getCurrentFont().getHeight());
+        for (const auto& text : { "The effect bypasses for 10 seconds of every minute.", "Activate with the email and serial key from your purchase." })
+        {
+            drawTextOnPixels(g, grid, text, row, juce::Justification::topLeft);
+            row.translate(0.f, row.getHeight());
+        }
     }
     else
     {
         g.setColour(juce::Colour(0xff5bbd7d));
         g.setFont(juce::Font(12.f, juce::Font::bold).withExtraKerningFactor(0.12f));
-        g.drawText("ACTIVATED", line, juce::Justification::centredLeft, false);
+        drawTextOnPixels(g, grid, "ACTIVATED", line, juce::Justification::centredLeft);
         g.setColour(juce::Colour(0xffa9abb3));
         g.setFont(juce::Font(12.5f));
-        g.drawText("Thank you for your purchase!", line.translated(0.f, 20.f), juce::Justification::centredLeft, false);
+        drawTextOnPixels(g, grid, "Thank you for your purchase!", line.translated(0.f, 20.f), juce::Justification::centredLeft);
     }
 }
 

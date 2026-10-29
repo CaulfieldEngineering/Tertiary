@@ -12,6 +12,7 @@
 
 #include "PresetBar.h"
 #include "MyLookAndFeel.h"
+#include "UtilityFunctions.h"   // [Claude 2026-10-29] PixelGrid
 
 namespace
 {
@@ -43,15 +44,16 @@ PresetBar::~PresetBar()
 void PresetBar::ArrowKey::paintButton(juce::Graphics& g, bool highlighted, bool down)
 {
     // a small raised grey key with a lit top edge, pressed darker, and a fine chevron
-    auto r = getLocalBounds().toFloat().reduced(0.5f);
+    const PixelGrid grid(g, this);   // [Claude 2026-10-29] edges and highlight on whole screen pixels
+    auto r = grid.strokeRect(getLocalBounds().toFloat());
     const auto top = down ? juce::Colour(0xff26282e) : juce::Colour(0xff34363e);
     const auto bot = down ? juce::Colour(0xff1f2126) : juce::Colour(0xff25272d);
     g.setGradientFill(juce::ColourGradient(top, 0.f, r.getY(), bot, 0.f, r.getBottom(), false));
     g.fillRoundedRectangle(r, 1.5f);
     g.setColour(juce::Colours::white.withAlpha(highlighted ? 0.16f : 0.1f));
-    g.fillRect(r.withHeight(1.f).reduced(1.5f, 0.f));
+    fillHLine(g, grid, r.getY() + grid.rulePx() / 2.f, r.getX() + 1.5f, r.getRight() - 1.5f);
     g.setColour(juce::Colours::black.withAlpha(0.7f));
-    g.drawRoundedRectangle(r, 1.5f, 1.f);
+    g.drawRoundedRectangle(r, 1.5f, grid.rulePx());
 
     const float cx = r.getCentreX(), cy = r.getCentreY(), w = 2.5f, h = 4.f;
     juce::Path chevron;
@@ -73,20 +75,21 @@ void PresetBar::resized()
 void PresetBar::paint(juce::Graphics& g)
 {
     // [Claude 2026-10-29] The name in a recessed well, in the header's text size (Joe: "let's restyle it")
-    auto area = nameArea.toFloat().reduced(0.5f);
+    const PixelGrid grid(g, this);   // [Claude 2026-10-29] the well's edges and the name on whole screen pixels
+    auto area = grid.strokeRect(nameArea.toFloat());
     g.setGradientFill(juce::ColourGradient(juce::Colour(0xff0b0c0f), 0.f, area.getY(), juce::Colour(0xff15161a), 0.f, area.getBottom(), false));
     g.fillRoundedRectangle(area, 1.5f);
     g.setColour(juce::Colours::black.withAlpha(0.6f));
-    g.fillRect(area.withHeight(1.5f).reduced(1.5f, 0.f));
+    fillHLine(g, grid, area.getY(), area.getX() + 1.5f, area.getRight() - 1.5f, grid.thick(1.5f));
     g.setColour(juce::Colours::white.withAlpha(0.06f));
-    g.fillRect(area.withTop(area.getBottom() - 1.f).reduced(1.5f, 0.f));
+    fillHLine(g, grid, area.getBottom() - grid.rulePx(), area.getX() + 1.5f, area.getRight() - 1.5f);
     g.setColour(juce::Colours::black.withAlpha(0.7f));
-    g.drawRoundedRectangle(area, 1.5f, 1.f);
+    g.drawRoundedRectangle(area, 1.5f, grid.rulePx());
 
     g.setColour(juce::Colour(0xffd6d7dc));
     g.setFont(juce::Font(12.5f));
     auto label = shownName + (shownModified ? " *" : "");
-    g.drawFittedText(label, nameArea.reduced(6, 0).withTrimmedRight(12), juce::Justification::centredLeft, 1);
+    drawTextOnPixels(g, grid, label, nameArea.reduced(6, 0).withTrimmedRight(12).toFloat(), juce::Justification::centredLeft);
 
     // A small down-pointing triangle: this opens a menu
     auto r = nameArea.withTrimmedLeft(nameArea.getWidth() - 14).toFloat().withSizeKeepingCentre(7.f, 4.f).translated(-4.f, 0.f);

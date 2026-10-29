@@ -158,6 +158,7 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
     const char* names[] = { "Shape", "Skew", "Depth", "Rhythm", "Phase", "Gain" };
     const int n = 6;
     const float pitch = (rows[n - 1].getCentreY() - rows[0].getCentreY()) / (float) (n - 1);
+    const PixelGrid grid(g, this);   // [Claude 2026-10-29] the row lines and labels on whole screen pixels at every window size
 
     for (int i = 0; i < n; ++i)
     {
@@ -165,8 +166,8 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
         g.setColour(controlLabelsFontColor);
         g.setOpacity(controlLabelsFontTransparency);
         g.setFont(myFont);
-        g.drawFittedText(names[i], juce::Rectangle<float>((float) border2.getX(), yc - pitch / 2.f, (float) border2.getWidth(), pitch).toNearestInt(),
-                         juce::Justification::centred, 1);
+        drawTextOnPixels(g, grid, names[i], juce::Rectangle<float>((float) border2.getX(), yc - pitch / 2.f, (float) border2.getWidth(), pitch),
+                         juce::Justification::centred);
 
         // drawn inside each column only, so the columns' frames run unbroken top to bottom (Joe: "split sections
         // instead of a continuous frame")
@@ -174,10 +175,11 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
         for (auto col : { border2, border3, border4, border5 })
         {
             const auto c = col.toFloat().reduced(3.f, 0.f);
+            const auto dark = grid.hLine(yLine - 0.5f, c.getX(), c.getRight());
             g.setColour(juce::Colours::black.withAlpha(0.55f));
-            g.fillRect(juce::Rectangle<float>(c.getX(), yLine - 0.5f, c.getWidth(), 1.f));
+            g.fillRect(dark);
             g.setColour(juce::Colours::white.withAlpha(0.04f));
-            g.fillRect(juce::Rectangle<float>(c.getX(), yLine + 0.5f, c.getWidth(), 1.f));
+            g.fillRect(dark.translated(0.f, dark.getHeight()));
         }
     }
 
@@ -243,19 +245,20 @@ void GlobalControls::paintBandLabels(juce::Graphics& g)
     titleFont.setExtraKerningFactor(0.18f);
     g.setFont(titleFont);
     g.setColour(controlLabelsFontColor);
-    
+    const PixelGrid grid(g, this);   // [Claude 2026-10-29] the names on whole screen pixels, the same in each column
+
     auto lowLabelBounds = juce::Rectangle<int>{x + (int) (titleFont.getHeight() * 0.18f / 2.f), y, width, height};
-    g.drawFittedText("LOW", lowLabelBounds, juce::Justification::centred, 1);
-    
+    drawTextOnPixels(g, grid, "LOW", lowLabelBounds.toFloat(), juce::Justification::centred);
+
     x = border4.getX();
-    
+
     auto midLabelBounds = juce::Rectangle<int>{x + (int) (titleFont.getHeight() * 0.18f / 2.f), y, width, height};
-    g.drawFittedText("MID", midLabelBounds, juce::Justification::centred, 1);
-    
+    drawTextOnPixels(g, grid, "MID", midLabelBounds.toFloat(), juce::Justification::centred);
+
     x = border5.getX();
-    
+
     auto highLabelBounds = juce::Rectangle<int>{x + (int) (titleFont.getHeight() * 0.18f / 2.f), y, width, height};
-    g.drawFittedText("HIGH", highLabelBounds, juce::Justification::centred, 1);
+    drawTextOnPixels(g, grid, "HIGH", highLabelBounds.toFloat(), juce::Justification::centred);
 }
 
 void GlobalControls::resized()

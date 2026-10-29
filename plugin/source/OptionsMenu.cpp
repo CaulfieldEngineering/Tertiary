@@ -9,6 +9,7 @@
 */
 
 #include "OptionsMenu.h"
+#include "UtilityFunctions.h"   // [Claude 2026-10-29] PixelGrid
 #include <cstdlib>
 
 
@@ -60,14 +61,15 @@ void OptionsMenu::paint(juce::Graphics& g)
     auto bounds = getLocalBounds().toFloat();
     if (shouldShowDropdown)
     {
-        auto panel = bounds.withTrimmedTop((float) mButtonOptions.getHeight() + 2.f).reduced(0.5f);
+        const PixelGrid grid(g, this);   // [Claude 2026-10-29] the panel's edge and highlight on whole screen pixels
+        auto panel = grid.strokeRect(bounds.withTrimmedTop((float) mButtonOptions.getHeight() + 2.f));
         g.setGradientFill(juce::ColourGradient(juce::Colour(0xff26282f), panel.getX(), panel.getY(),
                                                juce::Colour(0xff1d1f25), panel.getX(), panel.getBottom(), false));
         g.fillRoundedRectangle(panel, 2.f);
         g.setColour(juce::Colours::white.withAlpha(0.08f));
-        g.drawLine(panel.getX() + 2.f, panel.getY() + 0.75f, panel.getRight() - 2.f, panel.getY() + 0.75f, 1.f);
+        fillHLine(g, grid, panel.getY() + grid.rulePx() / 2.f, panel.getX() + 2.f, panel.getRight() - 2.f);
         g.setColour(juce::Colours::black.withAlpha(0.75f));
-        g.drawRoundedRectangle(panel, 2.f, 1.f);
+        g.drawRoundedRectangle(panel, 2.f, grid.rulePx());
     }
 
     setAlpha(fadeValue);

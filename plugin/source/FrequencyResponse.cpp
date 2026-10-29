@@ -335,7 +335,7 @@ void FrequencyResponse::paintGainTag(juce::Graphics& g, Cursor& cursor, float ga
     g.drawRoundedRectangle(r, 3.f, 1.f);
     g.setColour(juce::Colour(0xffd9dade).withAlpha(t));
     g.setFont(11.f);
-    g.drawFittedText(text, r.toNearestInt(), juce::Justification::centred, 1);
+    drawTextOnPixels(g, PixelGrid(g, this), text, r, juce::Justification::centred);   // [Claude 2026-10-29]
 }
 
 /* Draw vertical grid lines (frequency) */
@@ -348,6 +348,7 @@ void FrequencyResponse::paintGridFrequency(juce::Graphics& g)
     using namespace juce;
     const auto textWidth = 30;
     const auto fontHeight = 12;
+    const PixelGrid grid(g, this);   // [Claude 2026-10-29] grid lines and labels on whole screen pixels
 
     // DRAW THE VERTICAL GRIDS ===============
     for (int i = 0; i < freqs.size()-1; i++)
@@ -355,7 +356,7 @@ void FrequencyResponse::paintGridFrequency(juce::Graphics& g)
         float x = responseArea.getX() + responseArea.getWidth() * mapLog2(freqs[i]);
 
         g.setColour(Colours::lightgrey.withAlpha(0.12f));
-        g.drawVerticalLine(x, responseArea.getY(), responseArea.getBottom());
+        fillVLine(g, grid, std::floor(x), responseArea.getY(), responseArea.getBottom());   // [Claude 2026-10-29] was drawVerticalLine on the whole layout pixel
 
         String strFreq;
 
@@ -365,16 +366,17 @@ void FrequencyResponse::paintGridFrequency(juce::Graphics& g)
         }
         else
             strFreq << freqs[i];
-        
+
         g.setFont(fontHeight - 1);
         g.setColour(Colours::lightgrey.withAlpha(0.6f));
 
         float xC = x - textWidth / 2;
+        const float textY = (float) (getHeight() - fontHeight - 7);
         // the first label sits inside the plot now that the dB scale has moved to the right
         if (i == 0)
-            g.drawFittedText(strFreq, x + 2, getHeight()-fontHeight-7, textWidth, fontHeight, Justification::centredLeft, 1, 1);
+            drawTextOnPixels(g, grid, strFreq, { x + 2.f, textY, (float) textWidth, (float) fontHeight }, Justification::centredLeft);
         else
-            g.drawFittedText(strFreq, xC, getHeight()-fontHeight-7, textWidth, fontHeight, Justification::centred, 1, 1);
+            drawTextOnPixels(g, grid, strFreq, { xC, textY, (float) textWidth, (float) fontHeight }, Justification::centred);
     }
 }
 
@@ -391,6 +393,7 @@ void FrequencyResponse::paintGridGain(juce::Graphics& g)
 
     const auto gMin = gain.getFirst();
     const auto gMax = gain.getLast();
+    const PixelGrid grid(g, this);   // [Claude 2026-10-29] grid lines and labels on whole screen pixels
 
     // DRAW THE HORIZONTAL GRIDS ===============
     for (int i = 1; i < gain.size()-1; i++)
@@ -398,7 +401,7 @@ void FrequencyResponse::paintGridGain(juce::Graphics& g)
         auto y = jmap(gain[i], gMin, gMax, float(responseArea.getBottom()), responseArea.getY());  // [Claude 2026-10-29] no second getY(), as for the gain cursors
 
         g.setColour(juce::Colours::lightgrey.withAlpha(0.12f));
-        g.drawHorizontalLine(y, responseArea.getX(), responseArea.getRight());
+        fillHLine(g, grid, std::floor(y), responseArea.getX(), responseArea.getRight());   // [Claude 2026-10-29] was drawHorizontalLine on the whole layout pixel
 
         if (int(gain[i]) % 12 != 0)
             continue;
@@ -412,7 +415,8 @@ void FrequencyResponse::paintGridGain(juce::Graphics& g)
 
         g.setFont(fontHeight - 2);
         g.setColour(Colours::lightgrey.withAlpha(0.5f));
-        g.drawFittedText(strGain, responseArea.getRight() - textWidth - 3, y - fontHeight, textWidth, fontHeight - 1, juce::Justification::centredRight, 1, 1);
+        drawTextOnPixels(g, grid, strGain, { responseArea.getRight() - textWidth - 3.f, std::floor(y) - fontHeight, (float) textWidth, (float) fontHeight - 1.f },
+                         juce::Justification::centredRight);
 
     }
 }

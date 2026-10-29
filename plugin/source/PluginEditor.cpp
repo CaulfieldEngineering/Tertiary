@@ -15,7 +15,7 @@ struct MenuPreview : juce::Component
     for (int i = 0; i < items.size(); ++i)
     {
       const bool sep = items[i].isEmpty();
-      const int h = sep ? 9 : 22;
+      const int h = sep ? 8 : 24;   // [Claude 2026-10-29] as HouseMenuLookAndFeel::getIdealPopupMenuItemSize
       look.drawPopupMenuItem(g, { 4, y, getWidth() - 8, h }, sep, active[i], i == 0, false, false, items[i], {}, nullptr, nullptr);
       y += h;
     }
@@ -48,11 +48,10 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       topBanner.addMouseListener(this, true);
 
       /* Set UI is Resizable for Hi-Res Screen Capturing, etc */
-      // [Claude 2026-10-29] Resizable from 75 % to 250 %, always the same shape; it opens at the size last used
-      // (the ☰ menu has 100 / 125 / 150 / 200 %). The window was 750 x 515 before the shorter layout.
-      setResizable(true, false);   // no corner grip: it sat over the right meter; hosts and the standalone resize from their window edges
-      setResizeLimits(baseWidth * 3 / 4, baseHeight * 3 / 4, baseWidth * 5 / 2, baseHeight * 5 / 2);
-      getConstrainer()->setFixedAspectRatio((double) baseWidth / (double) baseHeight);
+      // [Claude 2026-10-29] Four window sizes, 100 / 125 / 150 / 200 %, from the ☰ menu; it opens at the size last
+      // used. Not dragged to other sizes (Joe: "Standalone is not a priority"): everything is drawn on whole screen
+      // pixels at exactly these four. The window was 750 x 515 before the shorter layout.
+      setResizable(false, false);
       uiScale = loadUiScale();
       setSize(juce::roundToInt(baseWidth * uiScale), juce::roundToInt(baseHeight * uiScale));
 
@@ -137,7 +136,7 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
           m->items = { audioProcessor.getDemoState() ? "Activate Tertiary..." : "About Tertiary...",
                        "Tertiary " + juce::String(JucePlugin_VersionString) + " is up to date", "Open presets folder", "", "WonderlandAudio.com" };
           m->active = { true, false, true, true, true };
-          m->setBounds(750 - 14 - 200, 44, 200, 4 + 22 * 4 + 9 + 4);
+          m->setBounds(750 - 14 - 200, 44, 200, 4 + 24 * 4 + 8 + 4);
           content.addAndMakeVisible(m);   // a still only
           m->toFront(false);
         }
@@ -374,6 +373,15 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       return options;
     }
 
+    // [Claude 2026-10-29] the nearest of the four window sizes (a size remembered by an earlier build could be any)
+    static float nearestUiScale(float scale)
+    {
+      float best = 1.f;
+      for (float s : { 1.f, 1.25f, 1.5f, 2.f })
+        if (std::abs(scale - s) < std::abs(scale - best)) best = s;
+      return best;
+    }
+
     float AudioPluginAudioProcessorEditor::loadUiScale()
     {
      #if WLA_REVIEW_RENDER_BUILD
@@ -383,7 +391,7 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
      #else
       juce::PropertiesFile props(tertiarySettings());
       if (props.containsKey("uiScale"))
-        return juce::jlimit(0.75f, 2.5f, (float) props.getDoubleValue("uiScale", 1.0));
+        return nearestUiScale((float) props.getDoubleValue("uiScale", 1.0));
       // first open: 125 % where the screen has room for it (Joe: "yes 125% by default"), else 100 %
       if (auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
         if (display->userArea.getWidth() >= 1700 && display->userArea.getHeight() >= 1000)

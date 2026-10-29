@@ -1,4 +1,5 @@
 #include "ScopeChannel.h"
+#include "UtilityFunctions.h"   // [Claude 2026-10-29] PixelGrid
 
 /* Constructor */
 // ========================================================
@@ -297,6 +298,8 @@ void ScopeChannel::paintGridLines(juce::Graphics& g)
     float leftGridLine;
     float rightGridLine;
 
+    const PixelGrid grid(g, this);   // [Claude 2026-10-29] the grid on whole screen pixels at every window size
+
     // Draw Gridlines
     for (int i = bounds.getCentreX(); i <= 2 * bounds.getRight(); i++)
     {
@@ -307,19 +310,19 @@ void ScopeChannel::paintGridLines(juce::Graphics& g)
             // [Claude 2026-10-29] The crossover's grid: one quiet grey for every beat, the origin a step brighter
             // (Joe: "make the gridlines the same style as the crossover"). Was dark and light grey alternating at 35 %.
             g.setColour(juce::Colours::lightgrey.withAlpha(0.12f));  // the origin too (Joe: "match the center one too")
-            
+
             // Draw Twice as Many Gridlines to Account for Panning
             rightGridLine = c + num * beatSpacing;
 
             verticalAxis.setStart(rightGridLine, bounds.getY());
             verticalAxis.setEnd(rightGridLine, bounds.getBottom());
-            g.drawLine(verticalAxis, 1.f);
+            fillVLine(g, grid, rightGridLine - 0.5f, (float) bounds.getY(), (float) bounds.getBottom());   // [Claude 2026-10-29] was a 1 px drawLine at a fractional x
 
             leftGridLine = c - num * beatSpacing;
             verticalAxis.setStart(leftGridLine, bounds.getY());
             verticalAxis.setEnd(leftGridLine, bounds.getBottom());
             if (num > 0)    // at the origin both lines fall on one place and drew it twice as bright
-                g.drawLine(verticalAxis, 1.f);
+                fillVLine(g, grid, leftGridLine - 0.5f, (float) bounds.getY(), (float) bounds.getBottom());
 
             // Calculate Left-Most Onscreen Valid (Even) Marker
 
@@ -353,7 +356,7 @@ void ScopeChannel::paintGridLines(juce::Graphics& g)
     for (int i = 1; i < numDepthLines; i++)
     {
         auto y = bounds.getY() + i * (bounds.getHeight() / numDepthLines);
-        g.drawHorizontalLine(y, bounds.getX(), bounds.getRight());
+        fillHLine(g, grid, (float) y, (float) bounds.getX(), (float) bounds.getRight());   // [Claude 2026-10-29]
     }
 
     redrawScope();

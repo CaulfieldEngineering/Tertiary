@@ -44,21 +44,24 @@ void InputOutputGain::paint(juce::Graphics& g)
 	// [Claude 2026-10-29] Each LED drawn as its own rectangle on screen pixels, unlit or lit, on black. It was colour
 	// under a black picture with LED holes cut in it; scaled to 125 % or 150 % the picture's edges let the colour show
 	// through as stray red, yellow and green pixels (Joe)
+	// [Claude 2026-10-29] The grid itself is laid out in screen pixels for the window's scale (buildLeds), so every
+	// LED and every gap is the same whole number of pixels and the two columns line up row for row (Joe: "even at
+	// large scalings the meters look pretty bad compared to how they did previously")
+	const PixelGrid grid(g, this);
+	if (builtScale != grid.scale)
+		buildLeds(grid);
 	g.setColour(juce::Colours::black);
-	g.fillRect(grillBounds);
-	for (const auto& led : ledRects)
+	g.fillRect(ledGrill);
+	for (int column = 0; column < 2; ++column)
 	{
-		const auto r = snapToScreenPixels(g, led.toFloat(), this);
-		g.setGradientFill(ledOffGradient);
-		g.fillRect(r);
-		for (const auto& lit : { leftBounds, rightBounds })
+		const auto& leds = column == 0 ? leftLeds : rightLeds;
+		const float level = column == 0 ? leftLevelPixel : rightLevelPixel;
+		for (int i = 0; i < leds.size(); ++i)
 		{
-			const auto on = r.getIntersection(lit);
-			if (! on.isEmpty())
-			{
-				g.setGradientFill(ledOnGradient);
-				g.fillRect(on);
-			}
+			// lit when its top is within the level, measured up from the grill's bottom (the same rule getLevels
+			// quantises to, so the meter steps one whole LED at a time)
+			g.setGradientFill(ledThresholds[i] <= level + 0.001f ? ledOnGradient : ledOffGradient);
+			g.fillRect(leds[i]);
 		}
 	}
 
@@ -104,7 +107,7 @@ void InputOutputGain::paint(juce::Graphics& g)
 
 	// Set color and draw the text
 	g.setColour(juce::Colours::white.withAlpha(0.65f));
-	g.drawFittedText(valueString, labelBounds.toNearestInt(), juce::Justification::centred, 1);
+	drawTextOnPixels(g, grid, valueString, labelBounds, juce::Justification::centred);   // [Claude 2026-10-29] on whole screen pixels
 
 	g.setColour(juce::Colours::hotpink);
 }
@@ -126,8 +129,8 @@ void InputOutputGain::resized()
 	ledOffGradient = makeMeterGradient(grillBounds, 0.3f);  // (Joe: "Meters still a little too dark" at 0.2)  // [Claude 2026-10-29] visible again on Joe's screen ("I can't see the off meter LEDs"); 0.1 was too dark  // [Claude 2026-10-29] darker unlit LEDs, a quiet meter at rest (was 0.22)
 	ledOnGradient = makeMeterGradient(grillBounds, 1.f);
 
-	// Draw The Grill Image =======================================================
-	buildGrill(bounds);
+	// The LEDs are laid out at the next paint, for the screen's scale (buildLeds)
+	builtScale = 0.f;
 
 	// Place The Slider
 	// ===========================================================
@@ -185,31 +188,25 @@ void InputOutputGain::getLevels()
 	}
 
 	//auto bounds = getLocalBounds().toFloat();
-	auto bounds = grillBounds;
+	// [Claude 2026-10-29] over the grill as drawn (on screen pixels), the height the LED thresholds are measured in;
+	// over the unsnapped height the top LED could stay off at 0 dB (Codex)
+	auto bounds = ledGrill.isEmpty() ? grillBounds : ledGrill;
 
 	leftLevelPixel = bounds.getHeight() * juce::jmap(leftLevel, -60.f, 0.f, 0.f, 1.f);
 	rightLevelPixel = bounds.getHeight() * juce::jmap(rightLevel, -60.f, 0.f, 0.f, 1.f);
 
-	// Quantize levels to discrete LED steps safely (avoid out-of-bounds reads).
-	for (int i = ledThresholds.size()-1; i >= 1; i--)
+	// Quantize levels to discrete LED steps: down to the top of the highest LED the level reaches
+	// [Claude 2026-10-29] the thresholds are the LEDs' tops measured up from the grill's bottom, as paint lights them
+	for (float* level : { &leftLevelPixel, &rightLevelPixel })
 	{
-		if (leftLevelPixel < ledThresholds[i] && leftLevelPixel > ledThresholds[i - 1])
-			leftLevelPixel = ledThresholds[i - 1];
-
-		if (rightLevelPixel < ledThresholds[i] && rightLevelPixel > ledThresholds[i - 1])
-			rightLevelPixel = ledThresholds[i - 1];
-
+		float quantised = 0.f;
+		for (float threshold : ledThresholds)
+		{
+			if (threshold > *level) break;
+			quantised = threshold;
+		}
+		*level = quantised;
 	}
-
-	leftBounds.setBounds(	bounds.getX(), 
-							bounds.getBottom() - leftLevelPixel, 
-							bounds.getWidth() / 2, 
-							leftLevelPixel);
-
-	rightBounds.setBounds(	bounds.getX() + bounds.getWidth()/2.f, 
-							bounds.getBottom() - rightLevelPixel,
-							bounds.getWidth() / 2,
-							rightLevelPixel);
 }
 
 void InputOutputGain::setPickOffPoint(juce::String pickoff)
@@ -217,67 +214,66 @@ void InputOutputGain::setPickOffPoint(juce::String pickoff)
 	pickOffPoint = pickoff;
 }
 
-void InputOutputGain::buildGrill(juce::Rectangle<float> bounds)
+// [Claude 2026-10-29] The LED grid in screen pixels. The 100 % meter (the original grill picture: LEDs 2 px tall, 1 px
+// apart, 11 px wide, the two columns 1 px apart) is the pattern; at 125, 150 and 200 % each of those is rounded to
+// whole screen pixels and the grid is laid out from the grill's middle in those units, so every LED and every gap is
+// the same height, the columns align row for row, and the edges are crisp. Rebuilt when the window's scale changes.
+void InputOutputGain::buildLeds(const PixelGrid& grid)
 {
-	using namespace juce;
-
 	ledThresholds.clear();
-	ledRects.clear();
+	leftLeds.clear();
+	rightLeds.clear();
+	builtScale = grid.scale;
 
-	grill = Image(Image::PixelFormat::ARGB, (int) bounds.getWidth(), (int) bounds.getHeight(), true);
+	const float sc = grid.scale;
+	const auto toDevX = [&](float x) { return (grid.origin.x + x) * sc; };
+	const auto toDevY = [&](float y) { return (grid.origin.y + y) * sc; };
+	const auto fromDevX = [&](float X) { return X / sc - grid.origin.x; };
+	const auto fromDevY = [&](float Y) { return Y / sc - grid.origin.y; };
 
-	// Fill the image using a Graphics context, then destroy the context before we
-	// punch transparent "holes" into the image (some renderers/drivers don't like
-	// modifying the Image pixels while a Graphics context is active on that Image).
+	ledGrill = grid.snap(grillBounds);
+
+	// sizes, in screen pixels
+	const int ledPx = juce::jmax(1, juce::roundToInt(ledHeightAt1x * sc));
+	const int gapPx = juce::jmax(1, juce::roundToInt(ledGapAt1x * sc));
+	const int pitchPx = ledPx + gapPx;
+	const int widthPx = juce::jmax(1, juce::roundToInt(ledWidth * sc));
+	const int columnGapPx = juce::jmax(1, juce::roundToInt(columnGapAt1x * sc));
+
+	// the two columns, centred on the grill
+	const float centreDevX = std::round(toDevX(grillBounds.getCentreX()));
+	const float leftDev = std::round(centreDevX - (2 * widthPx + columnGapPx) / 2.f);
+	const float rightDev = leftDev + (float) (widthPx + columnGapPx);
+
+	// the rows, from the middle outward (the component's middle, as the grill picture was built), whole LEDs inside
+	// the grill only
+	const float topDev = std::round(toDevY(grillBounds.getY())), bottomDev = std::round(toDevY(grillBounds.getBottom()));
+	const float middleTop = std::round(toDevY(getLocalBounds().toFloat().getCentreY()) - ledPx / 2.f);
+	const int above = (int) std::floor((middleTop - topDev) / pitchPx);
+	const int below = (int) std::floor((bottomDev - ledPx - middleTop) / pitchPx);
+	for (int k = -above; k <= below; ++k)
 	{
-		Graphics g(grill);
-		g.setColour(juce::Colours::black); // Migrate to AllColors
-		g.fillRect(bounds);
+		const float top = middleTop + (float) (k * pitchPx);
+		const auto row = juce::Rectangle<float>::leftTopRightBottom(0.f, fromDevY(top), 0.f, fromDevY(top + ledPx));
+		leftLeds.add(row.withLeft(fromDevX(leftDev)).withRight(fromDevX(leftDev + widthPx)));
+		rightLeds.add(row.withLeft(fromDevX(rightDev)).withRight(fromDevX(rightDev + widthPx)));
+		ledThresholds.add((bottomDev - top) / sc);   // its top, up from the grill's bottom, in layout pixels
+	}
+	// bottom to top, as the levels rise
+	for (int i = 0, j = leftLeds.size() - 1; i < j; ++i, --j)
+	{
+		leftLeds.swap(i, j);
+		rightLeds.swap(i, j);
+		ledThresholds.swap(i, j);
 	}
 
-	for (int x = 0; x < 2; x++)	// Iterate Loop Twice for Left/Right Grills
+	// The fader is drawn on the gap between the columns, which can sit off the component's centre by a screen
+	// pixel (Joe: "the track is to the left of center on the meter")
+	const double ledCentreX = (double) fromDevX(leftDev + widthPx + columnGapPx / 2.f);
+	if (sliderGain.getProperties()["ledCentreX"] != juce::var(ledCentreX))
 	{
-		const float xPos = (x == 0 ? -0.25f : 0.25f);	// Left/Right LED positioning
-
-		for (int y = 0; y < 2; y++)	// Iterate Loop Twice.  Begin LED's at center and move Up, Down
-		{
-			const float dir = (y == 0 ? 1.0f : -1.0f);  // Down/up
-
-			for (int z = 0; z < bounds.getCentreY() - margin; z += spacing)
-			{
-				// Define LED bound to draw
-				juce::Rectangle<float> ledArea = {  bounds.getCentreX() + bounds.getWidth() * xPos - ledWidth / 2.f,
-													bounds.getCentreY() + dir * z - ledHeight / 2,
-													ledWidth, ledHeight };
-
-				// Store LED's Y value in an array, as to quantize (discretize) the meter levels later on
-				ledThresholds.add(ledArea.getBottom());
-
-				// Provide transparency in the image
-				grill.clear(ledArea.toNearestInt(), juce::Colours::hotpink.withAlpha(0.f));
-				ledRects.add(ledArea.toNearestInt());
-				if (z == 0 && y == 0)
-					(x == 0 ? leftLedEdge : rightLedEdge) = (x == 0 ? ledArea.toNearestInt().getRight() : ledArea.toNearestInt().getX());
-			}
-
-
-		}
-	}
-
-	// [Claude 2026-10-29] The LED holes are cut on whole pixels, so their gap can sit half a pixel off the component's
-	// centre; the fader is drawn on the gap itself (Joe: "the track is to the left of center on the meter")
-	sliderGain.getProperties().set("ledCentreX", (leftLedEdge + rightLedEdge) / 2.0);
-
-	// Sort LED Y values in Ascending Fashion
-	ledThresholds.sort();
-
-	// Remove duplicates safely (avoid out-of-bounds reads).
-	for (int i = 0; i + 1 < ledThresholds.size();)
-	{
-		if (ledThresholds[i] == ledThresholds[i + 1])
-			ledThresholds.remove(i + 1);
-		else
-			++i;
+		sliderGain.getProperties().set("ledCentreX", ledCentreX);
+		sliderGain.repaint();
 	}
 }
 

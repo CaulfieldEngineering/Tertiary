@@ -154,6 +154,16 @@ struct HouseMenuLookAndFeel : juce::LookAndFeel_V4
 	static HouseMenuLookAndFeel& get() { static HouseMenuLookAndFeel look; return look; }
 };
 
+// [Claude 2026-10-29] Labels (the slider values, the crossover's frequency labels, the About window's status line) drawn
+// with their text on whole screen pixels, like the rest of the window (UtilityFunctions: drawTextOnPixels). Set on
+// those labels; everything else about them is the default look.
+struct HouseLabelLookAndFeel : juce::LookAndFeel_V4
+{
+	void drawLabel(juce::Graphics& g, juce::Label& label) override;
+
+	static HouseLabelLookAndFeel& get() { static HouseLabelLookAndFeel look; return look; }
+};
+
 struct ButtonOptionsLookAndFeel : juce::LookAndFeel_V4
 {
 	void drawButtonBackground(	juce::Graphics& g, 

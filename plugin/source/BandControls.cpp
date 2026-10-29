@@ -30,7 +30,10 @@ BandControl::BandControl(juce::AudioProcessorValueTreeState& apv)
     
     runOnceOnConstructor = false;
 
-    setBufferedToImage(true);
+    // [Claude 2026-10-29] No longer buffered to an image: at 125 and 150 % the cached picture was laid back down at a
+    // fractional screen position and resampled, which blurred every key, menu and slider in the column (their edges
+    // smeared over three rows at 125 %) and left odd pixels at its border, and it defeated the screen-pixel snapping
+    // inside, which assumed the column's real origin. The column is cheap to paint directly.
 }
 
 BandControl::~BandControl()

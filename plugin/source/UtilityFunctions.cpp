@@ -37,6 +37,80 @@ juce::Rectangle<float> snapToScreenPixels(juce::Graphics& g, juce::Rectangle<flo
 	                                                   snap(o.x + r.getRight()) - o.x, snap(o.y + r.getBottom()) - o.y);
 }
 
+// [Claude 2026-10-29] The pixel grid (see the header)
+// ==================================================================
+PixelGrid::PixelGrid(juce::Graphics& g, const juce::Component* owner)
+	: scale((float) g.getInternalContext().getPhysicalPixelScaleFactor()),
+	  origin(owner != nullptr ? originInLayout(owner) : juce::Point<float>())
+{
+	if (! (scale > 0.f)) scale = 1.f;
+}
+
+float PixelGrid::snapX(float x) const { return std::round((origin.x + x) * scale) / scale - origin.x; }
+float PixelGrid::snapY(float y) const { return std::round((origin.y + y) * scale) / scale - origin.y; }
+
+juce::Rectangle<float> PixelGrid::snap(juce::Rectangle<float> r) const
+{
+	return juce::Rectangle<float>::leftTopRightBottom(snapX(r.getX()), snapY(r.getY()), snapX(r.getRight()), snapY(r.getBottom()));
+}
+
+juce::Rectangle<float> PixelGrid::hLine(float top, float x0, float x1, int pixels) const
+{
+	const float y = snapY(top);
+	return juce::Rectangle<float>::leftTopRightBottom(snapX(x0), y, snapX(x1), y + (float) (pixels > 0 ? pixels : rule()) * px());
+}
+
+juce::Rectangle<float> PixelGrid::vLine(float left, float y0, float y1, int pixels) const
+{
+	const float x = snapX(left);
+	return juce::Rectangle<float>::leftTopRightBottom(x, snapY(y0), x + (float) (pixels > 0 ? pixels : rule()) * px(), snapY(y1));
+}
+
+void fillHLine(juce::Graphics& g, const PixelGrid& grid, float top, float x0, float x1, int pixels)
+{
+	g.fillRect(grid.hLine(top, x0, x1, pixels));
+}
+
+void fillVLine(juce::Graphics& g, const PixelGrid& grid, float left, float y0, float y1, int pixels)
+{
+	g.fillRect(grid.vLine(left, y0, y1, pixels));
+}
+
+void drawTextOnPixels(juce::Graphics& g, const PixelGrid& grid, const juce::String& text, juce::Rectangle<float> area, juce::Justification justification)
+{
+	if (text.isEmpty())
+		return;
+	auto font = g.getCurrentFont();
+	float w = font.getStringWidthFloat(text);
+	// too wide: squeezed as drawFittedText squeezes a single line (to 70 % at most), then cut with an ellipsis; still
+	// placed on screen pixels (Codex: the fallback to drawFittedText lost the snapping for long preset names)
+	bool curtail = false;
+	if (w > area.getWidth() + 0.01f)
+	{
+		font = font.withHorizontalScale(juce::jmax(0.7f, area.getWidth() / w));
+		w = font.getStringWidthFloat(text);
+		if (w > area.getWidth() + 0.01f) { curtail = true; w = area.getWidth(); }
+	}
+	using J = juce::Justification;
+	float x = justification.testFlags(J::right) ? area.getRight() - w
+	        : justification.testFlags(J::horizontallyCentred) ? area.getCentreX() - w / 2.f
+	        : area.getX();
+	// the line box drawText centres is ascent + descent tall, so its baseline sits ascent below the box's top
+	float baseline = justification.testFlags(J::top) ? area.getY() + font.getAscent()
+	               : justification.testFlags(J::bottom) ? area.getBottom() - font.getDescent()
+	               : area.getY() + (area.getHeight() + font.getAscent() - font.getDescent()) / 2.f;
+	// the renderer truncates the baseline to a screen row (so text at 100 % keeps the row it always had); here the
+	// row is chosen the same way, then nudged a hair below its edge so the truncation cannot drop it a row
+	x = grid.snapX(x);
+	baseline = (std::floor((grid.origin.y + baseline) * grid.scale) + 0.05f) / grid.scale - grid.origin.y;
+	juce::GlyphArrangement glyphs;
+	if (curtail)
+		glyphs.addCurtailedLineOfText(font, text, x, baseline, area.getWidth(), true);
+	else
+		glyphs.addLineOfText(font, text, x, baseline);
+	glyphs.draw(g);
+}
+
 void paintBorder(juce::Graphics& g, juce::Colour baseColor, juce::Rectangle<float> bounds, const juce::Component* owner)
 {
 	// [Claude 2026-10-29] With an owner, every step lands on whole screen pixels at any window size, one screen pixel per

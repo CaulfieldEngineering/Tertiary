@@ -9,6 +9,7 @@
 */
 
 #include "ScrollPad.h"
+#include "UtilityFunctions.h"   // [Claude 2026-10-29] PixelGrid
 
 using namespace juce;
 
@@ -241,13 +242,14 @@ void ScrollPad::paint(juce::Graphics& g)
 	// [Claude 2026-10-29] A subtle recessed slot and a crisp thumb (Joe: "sharpen up the slide/scrollbar ... Maybe a
 	// little recess or something. Just subtle."). Was a soft 6 px stroke with a glowing stack of strokes for the thumb.
 	const float h = 5.f, cy = bounds.getCentreY();
-	juce::Rectangle<float> slot { bounds.getCentreX() - maxWidth / 2.f, cy - h / 2.f, (float) maxWidth, h };
+	const PixelGrid grid(g, this);   // [Claude 2026-10-29] the slot's long edges and the two highlights on whole screen pixels
+	const auto slot = grid.snap({ bounds.getCentreX() - maxWidth / 2.f, cy - h / 2.f, (float) maxWidth, h });
 	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff1a1b20), 0.f, slot.getY(), juce::Colour(0xff2a2c32), 0.f, slot.getBottom(), false));
-	g.fillRoundedRectangle(slot, h / 2.f);
+	g.fillRoundedRectangle(slot, slot.getHeight() / 2.f);
 	g.setColour(juce::Colours::black.withAlpha(0.6f));
-	g.drawRoundedRectangle(slot, h / 2.f, 1.f);
+	g.drawRoundedRectangle(grid.strokeRect(slot), slot.getHeight() / 2.f - grid.rulePx() / 2.f, grid.rulePx());
 	g.setColour(juce::Colours::white.withAlpha(0.06f));
-	g.drawHorizontalLine((int) slot.getBottom(), slot.getX() + h / 2.f, slot.getRight() - h / 2.f);
+	fillHLine(g, grid, slot.getBottom(), slot.getX() + h / 2.f, slot.getRight() - h / 2.f);
 
 	juce::Path range;
 	range.startNewSubPath(point1, cy);
@@ -256,7 +258,7 @@ void ScrollPad::paint(juce::Graphics& g)
 	g.setGradientFill(setScrollBarGradient(range.getBounds().toFloat()));
 	g.fillRoundedRectangle(thumb, 1.5f);
 	g.setColour(juce::Colours::white.withAlpha(0.18f));
-	g.drawHorizontalLine((int) thumb.getY(), thumb.getX() + 1.5f, thumb.getRight() - 1.5f);
+	fillHLine(g, grid, std::floor(thumb.getY()), thumb.getX() + 1.5f, thumb.getRight() - 1.5f);
     
     
     

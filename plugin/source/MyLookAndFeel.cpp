@@ -22,6 +22,7 @@ CustomSlider::CustomSlider()
 CustomSlider::~CustomSlider()
 {
 	slider.setLookAndFeel(nullptr);
+	label.setLookAndFeel(nullptr);   // [Claude 2026-10-29]
 }
 
 void CustomSlider::resized()
@@ -179,6 +180,7 @@ void CustomSlider::buildLabel()
 		textWidth = label.getFont().getStringWidth(label.getText()); // Recalculate text width
 	}
 
+	label.setLookAndFeel(&HouseLabelLookAndFeel::get());   // [Claude 2026-10-29] the value on whole screen pixels
 	label.addListener(this);
 	addAndMakeVisible(label);
 }
@@ -658,7 +660,9 @@ static void drawRecessedTrack(juce::Graphics& g, juce::Rectangle<float> r)
 	g.fillRect(r);
 }
 
-static void drawValueLine(juce::Graphics& g, juce::Rectangle<float> r, float x, juce::Colour c)
+// [Claude 2026-10-29] The lines are laid on whole screen pixels (PixelGrid): the 2 px core and the 1 px edge
+// straddled two screen pixels at 125 % and came out soft
+static void drawValueLine(juce::Graphics& g, const PixelGrid& grid, juce::Rectangle<float> r, float x, juce::Colour c)
 {
 	// a little width: a soft glow either side of a bright core (Joe: "add a pixel or two of width to it with a teeny
 	// gradient")
@@ -669,12 +673,12 @@ static void drawValueLine(juce::Graphics& g, juce::Rectangle<float> r, float x, 
 	g.setGradientFill(grad);
 	g.fillRect(juce::Rectangle<float>(cx - 3.f, r.getY(), 6.f, r.getHeight()).getIntersection(r));
 	g.setColour(c.brighter(0.4f));
-	g.fillRect(juce::Rectangle<float>(cx - 1.f, r.getY(), 2.f, r.getHeight()));
+	fillVLine(g, grid, cx - 1.f, r.getY(), r.getBottom(), grid.thick(2.f));
 }
 
 // A thin dark edge where the fill ends, with a little shadow falling onto the empty track, as in Joe's original
 // (Joe: "a little bit of a dark line or kind of recessed shadow where the end cap is")
-static void drawEndShadow(juce::Graphics& g, juce::Rectangle<float> r, float x, int direction)
+static void drawEndShadow(juce::Graphics& g, const PixelGrid& grid, juce::Rectangle<float> r, float x, int direction)
 {
 	if (x <= r.getX() + 0.5f || x >= r.getRight() - 0.5f) return;
 	const float w = 2.5f, x2 = x + direction * w;  // a short, sharp shade (Joe: "make the edge sharper")
@@ -682,7 +686,17 @@ static void drawEndShadow(juce::Graphics& g, juce::Rectangle<float> r, float x, 
 	g.setGradientFill(sh);
 	g.fillRect(juce::Rectangle<float>(juce::jmin(x, x2), r.getY(), w, r.getHeight()).getIntersection(r));
 	g.setColour(juce::Colours::black.withAlpha(0.8f));
-	g.fillRect(juce::Rectangle<float>(x - 0.5f, r.getY(), 1.f, r.getHeight()));
+	// the edge sits just inside the fill: on the pixel before `x` when the fill is to the left of it
+	fillVLine(g, grid, direction < 0 ? x - grid.rulePx() : x, r.getY(), r.getBottom());
+}
+
+// [Claude 2026-10-29] Where the fill ends, from the value itself: JUCE's sliderPos is a position inside its
+// thumb-indented range, and read as 0..width it left a gap at the ends (Joe: the centre sliders "don't reach the left
+// end of the track" at full negative). On a screen pixel, like the track's edges.
+static float valueEdge(const PixelGrid& grid, juce::Rectangle<float> track, juce::Slider& slider)
+{
+	const float p = (float) slider.valueToProportionOfLength(slider.getValue());
+	return grid.snapX(track.getX() + juce::jlimit(0.f, 1.f, p) * track.getWidth());
 }
 
 void StandardSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int y, int width, int height,
@@ -695,10 +709,13 @@ void StandardSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int 
 	slider.setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
 	slider.setColour(juce::Slider::ColourIds::textBoxOutlineColourId, juce::Colours::black.withAlpha(0.f));
 
-	juce::Rectangle<float> bounds = { (float)x, (float)y, (float)width, (float)height };
-	auto valuePosition = juce::jmap((sliderPos / bounds.getWidth()), bounds.getX(), bounds.getRight() - 1);
+	// [Claude 2026-10-29] the whole slider, not the area JUCE hands in, which is inset by a layout pixel: at 150 and
+	// 200 % that inset became a screen pixel or two of background between the outline and the track
+	juce::Rectangle<float> bounds = slider.getLocalBounds().toFloat();
+	const PixelGrid grid(g, &slider);   // [Claude 2026-10-29]
 
-	bounds = snapToScreenPixels(g, bounds, &slider);   // [Claude 2026-10-29] the fill ends where the outline is
+	bounds = grid.snap(bounds);   // [Claude 2026-10-29] the fill ends where the outline is
+	const float valuePosition = valueEdge(grid, bounds, slider);
 	drawRecessedTrack(g, bounds);
 
 	juce::Rectangle<float> valueBar = bounds.withRight(valuePosition);
@@ -715,7 +732,7 @@ void StandardSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int 
 		g.setGradientFill(BASIC_SLIDER_GRADIENT_BYPASS(bounds));
 	g.fillRect(valueBar);
 	// no bright cap at the value: the fill simply ends, as in Joe's original (Joe: "I don't want that big bright cap")
-	drawEndShadow(g, bounds, valuePosition, -1);  // the shade falls back into the fill, where it shows
+	drawEndShadow(g, grid, bounds, valuePosition, -1);  // the shade falls back into the fill, where it shows
 }
 
 void StandardSliderLookAndFeel::setBandMode(int bandMode)
@@ -736,15 +753,18 @@ void CenterSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int y,
 	slider.setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
 	slider.setColour(juce::Slider::ColourIds::textBoxOutlineColourId, juce::Colours::black.withAlpha(0.f));
 
-	juce::Rectangle<float> bounds = { (float)x, (float)y, (float)width, (float)height };
-	auto valuePosition = juce::jmap((sliderPos / bounds.getWidth()), bounds.getX(), bounds.getRight() - 1);
+	// [Claude 2026-10-29] the whole slider, as in the standard slider above
+	juce::Rectangle<float> bounds = slider.getLocalBounds().toFloat();
+	const PixelGrid grid(g, &slider);   // [Claude 2026-10-29]
 
-	bounds = snapToScreenPixels(g, bounds, &slider);   // [Claude 2026-10-29] the fill ends where the outline is
+	bounds = grid.snap(bounds);   // [Claude 2026-10-29] the fill ends where the outline is
+	const float valuePosition = valueEdge(grid, bounds, slider);
+	const float centreX = grid.snapX(bounds.getCentreX());   // [Claude 2026-10-29] the centre mark and the fill's start on one screen pixel
 	drawRecessedTrack(g, bounds);
 
 	// The fill runs from the centre to the value
 	juce::Rectangle<float> valueBar = juce::Rectangle<float>::leftTopRightBottom(
-		juce::jmin(bounds.getCentreX(), valuePosition), bounds.getY(), juce::jmax(bounds.getCentreX(), valuePosition), bounds.getBottom());
+		juce::jmin(centreX, valuePosition), bounds.getY(), juce::jmax(centreX, valuePosition), bounds.getBottom());
 	switch (mode)
 	{
     case 0: g.setGradientFill( makeCenterSliderGradient  (bounds, "LOW"  ));    break;
@@ -753,15 +773,15 @@ void CenterSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int y,
 	}
 	if (slider.isEnabled())
 		g.fillRect(valueBar);
-	if (std::abs(valuePosition - bounds.getCentreX()) >= 2.f)
-		drawEndShadow(g, bounds, valuePosition, valuePosition > bounds.getCentreX() ? -1 : +1);
+	if (std::abs(valuePosition - centreX) >= 2.f)
+		drawEndShadow(g, grid, bounds, valuePosition, valuePosition > centreX ? -1 : +1);
 
 	// A fine centre mark in place of the old 7 px groove, then the value line on top
 	g.setColour(juce::Colours::white.withAlpha(0.14f));
-	g.fillRect(juce::Rectangle<float>(bounds.getCentreX() - 0.5f, bounds.getY(), 1.f, bounds.getHeight()));
+	fillVLine(g, grid, bounds.getCentreX() - 0.5f, bounds.getY(), bounds.getBottom());
 	// the marker only where there is no fill to show the value, at the centre; otherwise the fill ends plainly
-	if (std::abs(valuePosition - bounds.getCentreX()) < 2.f)
-		drawValueLine(g, bounds, valuePosition, bandColourFor(mode, slider.isEnabled()));
+	if (std::abs(valuePosition - centreX) < 2.f)
+		drawValueLine(g, grid, bounds, valuePosition, bandColourFor(mode, slider.isEnabled()));
 }
 
 void CenterSliderLookAndFeel::setBandMode(int bandMode)
@@ -780,15 +800,16 @@ void ButtonOptionsLookAndFeel::drawButtonBackground(juce::Graphics& g,
 {
 	// [Claude 2026-10-29] The Options key in the header's style (Joe: "What about the Options menu that shows up in the
 	// corner?"): a small raised grey key with a lit top edge, pressed darker. Was a white bevelled block.
-	auto r = button.getLocalBounds().toFloat().reduced(0.5f);
+	const PixelGrid grid(g, &button);   // [Claude 2026-10-29] the edge and its highlight on whole screen pixels
+	auto r = grid.strokeRect(button.getLocalBounds().toFloat());
 	const auto top = shouldDrawButtonAsDown ? juce::Colour(0xff26282e) : juce::Colour(0xff34363e);
 	const auto bot = shouldDrawButtonAsDown ? juce::Colour(0xff1f2126) : juce::Colour(0xff25272d);
 	g.setGradientFill(juce::ColourGradient(top, r.getX(), r.getY(), bot, r.getX(), r.getBottom(), false));
 	g.fillRoundedRectangle(r, 1.5f);
 	g.setColour(juce::Colours::white.withAlpha(shouldDrawButtonAsHighlighted ? 0.16f : 0.1f));
-	g.drawLine(r.getX() + 1.5f, r.getY() + 0.75f, r.getRight() - 1.5f, r.getY() + 0.75f, 1.f);
+	fillHLine(g, grid, r.getY() + grid.rulePx() / 2.f, r.getX() + 1.5f, r.getRight() - 1.5f);
 	g.setColour(juce::Colours::black.withAlpha(0.7f));
-	g.drawRoundedRectangle(r, 1.5f, 1.f);
+	g.drawRoundedRectangle(r, 1.5f, grid.rulePx());
 }
 
 void ButtonOptionsLookAndFeel::drawButtonText(	juce::Graphics& g,
@@ -799,7 +820,7 @@ void ButtonOptionsLookAndFeel::drawButtonText(	juce::Graphics& g,
 	auto bounds = button.getLocalBounds().toFloat();
 	g.setColour(juce::Colour(0xffc9cbd1));
 	g.setFont(juce::Font(11.f));
-	g.drawText("Options", bounds.withTrimmedRight(11.f), juce::Justification::centred, false);
+	drawTextOnPixels(g, PixelGrid(g, &button), "Options", bounds.withTrimmedRight(11.f), juce::Justification::centred);   // [Claude 2026-10-29]
 	// a small chevron
 	const float cx = bounds.getRight() - 9.f, cy = bounds.getCentreY();
 	juce::Path chevron;
@@ -821,7 +842,8 @@ void ButtonOptionsLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleB
 	}
 	// a small square box at the left: empty when off, filled light with a dark tick when on (Joe: "show the unchecked
 	// as empty toggles")
-	const juce::Rectangle<float> box { r.getX() + 4.f, r.getCentreY() - 4.5f, 9.f, 9.f };
+	const PixelGrid grid(g, &button);   // [Claude 2026-10-29] the box on whole screen pixels
+	const auto box = grid.snap({ r.getX() + 4.f, r.getCentreY() - 4.5f, 9.f, 9.f });
 	if (button.getToggleState())
 	{
 		g.setColour(juce::Colour(0xffe3e4e8));
@@ -837,11 +859,11 @@ void ButtonOptionsLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleB
 	else
 	{
 		g.setColour(juce::Colours::white.withAlpha(0.38f));
-		g.drawRoundedRectangle(box.reduced(0.5f), 1.f, 1.f);
+		g.drawRoundedRectangle(grid.strokeRect(box), 1.f, grid.rulePx());
 	}
 	g.setColour(juce::Colour(button.getToggleState() ? 0xffe3e4e8 : 0xff9a9da6));
 	g.setFont(juce::Font(11.f));
-	g.drawText(button.getButtonText(), r.withTrimmedLeft(17.f), juce::Justification::centredLeft, false);
+	drawTextOnPixels(g, PixelGrid(g, &button), button.getButtonText(), r.withTrimmedLeft(17.f), juce::Justification::centredLeft);   // [Claude 2026-10-29]
 }
 
 /* =========================================================================== */
@@ -897,19 +919,22 @@ void InOutLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int wid
 
 	// [Claude 2026-10-29] A drawn cap in place of the chrome picture (FaderKnob.png): a short dark key, lit along its
 	// top edge, with one white index line at the value.
+	// [Claude 2026-10-29] the cap itself on whole screen pixels, and its highlight, outline and index line with it,
+	// so the cap is one crisp key wherever it stops
+	const PixelGrid grid(g, &slider);
 	const float capW = faderWidth * 0.86f, capH = faderWidth * 0.62f;
-	juce::Rectangle<float> cap { bounds.getCentreX() - capW / 2.f, faderRange - capH / 2.f, capW, capH };
+	const auto cap = grid.snap({ bounds.getCentreX() - capW / 2.f, faderRange - capH / 2.f, capW, capH });
 	g.setColour(juce::Colours::black.withAlpha(0.6f));
 	g.fillRoundedRectangle(cap.translated(0.f, 1.5f), 2.f);
 	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff40434b), cap.getX(), cap.getY(),
 										   juce::Colour(0xff24262c), cap.getX(), cap.getBottom(), false));
 	g.fillRoundedRectangle(cap, 2.f);
 	g.setColour(juce::Colours::white.withAlpha(0.12f));
-	g.drawLine(cap.getX() + 2.f, cap.getY() + 0.75f, cap.getRight() - 2.f, cap.getY() + 0.75f, 1.f);
+	fillHLine(g, grid, cap.getY() + grid.rulePx(), cap.getX() + 2.f, cap.getRight() - 2.f);
 	g.setColour(juce::Colours::black.withAlpha(0.8f));
-	g.drawRoundedRectangle(cap, 2.f, 1.f);
+	g.drawRoundedRectangle(grid.strokeRect(cap), 2.f, grid.rulePx());
 	g.setColour(juce::Colours::white.withAlpha(0.9f));
-	g.drawLine(cap.getX() + 2.f, cap.getCentreY(), cap.getRight() - 2.f, cap.getCentreY(), 1.25f);
+	fillHLine(g, grid, cap.getCentreY() - 0.625f, cap.getX() + 2.f, cap.getRight() - 2.f, grid.thick(1.25f));
 }
 
 /* =========================================================================== */
@@ -1001,18 +1026,11 @@ void ToggleLookAndFeel::drawToggleButton (  juce::Graphics& g, juce::ToggleButto
 // [Claude 2026-10-29] Text centred on a whole-pixel baseline and left edge. Centring by itself put small text on half
 // pixels, which smeared it a pixel up and down (Joe: "the word "Square" on the blue dropdown menu" looked blurry at
 // 100 %). Falls back to fitting when the text is wider than its box.
-static void drawCrispText(juce::Graphics& g, const juce::String& text, juce::Rectangle<int> r)
+// [Claude 2026-10-29] Now whole *screen* pixels, through drawTextOnPixels (UtilityFunctions), so it holds at 125 and
+// 150 % too; `owner` is the key or menu being drawn.
+static void drawCrispText(juce::Graphics& g, const juce::String& text, juce::Rectangle<float> r, const juce::Component* owner)
 {
-	const auto font = g.getCurrentFont();
-	const float w = font.getStringWidthFloat(text);
-	if (w > (float) r.getWidth())
-	{
-		g.drawFittedText(text, r, juce::Justification::centred, 1);
-		return;
-	}
-	const float baseline = std::round((float) r.getY() + ((float) r.getHeight() + font.getAscent() - font.getDescent()) / 2.f);
-	const float left = std::round((float) r.getCentreX() - w / 2.f);
-	g.drawSingleLineText(text, juce::roundToInt(left), juce::roundToInt(baseline));
+	drawTextOnPixels(g, PixelGrid(g, owner), text, r, juce::Justification::centred);
 }
 
 // [Claude 2026-10-29] The keys', menus' and sliders' outline: one screen pixel, on a rectangle already snapped to screen
@@ -1024,21 +1042,23 @@ static void drawOutline(juce::Graphics& g, juce::Rectangle<float> snapped)
 	g.drawRect(snapped, 1.f / (float) g.getInternalContext().getPhysicalPixelScaleFactor());
 }
 
-static void drawLitKey(juce::Graphics& g, juce::Rectangle<float> r, juce::Colour c)
+// [Claude 2026-10-29] the keys' lit top edge: a hairline on whole screen pixels (1 layout pixel covered a pixel and a
+// quarter at 125 %)
+static void drawLitKey(juce::Graphics& g, const PixelGrid& grid, juce::Rectangle<float> r, juce::Colour c)
 {
 	c = ColorScheme::BandColors::matchLuminance(c, ColorScheme::BandColors::getHighBandBaseColor());  // [Claude 2026-10-29] even bands
 	g.setGradientFill(juce::ColourGradient(c.brighter(0.12f), 0.f, r.getY(), c.darker(0.28f), 0.f, r.getBottom(), false));
 	g.fillRect(r);
 	g.setColour(juce::Colours::white.withAlpha(0.22f));
-	g.fillRect(r.withHeight(1.f).reduced(1.f, 0.f));
+	fillHLine(g, grid, r.getY(), r.getX() + 1.f, r.getRight() - 1.f);
 }
 
-static void drawDarkKey(juce::Graphics& g, juce::Rectangle<float> r)
+static void drawDarkKey(juce::Graphics& g, const PixelGrid& grid, juce::Rectangle<float> r)
 {
 	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff2b2d33), 0.f, r.getY(), juce::Colour(0xff1d1f24), 0.f, r.getBottom(), false));
 	g.fillRect(r);
 	g.setColour(juce::Colours::white.withAlpha(0.07f));
-	g.fillRect(r.withHeight(1.f).reduced(1.f, 0.f));
+	fillHLine(g, grid, r.getY(), r.getX() + 1.f, r.getRight() - 1.f);
 }
 
 static const juce::Colour litKeyText { 0xff0e0f12 }, darkKeyText { 0xffa9abb3 };  // dark text on lit keys (Joe: "the white text is terrible")
@@ -1069,11 +1089,12 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
 	else
           baseColor = ColorScheme::BandColors::getBypassBaseColor();
 
-    bounds = snapToScreenPixels(g, bounds, &button);   // [Claude 2026-10-29] the fill ends where the outline is
+    const PixelGrid grid(g, &button);   // [Claude 2026-10-29]
+    bounds = grid.snap(bounds);   // [Claude 2026-10-29] the fill ends where the outline is
     if (ticked)
-        drawLitKey(g, bounds, baseColor);
+        drawLitKey(g, grid, bounds, baseColor);
     else
-        drawDarkKey(g, bounds);
+        drawDarkKey(g, grid, bounds);
 
     g.setColour(ticked ? litKeyText : darkKeyText);
 
@@ -1103,7 +1124,7 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
     }
 
     // Draw the text centered within the bounds
-    drawCrispText(g, mLabel, bounds.toNearestInt());
+    drawCrispText(g, mLabel, bounds, &button);
 
     // [Claude 2026-10-29] one crisp dark outline, as on the menus and sliders
     drawOutline(g, bounds);
@@ -1182,18 +1203,19 @@ void MultComboLookAndFeel::drawComboBox ( juce::Graphics& g,
     else
 	    g.setGradientFill(OPTION_SLIDER_GRADIENT_BYPASS(bounds.toFloat()));
 
-    const auto keyArea = snapToScreenPixels(g, menuBounds.toFloat(), &comboBox);   // [Claude 2026-10-29] fill and outline on one snapped edge
-    drawLitKey(g, keyArea, comboBox.isEnabled() ? baseColour : ColorScheme::BandColors::getBypassBaseColor());
-    
+    const PixelGrid grid(g, &comboBox);   // [Claude 2026-10-29]
+    const auto keyArea = grid.snap(menuBounds.toFloat());   // [Claude 2026-10-29] fill and outline on one snapped edge
+    drawLitKey(g, grid, keyArea, comboBox.isEnabled() ? baseColour : ColorScheme::BandColors::getBypassBaseColor());
+
     // [Claude 2026-10-29] one crisp dark outline, like the keys, in place of the stacked grey bevel (Joe: "Let's try it")
     drawOutline(g, keyArea);
     menuBounds.reduce(1, 1);
-    
+
 	g.setColour(litKeyText);
-    
+
     juce::String selection = comboBox.getItemText(comboBox.getSelectedItemIndex());
     g.setFont((float) juce::roundToInt(height * 0.78f));  // the same size as before the menus got shorter, on a whole pixel
-    drawCrispText(g, selection, menuBounds);
+    drawCrispText(g, selection, menuBounds.toFloat(), &comboBox);
 }
 
 void MultComboLookAndFeel::setMode(int bandMode)
@@ -1234,19 +1256,20 @@ void WaveComboLookAndFeel::drawComboBox ( juce::Graphics& g,
     else
 	    g.setGradientFill(OPTION_SLIDER_GRADIENT_BYPASS(bounds.toFloat()));
     
-    const auto keyArea = snapToScreenPixels(g, bounds.toFloat(), &comboBox);   // [Claude 2026-10-29] fill and outline on one snapped edge
-    drawLitKey(g, keyArea, comboBox.isEnabled() ? baseColour : ColorScheme::BandColors::getBypassBaseColor());
-    
+    const PixelGrid grid(g, &comboBox);   // [Claude 2026-10-29]
+    const auto keyArea = grid.snap(bounds.toFloat());   // [Claude 2026-10-29] fill and outline on one snapped edge
+    drawLitKey(g, grid, keyArea, comboBox.isEnabled() ? baseColour : ColorScheme::BandColors::getBypassBaseColor());
+
     // [Claude 2026-10-29] one crisp dark outline, like the keys, in place of the stacked grey bevel
     drawOutline(g, keyArea);
     bounds.reduce(1, 1);
-    
+
 	g.setColour(litKeyText);
-    
+
     juce::String selection = comboBox.getItemText(comboBox.getSelectedItemIndex());
     g.setFont((float) juce::roundToInt(height * 0.78f));  // the same size as before the menus got shorter, on a whole pixel
-    drawCrispText(g, selection, bounds);
-    
+    drawCrispText(g, selection, bounds.toFloat(), &comboBox);
+
 }
 
 void WaveComboLookAndFeel::setMode(int bandMode)
@@ -1256,22 +1279,57 @@ void WaveComboLookAndFeel::setMode(int bandMode)
 
 
 /* =========================================================================== */
+// [Claude 2026-10-29] The house label look: JUCE's own drawLabel, with the text placed on whole screen pixels
+void HouseLabelLookAndFeel::drawLabel(juce::Graphics& g, juce::Label& label)
+{
+	g.fillAll(label.findColour(juce::Label::backgroundColourId));
+
+	if (! label.isBeingEdited())
+	{
+		const float alpha = label.isEnabled() ? 1.0f : 0.5f;
+		const juce::Font font(getLabelFont(label));
+		g.setColour(label.findColour(juce::Label::textColourId).withMultipliedAlpha(alpha));
+		g.setFont(font);
+		const auto textArea = getLabelBorderSize(label).subtractedFrom(label.getLocalBounds());
+		const int maxLines = juce::jmax(1, (int) ((float) textArea.getHeight() / font.getHeight()));
+		// a label with room for more lines wraps a long text as it always did (the About window's status line);
+		// otherwise the one line goes on screen pixels (Codex)
+		if (maxLines > 1 && font.getStringWidthFloat(label.getText()) > (float) textArea.getWidth())
+			g.drawFittedText(label.getText(), textArea, label.getJustificationType(), maxLines, label.getMinimumHorizontalScale());
+		else
+			drawTextOnPixels(g, PixelGrid(g, &label), label.getText(), textArea.toFloat(), label.getJustificationType());
+		g.setColour(label.findColour(juce::Label::outlineColourId).withMultipliedAlpha(alpha));
+	}
+	else if (label.isEnabled())
+		g.setColour(label.findColour(juce::Label::outlineColourId));
+
+	g.drawRect(label.getLocalBounds());
+}
+
+/* =========================================================================== */
 // [Claude 2026-10-29] The house menu look
 void HouseMenuLookAndFeel::drawPopupMenuBackground(juce::Graphics& g, int width, int height)
 {
+	// [Claude 2026-10-29] the menu's window is scaled like the plugin window, so its hairlines go on screen pixels too;
+	// the window's origin is a screen pixel, so no owner is needed
+	const PixelGrid grid(g, nullptr);
 	juce::Rectangle<float> r { 0.f, 0.f, (float) width, (float) height };
 	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff26282f), 0.f, 0.f, juce::Colour(0xff1d1f25), 0.f, r.getBottom(), false));
 	g.fillRect(r);
 	g.setColour(juce::Colours::white.withAlpha(0.08f));
-	g.fillRect(r.withHeight(1.f).reduced(1.f, 0.f));
+	fillHLine(g, grid, r.getY(), r.getX() + 1.f, r.getRight() - 1.f);
 	g.setColour(juce::Colours::black.withAlpha(0.85f));
-	g.drawRect(r, 1.f);
+	g.drawRect(grid.snap(r), grid.rulePx());
 }
 
 void HouseMenuLookAndFeel::getIdealPopupMenuItemSize(const juce::String& text, bool isSeparator, int, int& idealWidth, int& idealHeight)
 {
-	if (isSeparator) { idealWidth = 50; idealHeight = 9; return; }
-	idealHeight = 22;
+	// [Claude 2026-10-29] Rows 24 and separators 8 (were 22 and 9), with the 4 px border: multiples of 4, so every
+	// row's own origin lands on a whole screen pixel at 125, 150 and 200 %. JUCE paints each row in the row's own
+	// coordinates, with nothing to tell the painter where the row sits, so the rows have to sit well by construction
+	// (Codex: "popup items use the wrong origin").
+	if (isSeparator) { idealWidth = 50; idealHeight = 8; return; }
+	idealHeight = 24;
 	idealWidth = getPopupMenuFont().getStringWidth(text) + 44;
 }
 
@@ -1280,7 +1338,7 @@ void HouseMenuLookAndFeel::drawPopupMenuSectionHeader(juce::Graphics& g, const j
 	auto f = juce::Font(10.f, juce::Font::bold).withExtraKerningFactor(0.12f);
 	g.setFont(f);
 	g.setColour(juce::Colour(0xff6c6f78));
-	g.drawText(name.toUpperCase(), area.withTrimmedLeft(10).withTrimmedTop(4), juce::Justification::centredLeft, false);
+	drawTextOnPixels(g, PixelGrid(g, nullptr), name.toUpperCase(), area.withTrimmedLeft(10).withTrimmedTop(4).toFloat(), juce::Justification::centredLeft);   // [Claude 2026-10-29]
 }
 
 void HouseMenuLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectangle<int>& area, bool isSeparator, bool isActive,
@@ -1288,13 +1346,15 @@ void HouseMenuLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rect
                                              const juce::String& shortcutKeyText, const juce::Drawable*, const juce::Colour*)
 {
 	auto r = area.toFloat();
+	const PixelGrid grid(g, nullptr);   // [Claude 2026-10-29] each row's own origin is a screen pixel (getIdealPopupMenuItemSize)
 	if (isSeparator)
 	{
 		const float y = std::floor(r.getCentreY());
 		g.setColour(juce::Colours::black.withAlpha(0.55f));
-		g.fillRect(juce::Rectangle<float>(r.getX() + 6.f, y, r.getWidth() - 12.f, 1.f));
+		const auto dark = grid.hLine(y, r.getX() + 6.f, r.getRight() - 6.f);
+		g.fillRect(dark);
 		g.setColour(juce::Colours::white.withAlpha(0.05f));
-		g.fillRect(juce::Rectangle<float>(r.getX() + 6.f, y + 1.f, r.getWidth() - 12.f, 1.f));
+		g.fillRect(dark.translated(0.f, dark.getHeight()));
 		return;
 	}
 	if (isHighlighted && isActive)
@@ -1314,11 +1374,11 @@ void HouseMenuLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rect
 	}
 	g.setFont(getPopupMenuFont());
 	g.setColour(! isActive ? juce::Colour(0xff5d606a) : isHighlighted ? juce::Colour(0xfff0f1f4) : juce::Colour(0xffc9cbd1));
-	g.drawText(text, r.withTrimmedLeft(24.f).withTrimmedRight(12.f), juce::Justification::centredLeft, true);
+	drawTextOnPixels(g, grid, text, r.withTrimmedLeft(24.f).withTrimmedRight(12.f), juce::Justification::centredLeft);   // [Claude 2026-10-29]
 	if (shortcutKeyText.isNotEmpty())
 	{
 		g.setColour(juce::Colour(0xff6c6f78));
-		g.drawText(shortcutKeyText, r.withTrimmedRight(10.f), juce::Justification::centredRight, false);
+		drawTextOnPixels(g, grid, shortcutKeyText, r.withTrimmedRight(10.f), juce::Justification::centredRight);   // [Claude 2026-10-29]
 	}
 	if (hasSubMenu)
 	{

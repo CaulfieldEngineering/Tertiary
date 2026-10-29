@@ -63,17 +63,19 @@ void TopBanner::paint(juce::Graphics& g)
     // line at the left, the preset in the middle (PresetBar, placed by the editor), the logo and a menu at the right,
     // and in the demo a DEMO tag and an Activate key before the logo. Replaces the purple glow and the title image.
     auto bounds = getLocalBounds().toFloat();
+    const PixelGrid grid(g, this);   // [Claude 2026-10-29] hairlines and text on whole screen pixels at every window size
 
     g.setGradientFill(juce::ColourGradient(juce::Colour(0xff1f2026), 0.f, 0.f,
                                            juce::Colour(0xff15161a), 0.f, bounds.getBottom(), false));
     g.fillRect(bounds);
     g.setColour(juce::Colours::white.withAlpha(0.07f));
-    g.drawHorizontalLine(0, 0.f, bounds.getRight());
+    fillHLine(g, grid, 0.f, 0.f, bounds.getRight());
     // [Claude 2026-10-29] a soft seam under the header, like the bevels below it, not a hard black line
     g.setColour(juce::Colours::black.withAlpha(0.45f));
-    g.drawHorizontalLine((int) bounds.getBottom() - 1, 0.f, bounds.getRight());
+    const auto seam = grid.hLine(bounds.getBottom() - grid.rulePx(), 0.f, bounds.getRight());
+    g.fillRect(seam);
     g.setColour(juce::Colours::black.withAlpha(0.2f));
-    g.drawHorizontalLine((int) bounds.getBottom() - 2, 0.f, bounds.getRight());
+    g.fillRect(seam.translated(0.f, -seam.getHeight()));
 
     const float cy = bounds.getCentreY();
 
@@ -84,17 +86,23 @@ void TopBanner::paint(juce::Graphics& g)
     g.setColour(juce::Colour(0xffe9e9ec));
     const juce::String name("TERTIARY");
     const float nameW = (float) nameFont.getStringWidth(name);
-    g.drawText(name, juce::Rectangle<float>(14.f, cy - 10.f, nameW + 8.f, 20.f), juce::Justification::centredLeft, false);
+    drawTextOnPixels(g, grid, name, juce::Rectangle<float>(14.f, cy - 10.f, nameW + 8.f, 20.f), juce::Justification::centredLeft);
     g.setFont(juce::Font(12.5f));
     g.setColour(juce::Colour(0xff8b8e97));
-    g.drawText("Multiband Tremolo", juce::Rectangle<float>(14.f + nameW + 12.f, cy - 9.f, 130.f, 18.f), juce::Justification::centredLeft, false);
+    drawTextOnPixels(g, grid, "Multiband Tremolo", juce::Rectangle<float>(14.f + nameW + 12.f, cy - 9.f, 130.f, 18.f), juce::Justification::centredLeft);
 
     // Right side, right to left: menu, logo, then Activate and DEMO in the demo
     float x = bounds.getRight() - 14.f;
     mMenuArea = { x - 18.f, cy - 9.f, 18.f, 18.f };
     g.setColour(juce::Colour(0xffa9abb3));
-    for (int i = -1; i <= 1; ++i)
-        g.fillRect(juce::Rectangle<float>(x - 16.f, cy + i * 5.f - 0.75f, 16.f, 1.5f));
+    {
+        // [Claude 2026-10-29] the ☰ icon's three bars: the same whole number of screen pixels thick and the same
+        // whole number apart, laid out from the middle bar (they came out 1 and 2 px, unevenly spaced, at 125 %)
+        const int barPx = grid.thick(1.5f), pitchPx = juce::roundToInt(5.f * grid.scale);
+        const auto middle = grid.hLine(cy - 0.75f, x - 16.f, x, barPx);
+        for (int i = -1; i <= 1; ++i)
+            g.fillRect(middle.translated(0.f, (float) (i * pitchPx) * grid.px()));
+    }
     const float gap = 16.f;   // [Claude 2026-10-29] one even gap between everything on the right (Joe: "space these out evenly")
     x -= 16.f + gap;
 
@@ -125,9 +133,9 @@ void TopBanner::paint(juce::Graphics& g)
                                                juce::Colour(0xff3f9a5f), 0.f, mActivateArea.getBottom(), false));
         g.fillRoundedRectangle(mActivateArea, 2.f);
         g.setColour(juce::Colours::white.withAlpha(0.25f));
-        g.drawHorizontalLine((int) mActivateArea.getY() + 1, mActivateArea.getX() + 2.f, mActivateArea.getRight() - 2.f);
+        fillHLine(g, grid, std::floor(mActivateArea.getY()) + 1.f, mActivateArea.getX() + 2.f, mActivateArea.getRight() - 2.f);
         g.setColour(juce::Colour(0xff0f1a12));
-        g.drawText("Activate", mActivateArea, juce::Justification::centred, false);
+        drawTextOnPixels(g, grid, "Activate", mActivateArea, juce::Justification::centred);
         x -= actW + gap;
 
         auto tagFont = juce::Font(10.f, juce::Font::bold);
@@ -143,8 +151,8 @@ void TopBanner::paint(juce::Graphics& g)
             g.fillRoundedRectangle(tag, 2.f);
             g.setColour(juce::Colour(0xffc886dd));
         }
-        g.drawRoundedRectangle(tag.reduced(0.5f), 2.f, 1.f);
-        g.drawText(tagText, tag, juce::Justification::centred, false);
+        g.drawRoundedRectangle(grid.strokeRect(tag), 2.f, grid.rulePx());   // [Claude 2026-10-29] its straight edges on screen pixels
+        drawTextOnPixels(g, grid, tagText, tag, juce::Justification::centred);
     }
 }
 

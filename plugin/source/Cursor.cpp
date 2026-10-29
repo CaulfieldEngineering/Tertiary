@@ -10,6 +10,7 @@
 
 #include "Cursor.h"
 #include "AllColors.h"
+#include "UtilityFunctions.h"   // [Claude 2026-10-29] PixelGrid
 
 using namespace juce;
 
@@ -120,7 +121,10 @@ void Cursor::paint(juce::Graphics& g)
     // hover (Joe: "i liked the open circles better, maybe an open circle with a more faint vertical line?").
     const float x = bounds.getCentreX();
     g.setColour(juce::Colours::white.withAlpha(0.16f + 0.18f * t));
-    g.drawLine(x, bounds.getY(), x, bounds.getBottom(), 1.75f);  // a little heavier than the 1 px grid (Joe)
+    // a little heavier than the 1 px grid (Joe)
+    // [Claude 2026-10-29] on whole screen pixels: 2 at 100 and 125 %, 3 at 150, 4 at 200 (was a soft 1.75 px stroke)
+    const PixelGrid grid(g, this);
+    fillVLine(g, grid, x - 0.875f, bounds.getY(), bounds.getBottom(), grid.thick(1.75f));
     const float my = mMarkerY >= 0.f ? mMarkerY : bounds.getCentreY();
     const float r = 3.5f + 0.75f * t;
     g.setColour(juce::Colours::black.withAlpha(0.6f));
