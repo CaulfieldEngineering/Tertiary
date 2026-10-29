@@ -642,6 +642,29 @@ void MultLookAndFeel::setBandMode(int bandMode)
 /* =========================================================================== */
 /* =========================================================================== */
 
+// [Claude 2026-10-29] The bar sliders, reworked (Joe: "Slider"): a recessed track, the band's fill, and a bright line
+// at the value, so a slider at centre (Skew, Phase) still shows where it is instead of two empty boxes.
+static juce::Colour bandColourFor(int mode, bool enabled)
+{
+	using namespace ColorScheme::BandColors;
+	if (! enabled) return getBypassBaseColor();
+	return mode == 0 ? getLowBandBaseColor() : mode == 1 ? getMidBandBaseColor() : getHighBandBaseColor();
+}
+
+static void drawRecessedTrack(juce::Graphics& g, juce::Rectangle<float> r)
+{
+	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff0d0e11), 0.f, r.getY(), juce::Colour(0xff18191d), 0.f, r.getBottom(), false));
+	g.fillRect(r);
+	g.setColour(juce::Colours::black.withAlpha(0.55f));
+	g.drawHorizontalLine((int) r.getY(), r.getX(), r.getRight());
+}
+
+static void drawValueLine(juce::Graphics& g, juce::Rectangle<float> r, float x, juce::Colour c)
+{
+	g.setColour(c.brighter(0.35f));
+	g.fillRect(juce::Rectangle<float>(juce::jlimit(r.getX(), r.getRight() - 1.5f, x - 0.75f), r.getY(), 1.5f, r.getHeight()));
+}
+
 void StandardSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int y, int width, int height,
 													float sliderPos, float minSliderPos, float maxSliderPos,
 													const juce::Slider::SliderStyle sliderStyle, juce::Slider& slider)
@@ -649,28 +672,15 @@ void StandardSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int 
 	using namespace AllColors::SliderColors;
     using namespace Gradients::BarSliders;
 
-	// Set Textbox Style
 	slider.setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
 	slider.setColour(juce::Slider::ColourIds::textBoxOutlineColourId, juce::Colours::black.withAlpha(0.f));
 
-	// Establish Bounds Of Container (Slider & Label)
 	juce::Rectangle<float> bounds = { (float)x, (float)y, (float)width, (float)height };
-
-	// Establish Bounds of Slider
-	//juce::Rectangle<int> valueBounds = bounds.removeFromBottom(10).toNearestInt();
-    juce::Rectangle<int> valueBounds = bounds.toNearestInt();
-    
-	// Pixel Position of Parameter State
 	auto valuePosition = juce::jmap((sliderPos / bounds.getWidth()), bounds.getX(), bounds.getRight() - 1);
 
-	// Fill Background
-	g.setColour(juce::Colours::darkgrey.withMultipliedBrightness(0.4f));
-	g.fillRect(valueBounds);
-	// Draw Value Bar
-	juce::Rectangle<float> valueBar = { (float)valueBounds.getX(),
-										(float)valueBounds.getY(),
-										(float)valuePosition - x,
-										(float)valueBounds.getHeight() };
+	drawRecessedTrack(g, bounds);
+
+	juce::Rectangle<float> valueBar = bounds.withRight(valuePosition);
 	if (slider.isEnabled())
 	{
 		switch (mode)
@@ -682,8 +692,9 @@ void StandardSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int 
 	}
 	else
 		g.setGradientFill(BASIC_SLIDER_GRADIENT_BYPASS(bounds));
-
 	g.fillRect(valueBar);
+
+	drawValueLine(g, bounds, valuePosition, bandColourFor(mode, slider.isEnabled()));
 }
 
 void StandardSliderLookAndFeel::setBandMode(int bandMode)
@@ -701,57 +712,30 @@ void CenterSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int y,
 	using namespace AllColors::SliderColors;
     using namespace Gradients::BarSliders;
 
-	// Set Textbox Style
 	slider.setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
 	slider.setColour(juce::Slider::ColourIds::textBoxOutlineColourId, juce::Colours::black.withAlpha(0.f));
 
-	// Establish Bounds Of Container (Slider & Label)
 	juce::Rectangle<float> bounds = { (float)x, (float)y, (float)width, (float)height };
-
-	// Establish Bounds of Slider
-	//juce::Rectangle<int> valueBounds = bounds.removeFromBottom(10).toNearestInt();
-    juce::Rectangle<int> valueBounds = bounds.toNearestInt();
-    
-	// Pixel Position of Parameter State
 	auto valuePosition = juce::jmap((sliderPos / bounds.getWidth()), bounds.getX(), bounds.getRight() - 1);
 
-	// Fill Background
-	g.setColour(juce::Colours::darkgrey.withMultipliedBrightness(0.4f));
-	g.fillRect(valueBounds);
+	drawRecessedTrack(g, bounds);
 
-	// Establish Value Bar
-	juce::Path valueBar;
-	valueBar.startNewSubPath(valueBounds.getCentreX(), valueBounds.getY());
-	valueBar.lineTo(valueBounds.getCentreX(), valueBounds.getBottom());
-	valueBar.lineTo(valuePosition, valueBounds.getBottom());
-	valueBar.lineTo(valuePosition, valueBounds.getY());
-	valueBar.closeSubPath();
-
-	// Fill Value Bar
+	// The fill runs from the centre to the value
+	juce::Rectangle<float> valueBar = juce::Rectangle<float>::leftTopRightBottom(
+		juce::jmin(bounds.getCentreX(), valuePosition), bounds.getY(), juce::jmax(bounds.getCentreX(), valuePosition), bounds.getBottom());
 	switch (mode)
 	{
     case 0: g.setGradientFill( makeCenterSliderGradient  (bounds, "LOW"  ));    break;
     case 1: g.setGradientFill( makeCenterSliderGradient  (bounds, "MID"  ));    break;
-    case 2: g.setGradientFill( makeCenterSliderGradient  (bounds, "HIGH" ));    break; 
+    case 2: g.setGradientFill( makeCenterSliderGradient  (bounds, "HIGH" ));    break;
 	}
-
 	if (slider.isEnabled())
-		g.fillPath(valueBar);
+		g.fillRect(valueBar);
 
-	// Draw Value Line
-	//g.setColour(juce::Colours::white);
-	//g.drawVerticalLine(valuePosition, valueBounds.getY(), valueBounds.getBottom());
-    
-    /* Draw Center Marker */
-    /* Provide a "Recessed" appearance */
-    
-    for (int i = 0; i < 4; i++)
-    {
-        g.setColour(juce::Colours::darkgrey.withMultipliedAlpha(1.f/((i*i)+0.75f)));
-        
-        g.drawVerticalLine(bounds.getCentreX() + i, bounds.getY(), bounds.getBottom());
-        g.drawVerticalLine(bounds.getCentreX() - i, bounds.getY(), bounds.getBottom());
-    }
+	// A fine centre mark in place of the old 7 px groove, then the value line on top
+	g.setColour(juce::Colours::white.withAlpha(0.14f));
+	g.fillRect(juce::Rectangle<float>(bounds.getCentreX() - 0.5f, bounds.getY(), 1.f, bounds.getHeight()));
+	drawValueLine(g, bounds, valuePosition, bandColourFor(mode, slider.isEnabled()));
 }
 
 void CenterSliderLookAndFeel::setBandMode(int bandMode)
