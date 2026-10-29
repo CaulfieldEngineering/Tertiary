@@ -109,7 +109,7 @@ void InputOutputGain::resized()
 	//spacing = bo unds.getHeight()*0.014f;			// Vertical Distance between LEDs
 	//ledHeight = bounds.getHeight()*0.006f;
 
-	ledOffGradient = makeMeterGradient(grillBounds, 0.1f);  // [Claude 2026-10-29] darker unlit LEDs, a quiet meter at rest (was 0.22)
+	ledOffGradient = makeMeterGradient(grillBounds, 0.2f);  // [Claude 2026-10-29] visible again on Joe's screen ("I can't see the off meter LEDs"); 0.1 was too dark  // [Claude 2026-10-29] darker unlit LEDs, a quiet meter at rest (was 0.22)
 	ledOnGradient = makeMeterGradient(grillBounds, 1.f);
 
 	// Draw The Grill Image =======================================================

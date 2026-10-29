@@ -585,10 +585,10 @@ namespace AllColors
 		// GRADIENT ITEMS FOR MAIN BACKGROUND ==============================================================
 		// [Claude 2026-10-29] The window behind the sections is the header's grey (Joe: the gutters and the separator);
 		// was black to a red-brown and a blue
-		inline Colour GRADIENT1() { return Colour(0xff1a1b20); }
-		inline Colour GRADIENT2() { return Colour(0xff1a1b20); }
-		inline Colour GRADIENT3() { return Colour(0xff1a1b20); }
-		inline Colour GRADIENT4() { return Colour(0xff1a1b20); }
+		inline Colour GRADIENT1() { return Colour(0xff202127); }
+		inline Colour GRADIENT2() { return Colour(0xff202127); }
+		inline Colour GRADIENT3() { return Colour(0xff202127); }
+		inline Colour GRADIENT4() { return Colour(0xff202127); }
 
 		// BACKGROUND GRADIENT ==========================================================
 		inline ColourGradient BACKGROUND_GRADIENT(juce::Rectangle<float> bounds)
