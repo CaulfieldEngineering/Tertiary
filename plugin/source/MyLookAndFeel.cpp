@@ -981,7 +981,7 @@ static void drawDarkKey(juce::Graphics& g, juce::Rectangle<float> r)
 	g.fillRect(r.withHeight(1.f).reduced(1.f, 0.f));
 }
 
-static const juce::Colour litKeyText { 0xfff4f5f7 }, darkKeyText { 0xffa9abb3 };
+static const juce::Colour litKeyText { 0xff0e0f12 }, darkKeyText { 0xffa9abb3 };  // dark text on lit keys (Joe: "the white text is terrible")
 
 void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& button,
                                         float x, float y, float w, float h,
