@@ -242,7 +242,7 @@ void ScrollPad::paint(juce::Graphics& g)
 	// little recess or something. Just subtle."). Was a soft 6 px stroke with a glowing stack of strokes for the thumb.
 	const float h = 5.f, cy = bounds.getCentreY();
 	juce::Rectangle<float> slot { bounds.getCentreX() - maxWidth / 2.f, cy - h / 2.f, (float) maxWidth, h };
-	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff08090b), 0.f, slot.getY(), juce::Colour(0xff17181c), 0.f, slot.getBottom(), false));
+	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff1a1b20), 0.f, slot.getY(), juce::Colour(0xff2a2c32), 0.f, slot.getBottom(), false));
 	g.fillRoundedRectangle(slot, h / 2.f);
 	g.setColour(juce::Colours::black.withAlpha(0.6f));
 	g.drawRoundedRectangle(slot, h / 2.f, 1.f);
