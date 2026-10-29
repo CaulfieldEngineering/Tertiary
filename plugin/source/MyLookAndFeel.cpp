@@ -648,10 +648,14 @@ static juce::Colour bandColourFor(int mode, bool enabled)
 
 static void drawRecessedTrack(juce::Graphics& g, juce::Rectangle<float> r)
 {
-	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff0d0e11), 0.f, r.getY(), juce::Colour(0xff18191d), 0.f, r.getBottom(), false));
+	// a touch lighter than the column, shaded at the top and lit along the bottom, so the track reads as cut into the
+	// panel (Joe: "the sliders blend into the background a little too much")
+	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff111216), 0.f, r.getY(), juce::Colour(0xff222429), 0.f, r.getBottom(), false));
 	g.fillRect(r);
-	g.setColour(juce::Colours::black.withAlpha(0.55f));
-	g.drawHorizontalLine((int) r.getY(), r.getX(), r.getRight());
+	g.setColour(juce::Colours::black.withAlpha(0.6f));
+	g.fillRect(r.withHeight(2.f));
+	g.setColour(juce::Colours::white.withAlpha(0.1f));
+	g.fillRect(r.withTop(r.getBottom() - 1.f));
 }
 
 static void drawValueLine(juce::Graphics& g, juce::Rectangle<float> r, float x, juce::Colour c)
