@@ -9,6 +9,7 @@
 */
 
 #include "InputOutputGain.h"
+#include "UtilityFunctions.h"
 
 InputOutputGain::InputOutputGain(audio_plugin::AudioPluginAudioProcessor& p) :
 	audioProcessor(p)
@@ -40,14 +41,26 @@ void InputOutputGain::paint(juce::Graphics& g)
 	auto bounds = getLocalBounds().toFloat();
 	bounds.reduce(4, 0);
 
-	// Fill Background Gradient (LED's Off)
-	g.setGradientFill(ledOffGradient);
+	// [Claude 2026-10-29] Each LED drawn as its own rectangle on screen pixels, unlit or lit, on black. It was colour
+	// under a black picture with LED holes cut in it; scaled to 125 % or 150 % the picture's edges let the colour show
+	// through as stray red, yellow and green pixels (Joe)
+	g.setColour(juce::Colours::black);
 	g.fillRect(grillBounds);
-
-	// DRAW THE LEFT & RIGHT METER
-	g.setGradientFill(ledOnGradient);
-	g.fillRect(leftBounds);
-	g.fillRect(rightBounds);
+	for (const auto& led : ledRects)
+	{
+		const auto r = snapToScreenPixels(g, led.toFloat(), this);
+		g.setGradientFill(ledOffGradient);
+		g.fillRect(r);
+		for (const auto& lit : { leftBounds, rightBounds })
+		{
+			const auto on = r.getIntersection(lit);
+			if (! on.isEmpty())
+			{
+				g.setGradientFill(ledOnGradient);
+				g.fillRect(on);
+			}
+		}
+	}
 
 	// Draw the Slider Value Background
 	g.setColour(juce::Colours::black);  // Migrate to AllColors
@@ -72,7 +85,7 @@ void InputOutputGain::paint(juce::Graphics& g)
 	if (sliderValue == 0)
 		valueString = valueString << " dB";
 
-	g.drawImage(grill, grillBounds);
+	// (the LEDs are drawn above, one by one; the grill picture is no longer drawn)
 
 	// Initial font size based on height of labelBounds or a fixed size
 	auto initialFontSize = 13.0f;
@@ -209,6 +222,7 @@ void InputOutputGain::buildGrill(juce::Rectangle<float> bounds)
 	using namespace juce;
 
 	ledThresholds.clear();
+	ledRects.clear();
 
 	grill = Image(Image::PixelFormat::ARGB, (int) bounds.getWidth(), (int) bounds.getHeight(), true);
 
@@ -241,6 +255,7 @@ void InputOutputGain::buildGrill(juce::Rectangle<float> bounds)
 
 				// Provide transparency in the image
 				grill.clear(ledArea.toNearestInt(), juce::Colours::hotpink.withAlpha(0.f));
+				ledRects.add(ledArea.toNearestInt());
 				if (z == 0 && y == 0)
 					(x == 0 ? leftLedEdge : rightLedEdge) = (x == 0 ? ledArea.toNearestInt().getRight() : ledArea.toNearestInt().getX());
 			}

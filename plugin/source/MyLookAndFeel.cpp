@@ -9,6 +9,9 @@
 */
 
 #include "MyLookAndFeel.h"
+#include "UtilityFunctions.h"
+
+static void drawOutline(juce::Graphics& g, juce::Rectangle<float> snapped);   // [Claude 2026-10-29] defined with the keys
 
 
 CustomSlider::CustomSlider()
@@ -42,10 +45,9 @@ void CustomSlider::resized()
 
 void CustomSlider::paintOverChildren(juce::Graphics& g)
 {
-    auto bounds = slider.getLocalBounds();
-    // [Claude 2026-10-29] one crisp dark outline on every key, menu and slider (Joe chose it over the grey frames)
-    g.setColour(juce::Colours::black.withAlpha(0.75f));
-    g.drawRect(bounds.toFloat(), 1.f);
+    // [Claude 2026-10-29] one crisp dark outline on every key, menu and slider (Joe chose it over the grey frames), on
+    // screen pixels, round the same snapped rectangle the track fills
+    drawOutline(g, snapToScreenPixels(g, slider.getBounds().toFloat(), this));
     
 //    g.setColour(juce::Colours::hotpink);
 //    g.fillRect(label.getBounds());
@@ -696,6 +698,7 @@ void StandardSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int 
 	juce::Rectangle<float> bounds = { (float)x, (float)y, (float)width, (float)height };
 	auto valuePosition = juce::jmap((sliderPos / bounds.getWidth()), bounds.getX(), bounds.getRight() - 1);
 
+	bounds = snapToScreenPixels(g, bounds, &slider);   // [Claude 2026-10-29] the fill ends where the outline is
 	drawRecessedTrack(g, bounds);
 
 	juce::Rectangle<float> valueBar = bounds.withRight(valuePosition);
@@ -736,6 +739,7 @@ void CenterSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int y,
 	juce::Rectangle<float> bounds = { (float)x, (float)y, (float)width, (float)height };
 	auto valuePosition = juce::jmap((sliderPos / bounds.getWidth()), bounds.getX(), bounds.getRight() - 1);
 
+	bounds = snapToScreenPixels(g, bounds, &slider);   // [Claude 2026-10-29] the fill ends where the outline is
 	drawRecessedTrack(g, bounds);
 
 	// The fill runs from the centre to the value
@@ -1011,6 +1015,15 @@ static void drawCrispText(juce::Graphics& g, const juce::String& text, juce::Rec
 	g.drawSingleLineText(text, juce::roundToInt(left), juce::roundToInt(baseline));
 }
 
+// [Claude 2026-10-29] The keys', menus' and sliders' outline: one screen pixel, on a rectangle already snapped to screen
+// pixels with snapToScreenPixels. A 1-layout-pixel line covered only part of a screen pixel at 125 %, and the fill
+// showed past it (Joe: "The fill slightly exceeds the black border")
+static void drawOutline(juce::Graphics& g, juce::Rectangle<float> snapped)
+{
+	g.setColour(juce::Colours::black.withAlpha(0.75f));
+	g.drawRect(snapped, 1.f / (float) g.getInternalContext().getPhysicalPixelScaleFactor());
+}
+
 static void drawLitKey(juce::Graphics& g, juce::Rectangle<float> r, juce::Colour c)
 {
 	c = ColorScheme::BandColors::matchLuminance(c, ColorScheme::BandColors::getHighBandBaseColor());  // [Claude 2026-10-29] even bands
@@ -1056,6 +1069,7 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
 	else
           baseColor = ColorScheme::BandColors::getBypassBaseColor();
 
+    bounds = snapToScreenPixels(g, bounds, &button);   // [Claude 2026-10-29] the fill ends where the outline is
     if (ticked)
         drawLitKey(g, bounds, baseColor);
     else
@@ -1092,8 +1106,7 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
     drawCrispText(g, mLabel, bounds.toNearestInt());
 
     // [Claude 2026-10-29] one crisp dark outline, as on the menus and sliders
-    g.setColour(juce::Colours::black.withAlpha(0.75f));
-    g.drawRect(bounds, 1.f);
+    drawOutline(g, bounds);
 }
 
 void ToggleLookAndFeel::setBandMode(int bandMode, juce::String label)
@@ -1169,11 +1182,11 @@ void MultComboLookAndFeel::drawComboBox ( juce::Graphics& g,
     else
 	    g.setGradientFill(OPTION_SLIDER_GRADIENT_BYPASS(bounds.toFloat()));
 
-    drawLitKey(g, menuBounds.toFloat(), comboBox.isEnabled() ? baseColour : ColorScheme::BandColors::getBypassBaseColor());
+    const auto keyArea = snapToScreenPixels(g, menuBounds.toFloat(), &comboBox);   // [Claude 2026-10-29] fill and outline on one snapped edge
+    drawLitKey(g, keyArea, comboBox.isEnabled() ? baseColour : ColorScheme::BandColors::getBypassBaseColor());
     
     // [Claude 2026-10-29] one crisp dark outline, like the keys, in place of the stacked grey bevel (Joe: "Let's try it")
-    g.setColour(juce::Colours::black.withAlpha(0.75f));
-    g.drawRect(menuBounds, 1);
+    drawOutline(g, keyArea);
     menuBounds.reduce(1, 1);
     
 	g.setColour(litKeyText);
@@ -1221,11 +1234,11 @@ void WaveComboLookAndFeel::drawComboBox ( juce::Graphics& g,
     else
 	    g.setGradientFill(OPTION_SLIDER_GRADIENT_BYPASS(bounds.toFloat()));
     
-    drawLitKey(g, bounds.toFloat(), comboBox.isEnabled() ? baseColour : ColorScheme::BandColors::getBypassBaseColor());
+    const auto keyArea = snapToScreenPixels(g, bounds.toFloat(), &comboBox);   // [Claude 2026-10-29] fill and outline on one snapped edge
+    drawLitKey(g, keyArea, comboBox.isEnabled() ? baseColour : ColorScheme::BandColors::getBypassBaseColor());
     
     // [Claude 2026-10-29] one crisp dark outline, like the keys, in place of the stacked grey bevel
-    g.setColour(juce::Colours::black.withAlpha(0.75f));
-    g.drawRect(bounds, 1);
+    drawOutline(g, keyArea);
     bounds.reduce(1, 1);
     
 	g.setColour(litKeyText);

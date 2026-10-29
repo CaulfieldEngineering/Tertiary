@@ -239,7 +239,8 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
           // [Claude 2026-10-29] the frame grey itself, not the second step's shade, so the strip and the two outer
           // steps beside it are one even plateau rather than a lighter-darker-lighter ridge
           g.setColour(ColorScheme::WindowBorders::getWindowBorderColor());
-          g.fillRect(x0 - 1, wrapperOscilloscope.getY(), x1 - x0 + 2, wrapperOscilloscope.getHeight());
+          g.fillRect(snapToScreenPixels(g, juce::Rectangle<float>((float) x0 - 1.f, (float) wrapperOscilloscope.getY(),
+                                                                  (float) (x1 - x0 + 2), (float) wrapperOscilloscope.getHeight()), &content));
       }
     }
 
@@ -381,7 +382,13 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       return 1.f;
      #else
       juce::PropertiesFile props(tertiarySettings());
-      return juce::jlimit(0.75f, 2.5f, (float) props.getDoubleValue("uiScale", 1.0));
+      if (props.containsKey("uiScale"))
+        return juce::jlimit(0.75f, 2.5f, (float) props.getDoubleValue("uiScale", 1.0));
+      // first open: 125 % where the screen has room for it (Joe: "yes 125% by default"), else 100 %
+      if (auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+        if (display->userArea.getWidth() >= 1700 && display->userArea.getHeight() >= 1000)
+          return 1.25f;
+      return 1.f;
      #endif
     }
 

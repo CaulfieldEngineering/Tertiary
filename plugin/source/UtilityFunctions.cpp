@@ -17,8 +17,46 @@
 
 /* Paints a shaded border around specified object.*/
 // ==================================================================
-void paintBorder(juce::Graphics& g, juce::Colour baseColor, juce::Rectangle<float> bounds)
+// where `c`'s origin sits in the scaled layout: its position summed up to the scaled content (the one transformed parent)
+static juce::Point<float> originInLayout(const juce::Component* c)
 {
+	juce::Point<float> o;
+	for (auto* p = c; p != nullptr && ! p->isTransformed(); p = p->getParentComponent())
+		o += p->getPosition().toFloat();
+	return o;
+}
+
+juce::Rectangle<float> snapToScreenPixels(juce::Graphics& g, juce::Rectangle<float> r, const juce::Component* owner)
+{
+	if (owner == nullptr)
+		return r;
+	const float sc = (float) g.getInternalContext().getPhysicalPixelScaleFactor();
+	const auto o = originInLayout(owner);
+	const auto snap = [sc](float v) { return std::round(v * sc) / sc; };
+	return juce::Rectangle<float>::leftTopRightBottom(snap(o.x + r.getX()) - o.x, snap(o.y + r.getY()) - o.y,
+	                                                   snap(o.x + r.getRight()) - o.x, snap(o.y + r.getBottom()) - o.y);
+}
+
+void paintBorder(juce::Graphics& g, juce::Colour baseColor, juce::Rectangle<float> bounds, const juce::Component* owner)
+{
+	// [Claude 2026-10-29] With an owner, every step lands on whole screen pixels at any window size, one screen pixel per
+	// step (two at 200 %), so abutting frames tile into one plateau at 125 % and 150 % too (Joe: "at 125, those seams
+	// reappear"). Without one, the 1-layout-pixel version below.
+	if (owner != nullptr)
+	{
+		const float sc = (float) g.getInternalContext().getPhysicalPixelScaleFactor();
+		const float step = (float) juce::jmax(1, juce::roundToInt(sc)) / sc;
+		auto ring = snapToScreenPixels(g, bounds, owner);
+		const float steps[] = { 1.f, 0.8f, 0.6f, 0.3f };
+		for (float k : steps)
+		{
+			g.setColour(baseColor.withMultipliedBrightness(k));
+			g.drawRect(ring, step);
+			ring.reduce(step, step);
+		}
+		return;
+	}
+
 	// [Claude 2026-10-29] Joe's stepped bevel, tightened: the same four steps from the frame grey down into the recess,
 	// 1 px each instead of 2 (Joe: "revert the framing to its original state and just tighten it up", "a little
 	// thinner and sharper"). The boxes it frames are unchanged.

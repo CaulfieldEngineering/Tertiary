@@ -131,10 +131,10 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
     // 35 % black), so the four columns match (Joe: "a different background than the 2nd column")
     g.setColour(juce::Colours::black.withAlpha(0.22f));  // [Claude 2026-10-29] a touch lighter (Joe: "The whole UI seems pretty dark"); was 0.35
     // [Claude 2026-10-29] on whole pixels, as the frames now are (the band columns sit on fractional x)
-    g.fillRect(border2.toNearestIntEdges());
-    g.fillRect(border3.toNearestIntEdges());
-    g.fillRect(border4.toNearestIntEdges());
-    g.fillRect(border5.toNearestIntEdges());
+    g.fillRect(snapToScreenPixels(g, border2, this));
+    g.fillRect(snapToScreenPixels(g, border3, this));
+    g.fillRect(snapToScreenPixels(g, border4, this));
+    g.fillRect(snapToScreenPixels(g, border5, this));
     g.setGradientFill(BACKGROUND_GRADIENT(bounds));
 
     auto windowBorderColor = ColorScheme::WindowBorders::getWindowBorderColor();
@@ -183,27 +183,27 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
 
     // Input Gain Border
     // ==================================================================
-    paintBorder(g, windowBorderColor, border1);
+    paintBorder(g, windowBorderColor, border1, this);
 
     // Text Labels Border
     // ==================================================================
-    paintBorder(g, windowBorderColor, border2);
+    paintBorder(g, windowBorderColor, border2, this);
     
     // Low-Band Border
     // ==================================================================
-    paintBorder(g, windowBorderColor, border3);
+    paintBorder(g, windowBorderColor, border3, this);
     
     // Mid-Band Border
     // ==================================================================
-    paintBorder(g, windowBorderColor, border4);
+    paintBorder(g, windowBorderColor, border4, this);
     
     // High-Band Border
     // ==================================================================
-    paintBorder(g, windowBorderColor, border5);
+    paintBorder(g, windowBorderColor, border5, this);
     
     // Output Gain Border
     // ==================================================================
-    paintBorder(g, windowBorderColor, border6);
+    paintBorder(g, windowBorderColor, border6, this);
 }
 
 void GlobalControls::paintBandLabels(juce::Graphics& g)

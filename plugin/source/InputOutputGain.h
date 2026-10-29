@@ -61,6 +61,7 @@ private:
 	float ledWidth = 10.f;
 	float ledHeight = 1.5f;
 	juce::Array<float> ledThresholds;
+	juce::Array<juce::Rectangle<int>> ledRects;   // [Claude 2026-10-29] each LED, drawn directly (see paint)
 
 	juce::Rectangle<float> leftBounds, rightBounds;
 
