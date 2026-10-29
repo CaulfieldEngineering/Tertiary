@@ -126,7 +126,11 @@ void ScopeChannel::paint(juce::Graphics& g)
         g.fillRoundedRectangle(bounds, 5.f);
         g.setColour(juce::Colour(0xff0f1017).withAlpha(0.85f));
         g.fillRoundedRectangle(bounds, 3.f);
-        g.setColour(strokeColor.withAlpha(0.035f));  // half the wash (Joe: "a little too much")
+        // the wash fades out toward the edges, like a vignette (Joe: "give the wash soft edges")
+        juce::ColourGradient wash(strokeColor.withAlpha(0.06f), bounds.getCentreX(), bounds.getCentreY(),
+                                  strokeColor.withAlpha(0.f), bounds.getX(), bounds.getY(), true);
+        wash.addColour(0.55, strokeColor.withAlpha(0.035f));
+        g.setGradientFill(wash);
         g.fillRoundedRectangle(bounds, 3.f);
         g.setColour(juce::Colours::white.withAlpha(0.05f));
         g.drawHorizontalLine(0, bounds.getX() + 2.f, bounds.getRight() - 2.f);
