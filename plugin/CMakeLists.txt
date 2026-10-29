@@ -42,6 +42,8 @@ juce_add_plugin( ${PROJECT_NAME}
     PRODUCT_NAME "${wPLUGIN_NAME}"
     VST3_CATEGORIES ${wPLUGIN_CATEGORY}
     COPY_PLUGIN_AFTER_BUILD ${WLA_COPY_PLUGIN_AFTER_BUILD}  # [Claude 2026-10-27] was TRUE; still on by default
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/images/icon/tertiary-icon-1024.png"   # [Claude 2026-10-29] the app icon (Joe chose C1)
+    ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/images/icon/tertiary-icon-256.png"
 )
 
 # Explicitly set runtime library for the plugin target (belt and suspenders approach)

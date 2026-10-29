@@ -30,6 +30,9 @@ OutputDir=.
 OutputBaseFilename={#MyOutputBaseFilename}
 Compression=lzma
 SolidCompression=yes
+// [Claude 2026-10-29] the app icon on the installer and in Apps & features
+SetupIconFile=..\plugin\images\icon	ertiary-icon.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
 DisableProgramGroupPage=yes
 ArchitecturesInstallIn64BitMode=x64
 ArchitecturesAllowed=x64
