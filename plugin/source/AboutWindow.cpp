@@ -10,6 +10,7 @@
 
 
 #include "AboutWindow.h"
+#include "build_id.h"   // [Claude 2026-10-29] WLA_BUILD_ID
 #include <cstdlib>
 #include "PluginEditor.h"
 
@@ -179,7 +180,7 @@ void AboutWindow::paint(juce::Graphics& g)
     g.setFont(juce::Font(12.5f));
     g.setColour(juce::Colour(0xff8b8e97));
     drawTextOnPixels(g, grid, "Multiband Tremolo", juce::Rectangle<float>(x, 44.f, 200.f, 16.f), juce::Justification::centredLeft);
-    drawTextOnPixels(g, grid, "Version " + juce::String(JucePlugin_VersionString), juce::Rectangle<float>(x + 150.f, 44.f, r.getWidth() - x * 2.f - 150.f, 16.f),
+    drawTextOnPixels(g, grid, mShowBuildId ? juce::String(juce::CharPointer_UTF8("Build " WLA_BUILD_ID)) : "Version " + juce::String(JucePlugin_VersionString), juce::Rectangle<float>(x + 150.f, 44.f, r.getWidth() - x * 2.f - 150.f, 16.f),
                      juce::Justification::centredRight);
 
     // the logo, small, at the top right beside the close key
@@ -464,6 +465,19 @@ void AboutWindow::buttonClicked(juce::Button* button)
         setVisible(false);
     }
 
+}
+
+// [Claude 2026-10-29] A hidden developer detail: Ctrl+Shift+click on the version line swaps it for the exact build
+// (commit, + if it had uncommitted changes, and when it was built), so Joe can check he is testing the build just made
+void AboutWindow::mouseUp(const juce::MouseEvent& event)
+{
+    const auto e = event.getEventRelativeTo(this);
+    const bool onVersion = e.y >= 40 && e.y <= 64 && e.x >= getWidth() / 2;
+    if (onVersion && e.mods.isCtrlDown() && e.mods.isShiftDown())
+    {
+        mShowBuildId = ! mShowBuildId;
+        repaint();
+    }
 }
 
 void AboutWindow::mouseExit(const juce::MouseEvent& event)

@@ -34,6 +34,8 @@ public:
     void resized() override;
     void buttonClicked(juce::Button* button) override;
     void mouseExit(const juce::MouseEvent& event) override;
+    void mouseUp(const juce::MouseEvent& event) override;   // [Claude 2026-10-29] Ctrl+Shift+click the version: the build number
+    bool mShowBuildId { false };
 
 	/* Tells this class whether or not the app is in Demo Version */
     void setDemoState(bool demoState){mIsDemoVersion = demoState;}

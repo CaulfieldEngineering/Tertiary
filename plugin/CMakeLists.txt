@@ -108,6 +108,15 @@ target_include_directories(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+# [Claude 2026-10-29] build_id.h (commit, uncommitted changes, time) written before every build, for the About
+# window's hidden build number (cmake/build_id.cmake)
+add_custom_target(wla_build_id ALL
+    COMMAND ${CMAKE_COMMAND} -DOUT=${CMAKE_CURRENT_BINARY_DIR}/generated/build_id.h -DSRC=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/build_id.cmake
+    BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/generated/build_id.h)
+add_dependencies(${PROJECT_NAME} wla_build_id)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/generated)
+
 # Links to all necessary dependencies. The present ones are recommended by JUCE.
 # If you use one of the additional modules, like the DSP module, you need to specify it here.
 # =====================================================================
@@ -163,7 +172,8 @@ if (WLA_REVIEW_RENDER)
         # The plugin macros its sources read, as juce_add_plugin would set them
         JucePlugin_Name="${wPLUGIN_NAME}" JucePlugin_VersionString="${wPROJECT_VERSION}" JucePlugin_IsSynth=0
         JucePlugin_WantsMidiInput=0 JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0)
-    target_include_directories(ReviewRender PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_include_directories(ReviewRender PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_BINARY_DIR}/generated)
+    add_dependencies(ReviewRender wla_build_id)
     target_link_libraries(ReviewRender PRIVATE ${PROJECT_NAME}BinaryData juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
     if (MSVC)
         set_property(TARGET ReviewRender PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
