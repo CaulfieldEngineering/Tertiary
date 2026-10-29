@@ -213,7 +213,7 @@ void AboutWindow::paint(juce::Graphics& g)
         }
         g.setColour(juce::Colour(0xffa9abb3));
         g.setFont(juce::Font(12.5f));
-        g.drawText("Thank you for your purchase.", line.translated(0.f, 64.f), juce::Justification::centredLeft, false);
+        g.drawText("Thank you for your purchase!", line.translated(0.f, 64.f), juce::Justification::centredLeft, false);
     }
 }
 
@@ -226,18 +226,11 @@ void AboutWindow::resized()
     mButtonClose.setBounds(bounds.getRight() - x - 18, 22, 18, 18);
     mButtonWebsiteLink.setBounds(bounds.getX(), bounds.getBottom() - 30, bounds.getWidth(), 20);
 
-    if (mIsDemoVersion)
-    {
-        mTextEditorEmailAddress.setBounds(x, 146, w, 26);
-        mTextEditorSerialKey.setBounds(x, 178, w, 26);
-        mActionButton.setBounds(x, 214, w, 28);
-        mLabelStatus.setBounds(x, 246, w, 28);
-    }
-    else
-    {
-        mActionButton.setBounds(x, 194, w, 26);
-        mLabelStatus.setBounds(x, 224, w, 28);
-    }
+    // the button and the status line sit in the same place activated or not, so nothing jumps (Joe)
+    mTextEditorEmailAddress.setBounds(x, 146, w, 26);
+    mTextEditorSerialKey.setBounds(x, 178, w, 26);
+    mActionButton.setBounds(x, 214, w, 28);
+    mLabelStatus.setBounds(x, 246, w, 28);
 }
 
 
