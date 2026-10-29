@@ -952,6 +952,17 @@ void CrossoverLookAndFeel::drawRotarySlider(	juce::Graphics& g, int x, int y, in
 
 
 
+// [Claude 2026-10-29] A medium weight for the button words, between plain and bold (Joe: "a little less bold"):
+// Segoe UI Semibold on Windows, Helvetica Neue Medium on the Mac.
+static juce::Font buttonWordFont(float size)
+{
+   #if JUCE_WINDOWS
+    return juce::Font("Segoe UI", size, juce::Font::plain).withTypefaceStyle("Semibold");
+   #else
+    return juce::Font("Helvetica Neue", size, juce::Font::plain).withTypefaceStyle("Medium");
+   #endif
+}
+
 void ToggleLookAndFeel::drawToggleButton (  juce::Graphics& g, juce::ToggleButton& button,
                                             bool shouldDrawButtonAsHighlighted,
                                             bool shouldDrawButtonAsDown)
@@ -1016,8 +1027,9 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
 	// [Claude 2026-10-29] Button words as small spaced capitals, not big type (Joe: "Now the INV etc seem too large").
 	if (mLabel == "INV")
 	{
-		float fontSize = bounds.getHeight() * 0.42f;
-		g.setFont(juce::Font(fontSize, juce::Font::bold).withExtraKerningFactor(0.12f));
+		float fontSize = bounds.getHeight() * 0.43f;
+		// a touch lighter: the font's semibold face where there is one, else plain (Joe: "a little less bold")
+		g.setFont(buttonWordFont(fontSize).withExtraKerningFactor(0.12f));
 
 		auto textWidth = g.getCurrentFont().getStringWidth(mLabel);
 
@@ -1032,8 +1044,8 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
 
     // Adjust the font size if the text width exceeds the bounds width (Byp, Solo, Mute buttons)
     if (mLabel != "INV") {
-		float fontSize = bounds.getHeight() * 0.36f;
-		g.setFont(juce::Font(fontSize, juce::Font::bold).withExtraKerningFactor(0.12f));
+		float fontSize = bounds.getHeight() * 0.37f;
+		g.setFont(buttonWordFont(fontSize).withExtraKerningFactor(0.12f));
     }
 
     // Draw the text centered within the bounds
