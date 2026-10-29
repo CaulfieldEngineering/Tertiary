@@ -9,7 +9,6 @@
 */
 
 #include "UtilityFunctions.h"
-#include "AllColors.h"
 
 #if JUCE_WINDOWS
     #include <Windows.h>
@@ -62,9 +61,15 @@ void paintBorderTight(juce::Graphics& g, juce::Colour baseColor, juce::Rectangle
 
 void paintRecess(juce::Graphics& g, juce::Rectangle<float> b)
 {
-	// the original stepped bevel, sloping down from the plateau's grey into the recess (Joe: "now its very blocky and
-	// not a bevel like it was"), now set into the one plateau instead of standing as a box of its own
-	paintBorder(g, ColorScheme::WindowBorders::getWindowBorderColor(), b);
+	g.setGradientFill(juce::ColourGradient(juce::Colours::black.withAlpha(0.35f), 0.f, b.getY(),
+	                                       juce::Colours::black.withAlpha(0.f), 0.f, b.getY() + 5.f, false));
+	g.fillRect(b.withHeight(5.f));
+	g.setColour(juce::Colours::black.withAlpha(0.6f));
+	g.fillRect(b.withHeight(1.5f));
+	g.fillRect(b.withWidth(1.f));
+	g.setColour(juce::Colours::white.withAlpha(0.07f));
+	g.fillRect(b.withTop(b.getBottom() - 1.f));
+	g.fillRect(b.withLeft(b.getRight() - 1.f));
 }
 
 /* Conditions All Font & Text Parameters */
