@@ -242,7 +242,7 @@ void Oscilloscope::paintOverChildren(juce::Graphics& g)
 	auto bounds = getLocalBounds().toFloat();
 
 	/* Draw window border */
-	paintRecess(g, bounds);
+	paintBorder(g, ColorScheme::WindowBorders::getWindowBorderColor(), bounds);
 
 }
 
