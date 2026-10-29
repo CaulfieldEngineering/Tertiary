@@ -124,7 +124,12 @@ void ScopeChannel::paint(juce::Graphics& g)
     if (bandsAreStacked)
     {
         g.fillRoundedRectangle(bounds, 5.f);
-        g.setColour(juce::Colour(0xff0f1017).withAlpha(0.85f));
+        // the lane's lift fades out toward its edges too, so no edge is drawn (Joe: "There's still some kind of
+        // border that defines the edges")
+        juce::ColourGradient lift(juce::Colour(0xff0f1017), bounds.getCentreX(), bounds.getCentreY(),
+                                  juce::Colour(0xff0f1017).withAlpha(0.f), bounds.getX(), bounds.getY(), true);
+        lift.addColour(0.6, juce::Colour(0xff0f1017).withAlpha(0.7f));
+        g.setGradientFill(lift);
         g.fillRoundedRectangle(bounds, 3.f);
         // the wash fades out toward the edges, like a vignette (Joe: "give the wash soft edges")
         juce::ColourGradient wash(strokeColor.withAlpha(0.06f), bounds.getCentreX(), bounds.getCentreY(),
@@ -132,8 +137,6 @@ void ScopeChannel::paint(juce::Graphics& g)
         wash.addColour(0.55, strokeColor.withAlpha(0.035f));
         g.setGradientFill(wash);
         g.fillRoundedRectangle(bounds, 3.f);
-        g.setColour(juce::Colours::white.withAlpha(0.05f));
-        g.drawHorizontalLine(0, bounds.getX() + 2.f, bounds.getRight() - 2.f);
     }
 
     paintGridLines(g);

@@ -177,6 +177,15 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       g.setGradientFill(AllColors::PluginEditorColors::BACKGROUND_GRADIENT(
           getLocalBounds().toFloat()));
       g.fillAll();
+
+      // [Claude 2026-10-29] The strip between the scope and the crossover is the frames' platform grey, so the two
+      // recesses sit in one surface (Joe: "restore the plateau on this section")
+      const int x0 = wrapperOscilloscope.getRight(), x1 = wrapperFrequency.getX();
+      if (x1 > x0)
+      {
+          g.setColour(juce::Colour(0xff242426));
+          g.fillRect(x0 - 1, wrapperOscilloscope.getY(), x1 - x0 + 2, wrapperOscilloscope.getHeight());
+      }
     }
 
     //==============================================================================
