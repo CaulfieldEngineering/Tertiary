@@ -126,9 +126,9 @@ void ScopeChannel::paint(juce::Graphics& g)
         g.fillRoundedRectangle(bounds, 5.f);
         // [Claude 2026-10-29] A flat lift and a faint colour wash across the whole width; only the top and bottom
         // soften, below (Joe: "I only want that wash on the top/bottom not the sides", "still a little too much")
-        g.setColour(juce::Colour(0xff0f1017).withAlpha(0.85f));
+        g.setColour(juce::Colour(0xff0a0b11));  // just off the black (Joe: "Just enough to distinguish the black background from the lanes")
         g.fillRect(bounds);
-        g.setColour(strokeColor.withAlpha(0.025f));
+        g.setColour(strokeColor.withAlpha(0.012f));
         g.fillRect(bounds);
 
         // and darker toward the top and bottom, a vignette across the lane's height (Joe: "soften the top/bottom
