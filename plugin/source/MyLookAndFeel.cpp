@@ -119,7 +119,7 @@ void CustomSlider::updateStringText()
 
 	label.setText(sliderValue, juce::NotificationType::dontSendNotification);
 
-	auto fontSize = slider.getHeight() * 0.6f;
+	auto fontSize = slider.getHeight() * 0.83f;  // the same size as before the sliders got shorter
     auto titleFont = juce::Font(getTypeface(), fontSize, getFontStyle());
 
     // Set the initial font size
@@ -159,7 +159,7 @@ void CustomSlider::buildLabel()
 
 	label.setJustificationType(getJustification());
 
-	auto fontSize = slider.getHeight() * 0.6f;
+	auto fontSize = slider.getHeight() * 0.83f;  // the same size as before the sliders got shorter
 	auto titleFont = juce::Font(getTypeface(), fontSize, getFontStyle());
 
 	// Set the initial font size

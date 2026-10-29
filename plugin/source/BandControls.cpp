@@ -115,17 +115,22 @@ void BandControl::updateFlexBox()
 
     auto spacer = FlexItem().withHeight(bounds.getHeight() * spacerHeightScale);
 
+    // [Claude 2026-10-29] The sliders a little shorter than their row, centred in it, so the rows keep their spacing and
+    // line up with the labels (Joe: "making the sliders slightly shorter in height")
+    const float rowH = bounds.getHeight() * columnItemHeightScale, sliderH = rowH * 0.72f;
+    auto sliderItem = [&](juce::Component& c) { return FlexItem(c).withHeight(sliderH).withMargin(FlexItem::Margin((rowH - sliderH) / 2.f, 0.f, (rowH - sliderH) / 2.f, 0.f)); };
+
     componentColumn.items.add(FlexItem(waveShapeRow).withHeight(bounds.getHeight() * columnItemHeightScale));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(mSliderSkew).withHeight(bounds.getHeight() * columnItemHeightScale));
+    componentColumn.items.add(sliderItem(mSliderSkew));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(mSliderDepth).withHeight(bounds.getHeight() * columnItemHeightScale));
+    componentColumn.items.add(sliderItem(mSliderDepth));
     componentColumn.items.add(spacer);
     componentColumn.items.add(FlexItem(*placeholder).withHeight(bounds.getHeight() * columnItemHeightScale));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(mSliderPhase).withHeight(bounds.getHeight() * columnItemHeightScale));
+    componentColumn.items.add(sliderItem(mSliderPhase));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(mSliderBandGain).withHeight(bounds.getHeight() * columnItemHeightScale));
+    componentColumn.items.add(sliderItem(mSliderBandGain));
     componentColumn.items.add(spacer);
     componentColumn.items.add(FlexItem(buttonRow).withHeight(bounds.getHeight() * buttonRowHeightScale));
     
