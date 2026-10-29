@@ -128,13 +128,13 @@ void ScopeChannel::paint(juce::Graphics& g)
         // border that defines the edges")
         juce::ColourGradient lift(juce::Colour(0xff0f1017), bounds.getCentreX(), bounds.getCentreY(),
                                   juce::Colour(0xff0f1017).withAlpha(0.f), bounds.getX(), bounds.getY(), true);
-        lift.addColour(0.6, juce::Colour(0xff0f1017).withAlpha(0.7f));
+        lift.addColour(0.9, juce::Colour(0xff0f1017).withAlpha(0.85f));
         g.setGradientFill(lift);
         g.fillRoundedRectangle(bounds, 3.f);
         // the wash fades out toward the edges, like a vignette (Joe: "give the wash soft edges")
         juce::ColourGradient wash(strokeColor.withAlpha(0.06f), bounds.getCentreX(), bounds.getCentreY(),
                                   strokeColor.withAlpha(0.f), bounds.getX(), bounds.getY(), true);
-        wash.addColour(0.55, strokeColor.withAlpha(0.035f));
+        wash.addColour(0.88, strokeColor.withAlpha(0.045f));
         g.setGradientFill(wash);
         g.fillRoundedRectangle(bounds, 3.f);
 
@@ -142,8 +142,8 @@ void ScopeChannel::paint(juce::Graphics& g)
         // edges of the lanes")
         juce::ColourGradient shade(juce::Colour(0xff03010d).withAlpha(0.75f), 0.f, bounds.getY(),
                                    juce::Colour(0xff03010d).withAlpha(0.75f), 0.f, bounds.getBottom(), false);
-        shade.addColour(0.3, juce::Colour(0xff03010d).withAlpha(0.f));
-        shade.addColour(0.7, juce::Colour(0xff03010d).withAlpha(0.f));
+        shade.addColour(0.09, juce::Colour(0xff03010d).withAlpha(0.f));  // tight to the edges (Joe: "tighten the radius? much more")
+        shade.addColour(0.91, juce::Colour(0xff03010d).withAlpha(0.f));
         g.setGradientFill(shade);
         g.fillRect(bounds);
     }
