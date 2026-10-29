@@ -47,18 +47,6 @@ void paintBorder(juce::Graphics& g, juce::Colour baseColor, juce::Rectangle<floa
 	g.drawRoundedRectangle(border, 2.f, 2.f);
 }
 
-void paintBorderTight(juce::Graphics& g, juce::Colour baseColor, juce::Rectangle<float> bounds)
-{
-	auto border = bounds.reduced(0.5f);
-	const float steps[] = { 1.f, 0.7f, 0.35f };
-	for (float k : steps)
-	{
-		g.setColour(baseColor.withMultipliedBrightness(k));
-		g.drawRoundedRectangle(border, 1.5f, 1.f);
-		border.reduce(1.f, 1.f);
-	}
-}
-
 /* Conditions All Font & Text Parameters */
 // ==================================================================
 void buildLabelFont(    juce::Label& label,
