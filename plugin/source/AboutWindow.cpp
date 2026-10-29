@@ -10,6 +10,7 @@
 
 
 #include "AboutWindow.h"
+#include <cstdlib>
 #include "PluginEditor.h"
 
 
@@ -88,9 +89,14 @@ void AboutWindow::applyLook()
 	mTextEditorEmailAddress.setTextToShowWhenEmpty("Email address", juce::Colour(0xff5d606a));
 	mTextEditorSerialKey.setTextToShowWhenEmpty("Serial key", juce::Colour(0xff5d606a));
 
-	// the demo shows the fields to activate; the full version shows who it is activated to instead
-	mTextEditorEmailAddress.setVisible(mIsDemoVersion);
-	mTextEditorSerialKey.setVisible(mIsDemoVersion);
+	// the fields are always there; activated, they show the email and key greyed out and read-only (Joe: "show the
+	// email and serial boxes but greyed out? with their content?")
+	for (auto* e : { &mTextEditorEmailAddress, &mTextEditorSerialKey })
+	{
+		e->setVisible(true);
+		e->setAlpha(mIsDemoVersion ? 1.f : 0.5f);
+		e->setInterceptsMouseClicks(mIsDemoVersion, mIsDemoVersion);
+	}
 	mActionButton.getProperties().set("primary", mIsDemoVersion);
 	mActionButton.setButtonText(mIsDemoVersion ? "Activate" : "Deactivate this computer");
 
@@ -200,20 +206,9 @@ void AboutWindow::paint(juce::Graphics& g)
         g.setColour(juce::Colour(0xff5bbd7d));
         g.setFont(juce::Font(12.f, juce::Font::bold).withExtraKerningFactor(0.12f));
         g.drawText("ACTIVATED", line, juce::Justification::centredLeft, false);
-        const auto email = mTextEditorEmailAddress.getText().fromFirstOccurrenceOf("Email: ", false, true).trim();
-        const auto key = mTextEditorSerialKey.getText().fromFirstOccurrenceOf("Key: ", false, true).trim();
-        g.setColour(juce::Colour(0xffd6d7dc));
-        g.setFont(juce::Font(13.f));
-        g.drawText(email.isNotEmpty() ? email : juce::String("This computer"), line.translated(0.f, 22.f), juce::Justification::centredLeft, true);
-        if (key.isNotEmpty())
-        {
-            g.setColour(juce::Colour(0xff8b8e97));
-            g.setFont(juce::Font(12.f));
-            g.drawText("Key ending " + key.getLastCharacters(4), line.translated(0.f, 40.f), juce::Justification::centredLeft, false);
-        }
         g.setColour(juce::Colour(0xffa9abb3));
         g.setFont(juce::Font(12.5f));
-        g.drawText("Thank you for your purchase!", line.translated(0.f, 64.f), juce::Justification::centredLeft, false);
+        g.drawText("Thank you for your purchase!", line.translated(0.f, 20.f), juce::Justification::centredLeft, false);
     }
 }
 
@@ -259,14 +254,20 @@ void AboutWindow::setUpSerialKeyEditor()
     {
         mTextEditorSerialKey.setReadOnly(false);
         mTextEditorSerialKey.setText("");
+        mActivatedKey = {};
     }
     else
     {
         mTextEditorSerialKey.setReadOnly(true);
 
 		juce::String savedKey = props.getValue("licenseKey", "");
+		if (savedKey.isEmpty() && std::getenv("WLA_FOCUS") != nullptr && juce::String(std::getenv("WLA_FOCUS")).contains("ABOUT"))
+			savedKey = "WLA-TERT-4F2C-91AB";  // [Claude 2026-10-29] review renders only: a sample, never saved
+		// [Claude 2026-10-29] the key is kept here for deactivation and shown masked, all but its last four characters
+		// (Joe: "show the serial as like XXX with the last few digits")
+		mActivatedKey = savedKey;
 		if (savedKey.isNotEmpty())
-			savedKey = "Key: " + savedKey;
+			savedKey = "Key: " + juce::String::repeatedString(juce::String(juce::CharPointer_UTF8("•")), 8) + " " + savedKey.getLastCharacters(4);
 
         mTextEditorSerialKey.setText(savedKey);
     }
@@ -304,6 +305,8 @@ void AboutWindow::setUpEmailEditor()
 		mTextEditorEmailAddress.setReadOnly(true);
 
 		juce::String savedEmail = props.getValue("licenseEmail", "");
+		if (savedEmail.isEmpty() && std::getenv("WLA_FOCUS") != nullptr && juce::String(std::getenv("WLA_FOCUS")).contains("ABOUT"))
+			savedEmail = "joe@example.com";  // [Claude 2026-10-29] review renders only: a sample, never saved
 		if (savedEmail.isNotEmpty())
 			savedEmail = "Email: " + savedEmail;
 
@@ -553,7 +556,7 @@ void AboutWindow::attemptSerialKeyActivation()
 
 void AboutWindow::attemptSerialKeyDeactivation()
 {
-	auto serialKey = mTextEditorSerialKey.getText().fromFirstOccurrenceOf("Key: ", false, true).trim();
+	auto serialKey = mActivatedKey.trim();  // [Claude 2026-10-29] the field shows the key masked; the real one is kept here
 	auto email = LicenseCheck::normaliseEmail(mTextEditorEmailAddress.getText().fromFirstOccurrenceOf("Email: ", false, true));
 
     // The instance it was activated with: the machine ID, or for a 1.0.x activation the device description

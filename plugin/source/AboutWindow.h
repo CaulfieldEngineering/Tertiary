@@ -52,6 +52,7 @@ private:
     juce::String formatBuildDateTime();
   
 	bool mIsDemoVersion {true};
+	juce::String mActivatedKey;  // [Claude 2026-10-29] the saved key, while the field shows it masked
 
     juce::TextButton mButtonClose;
 
