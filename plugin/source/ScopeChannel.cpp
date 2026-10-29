@@ -137,6 +137,15 @@ void ScopeChannel::paint(juce::Graphics& g)
         wash.addColour(0.55, strokeColor.withAlpha(0.035f));
         g.setGradientFill(wash);
         g.fillRoundedRectangle(bounds, 3.f);
+
+        // and darker toward the top and bottom, a vignette across the lane's height (Joe: "soften the top/bottom
+        // edges of the lanes")
+        juce::ColourGradient shade(juce::Colour(0xff03010d).withAlpha(0.75f), 0.f, bounds.getY(),
+                                   juce::Colour(0xff03010d).withAlpha(0.75f), 0.f, bounds.getBottom(), false);
+        shade.addColour(0.3, juce::Colour(0xff03010d).withAlpha(0.f));
+        shade.addColour(0.7, juce::Colour(0xff03010d).withAlpha(0.f));
+        g.setGradientFill(shade);
+        g.fillRect(bounds);
     }
 
     paintGridLines(g);
