@@ -17,6 +17,7 @@ InputOutputGain::InputOutputGain(audio_plugin::AudioPluginAudioProcessor& p) :
 	//setSize(40, 150);
 
 	sliderGain.setSliderStyle(juce::Slider::SliderStyle::LinearVertical);
+	sliderGain.setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);  // [Claude 2026-10-29] before the first layout, so no space is kept for one
 	sliderGain.setLookAndFeel(&inOutLookAndFeel);
 	sliderGain.addListener(this);
 	sliderValue = sliderGain.getValue();

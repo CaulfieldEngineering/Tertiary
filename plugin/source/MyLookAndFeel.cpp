@@ -868,6 +868,9 @@ void InOutLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int wid
 
 	// Establish Bounds
 	juce::Rectangle<float> bounds = { (float)x, (float)y, (float)width, (float)height };
+	// [Claude 2026-10-29] centred on the slider itself (which is centred on the meter), not on the area JUCE hands
+	// in, which can sit off to one side (Joe: "get these faders and fader track centered on the meter")
+	bounds.setX(slider.getLocalBounds().toFloat().getCentreX() - bounds.getWidth() / 2.f);
 
 	// Draw Track & Fader
 	auto faderWidth = bounds.getWidth();
