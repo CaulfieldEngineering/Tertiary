@@ -650,8 +650,8 @@ static void drawRecessedTrack(juce::Graphics& g, juce::Rectangle<float> r)
 {
 	// one smooth fall of light, darker at the top, and nothing drawn along the edges but the outline (Joe: the banded
 	// version "looks poorly rendered and clunky")
-	juce::ColourGradient grad(juce::Colour(0xff0c0d10), 0.f, r.getY(), juce::Colour(0xff1d1f24), 0.f, r.getBottom(), false);
-	grad.addColour(0.35, juce::Colour(0xff121317));
+	juce::ColourGradient grad(juce::Colour(0xff1b1c21), 0.f, r.getY(), juce::Colour(0xff2c2e34), 0.f, r.getBottom(), false);  // a mid grey, so the empty track stands off the dark column (Joe: "dark slider space on dark background"), like his original
+	grad.addColour(0.35, juce::Colour(0xff222328));
 	g.setGradientFill(grad);
 	g.fillRect(r);
 }
