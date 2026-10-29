@@ -99,7 +99,7 @@ void TopBanner::paint(juce::Graphics& g)
 
     if (! imageCompanyTitle.isNull())
     {
-        const float logoH = 14.f, logoW = logoH * companyTitleOriginalAspect;
+        const float logoH = 16.f, logoW = logoH * companyTitleOriginalAspect;  // [Claude 2026-10-29] a step bigger (Joe), the most the demo header has room for (was 14)
         g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
         g.drawImage(imageCompanyTitle, juce::Rectangle<float>(x - logoW, cy - logoH / 2.f, logoW, logoH));
         x -= logoW + 14.f;
