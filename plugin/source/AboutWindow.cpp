@@ -180,8 +180,12 @@ void AboutWindow::paint(juce::Graphics& g)
     if (! imageCompanyTitle.isNull())
     {
         const float h = 12.f, w = h * imageCompanyTitle.getWidth() / (float) imageCompanyTitle.getHeight();
-        g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
-        g.drawImage(imageCompanyTitle, juce::Rectangle<float>(r.getRight() - x - 26.f - w, 25.f, w, h));
+        // resampled once to the exact device pixels (drawn straight down from 4000 px it aliased)
+        const float sc = (float) g.getInternalContext().getPhysicalPixelScaleFactor();
+        const int pw = juce::roundToInt(w * sc), ph = juce::roundToInt(h * sc);
+        if (scaledCompanyTitle.isNull() || scaledCompanyTitle.getWidth() != pw || scaledCompanyTitle.getHeight() != ph)
+            scaledCompanyTitle = applyResize(imageCompanyTitle, pw, ph);
+        g.drawImage(scaledCompanyTitle, juce::Rectangle<float>(r.getRight() - x - 26.f - w, 25.f, w, h));
     }
 
     g.setColour(juce::Colours::black.withAlpha(0.5f));

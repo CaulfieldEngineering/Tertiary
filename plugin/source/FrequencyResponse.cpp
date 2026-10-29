@@ -320,7 +320,11 @@ void FrequencyResponse::paintGainTag(juce::Graphics& g, Cursor& cursor, float ga
         return;
     juce::String text = (gainDb > 0.05f ? "+" : "") + juce::String(gainDb, 1) + " dB";
     const auto c = cursor.getBounds().toFloat().getCentre();
-    const juce::Rectangle<float> r { c.x - 26.f, c.y - 24.f, 52.f, 17.f };
+    // above the pill, or below it when there is no room above (Joe: "the gain labels get pushed off of the screen")
+    juce::Rectangle<float> r { c.x - 26.f, c.y - 24.f, 52.f, 17.f };
+    if (r.getY() < responseArea.getY() + 2.f)
+        r.setY(c.y + 7.f);
+    r.setX(juce::jlimit(responseArea.getX() + 2.f, responseArea.getRight() - r.getWidth() - 2.f, r.getX()));
     g.setGradientFill(juce::ColourGradient(juce::Colour(0xff26282e).withMultipliedAlpha(t), r.getX(), r.getY(),
                                            juce::Colour(0xff17181c).withMultipliedAlpha(t), r.getX(), r.getBottom(), false));
     g.fillRoundedRectangle(r, 3.f);
@@ -774,8 +778,17 @@ void FrequencyResponse::updateResponse()
 
     // [Claude 2026-10-29] Each crossover's handle sits where its two bands meet: 6 dB under the higher of the two gains
     const auto yAtDb = [&](float db) { return juce::jmap(juce::jlimit(-30.f, 30.f, db), -30.f, 30.f, float(responseArea.getBottom()), responseArea.getY()); };
-    newCursorLM.setMarkerY(yAtDb(juce::jmax(mLowGain, mMidGain) - 6.f) - newCursorLM.getY());
-    newCursorMH.setMarkerY(yAtDb(juce::jmax(mMidGain, mHighGain) - 6.f) - newCursorMH.getY());
+    // Each ring sits on its crossover line where the drawn outline crosses it: the higher of the two bands' real
+    // responses at that frequency. With equal gains that is exactly where the curves meet (-6 dB); with different
+    // gains it follows the louder band's curve, so it always sits on a line you can see (Joe: "Their position is
+    // based on whatever band moved last ... Are they supposed to be at the intersection")
+    const auto lr4 = [](float f, float cut, bool high) { return -20.f * std::log10(1.f + std::pow(high ? cut / f : f / cut, 4.f)); };
+    const float atLM = juce::jmax(mLowGain + lr4(mLowMidCutoff, mLowMidCutoff, false),
+                                  mMidGain + lr4(mLowMidCutoff, mLowMidCutoff, true) + lr4(mLowMidCutoff, mMidHighCutoff, false));
+    const float atMH = juce::jmax(mMidGain + lr4(mMidHighCutoff, mLowMidCutoff, true) + lr4(mMidHighCutoff, mMidHighCutoff, false),
+                                  mHighGain + lr4(mMidHighCutoff, mMidHighCutoff, true));
+    newCursorLM.setMarkerY(yAtDb(atLM) - newCursorLM.getY());
+    newCursorMH.setMarkerY(yAtDb(atMH) - newCursorMH.getY());
 
     // [Claude 2026-10-29] Review renders only: WLA_FOCUS=LM, MH or MID shows that handle as if hovered, so a still can
     // show what emerges on hover. Never set in a release.

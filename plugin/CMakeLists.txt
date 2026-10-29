@@ -159,7 +159,7 @@ if (WLA_REVIEW_RENDER)
     juce_add_console_app(ReviewRender PRODUCT_NAME "ReviewRender")
     target_sources(ReviewRender PRIVATE ${PLUGIN_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/review/ReviewRender.cpp)
     target_compile_definitions(ReviewRender PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0
-        JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1
+        JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1 WLA_REVIEW_RENDER_BUILD=1
         # The plugin macros its sources read, as juce_add_plugin would set them
         JucePlugin_Name="${wPLUGIN_NAME}" JucePlugin_VersionString="${wPROJECT_VERSION}" JucePlugin_IsSynth=0
         JucePlugin_WantsMidiInput=0 JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0)

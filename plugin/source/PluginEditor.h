@@ -93,7 +93,23 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         // [Claude 2026-10-29] the ☰ menu
         juce::PopupMenu buildMainMenu();
         void showMainMenu();
-        std::unique_ptr<juce::Component> mMenuPreview;   // review renders only   // [Claude 2026-10-27] top left of the banner
+        std::unique_ptr<juce::Component> mMenuPreview;
+
+        // [Claude 2026-10-29] The window can be any size (Joe: "make the UI resizable or offer a 150%"). The whole UI is
+        // laid out once at 750 x 478 inside `content`, which is scaled to fill the window, so text, lines and images
+        // are drawn sharp at every size rather than stretched.
+        struct Content : juce::Component
+        {
+            std::function<void(juce::Graphics&)> onPaint;
+            void paint(juce::Graphics& g) override { if (onPaint) onPaint(g); }
+        };
+        Content content;
+        static constexpr int baseWidth = 750, baseHeight = 478;
+        float uiScale { 1.f };
+        void paintContent(juce::Graphics& g);
+        void setUiScale(float scale);
+        static float loadUiScale();
+        void saveUiScale();   // review renders only   // [Claude 2026-10-27] top left of the banner
 
         /* Header displayed in top corner */
         juce::Label companyTitle;

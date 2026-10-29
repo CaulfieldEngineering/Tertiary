@@ -116,7 +116,7 @@ void BandControl::updateFlexBox()
 
     // [Claude 2026-10-29] Rows sized from the window's width, not this column's height, and half the gap between them,
     // so the window can be shorter without the controls shrinking (Joe: "reduce all of the padding a bit")
-    const float H = 250.f * (float) getTopLevelComponent()->getWidth() / 750.f;
+    const float H = 250.f;   // [Claude 2026-10-29] the layout is always 750 wide now; the window scales it (was from the top-level width)
     auto spacer = FlexItem().withHeight(H * spacerHeightScale * 0.5f);
 
     // [Claude 2026-10-29] The sliders a little shorter than their row, centred in it, so the rows keep their spacing and
