@@ -95,14 +95,15 @@ void TopBanner::paint(juce::Graphics& g)
     g.setColour(juce::Colour(0xffa9abb3));
     for (int i = -1; i <= 1; ++i)
         g.fillRect(juce::Rectangle<float>(x - 16.f, cy + i * 5.f - 0.75f, 16.f, 1.5f));
-    x -= 16.f + 12.f;
+    const float gap = 16.f;   // [Claude 2026-10-29] one even gap between everything on the right (Joe: "space these out evenly")
+    x -= 16.f + gap;
 
     if (! imageCompanyTitle.isNull())
     {
         const float logoH = 16.f, logoW = logoH * companyTitleOriginalAspect;  // [Claude 2026-10-29] a step bigger (Joe), the most the demo header has room for (was 14)
         g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
         g.drawImage(imageCompanyTitle, juce::Rectangle<float>(x - logoW, cy - logoH / 2.f, logoW, logoH));
-        x -= logoW + 14.f;
+        x -= logoW + gap;
     }
 
     mActivateArea = {};
@@ -118,7 +119,7 @@ void TopBanner::paint(juce::Graphics& g)
         g.drawHorizontalLine((int) mActivateArea.getY() + 1, mActivateArea.getX() + 2.f, mActivateArea.getRight() - 2.f);
         g.setColour(juce::Colour(0xff0f1a12));
         g.drawText("Activate", mActivateArea, juce::Justification::centred, false);
-        x -= actW + 10.f;
+        x -= actW + gap;
 
         auto tagFont = juce::Font(10.f, juce::Font::bold);
         tagFont.setExtraKerningFactor(0.15f);

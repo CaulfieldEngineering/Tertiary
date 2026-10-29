@@ -312,7 +312,7 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       // [Claude 2026-10-27] The preset bar sits on the left of the banner; the line under it is the
       // banner's own (the demo note, or the update link)
       // [Claude 2026-10-29] the preset sits in the middle of the new header
-      presetBar.setBounds(topBanner.getX() + 248, topBanner.getY() + (topBanner.getHeight() - 22) / 2, 160, 22);
+      presetBar.setBounds(topBanner.getX() + 248, topBanner.getY() + (topBanner.getHeight() - 22) / 2, 172, 22);   // ends one gap (16 px) before DEMO
 
 	  	if (fullScreenScope)
 		  wrapperOscilloscope.setBounds(getLocalBounds());
