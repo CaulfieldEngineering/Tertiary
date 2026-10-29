@@ -128,6 +128,7 @@ void FrequencyResponse::buildLowGainSlider()
     //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, "");
 
     sliderLowGain.setSliderStyle(juce::Slider::SliderStyle::LinearVertical);
+    sliderLowGain.setSliderSnapsToMousePosition(false);   // [Claude 2026-10-29] drag from where you grab the handle; no jump
     sliderLowGain.setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
     sliderLowGain.addListener(this);
     sliderLowGain.setRange(0, 1.f, 0.001f);
@@ -148,6 +149,7 @@ void FrequencyResponse::buildMidGainSlider()
     //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, "");
 
     sliderMidGain.setSliderStyle(juce::Slider::SliderStyle::LinearVertical);
+    sliderMidGain.setSliderSnapsToMousePosition(false);   // [Claude 2026-10-29] drag from where you grab the handle; no jump
     sliderMidGain.setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
     sliderMidGain.addListener(this);
     sliderMidGain.setRange(0, 1.f, 0.001f);
@@ -168,6 +170,7 @@ void FrequencyResponse::buildHighGainSlider()
     //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, "");
 
     sliderHighGain.setSliderStyle(juce::Slider::SliderStyle::LinearVertical);
+    sliderHighGain.setSliderSnapsToMousePosition(false);   // [Claude 2026-10-29] drag from where you grab the handle; no jump
     sliderHighGain.setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
     sliderHighGain.addListener(this);
     sliderHighGain.setRange(0, 1.f, 0.001f);
@@ -728,6 +731,22 @@ void FrequencyResponse::updateResponse()
     auto midWidth = (freq2Pixel - freq1Pixel) * 0.75f;
     auto highWidth = (responseArea.getRight() - freq2Pixel) * 0.75f;
 
+    // [Claude 2026-10-29] Each gain handle sits on its band's drawn curve at the handle's centre, not on the gain line:
+    // the crossover slopes pull a band's top below its gain (most for the mid band), and the handle floated above the
+    // peak (Joe: "the blue bar on the mid band gain doesn't look center straddled across the peak")
+    const auto lr4dB = [](float f, float cut, bool high) { return -20.f * std::log10(1.f + std::pow(high ? cut / f : f / cut, 4.f)); };
+    const auto freqAt = [&](float px) { return 20.f * std::pow(1000.f, (px - responseArea.getX()) / responseArea.getWidth()); };   // inverse of mapLog2
+    float pillLowY = gainLowPixel, pillMidY = gainMidPixel, pillHighY = gainHighPixel;
+    const auto dbToPixel = [&](float db) { return juce::jmap(juce::jlimit(-30.f, 30.f, db), -30.f, 30.f, float(responseArea.getBottom()), responseArea.getY()); };
+    {
+        const float fL = freqAt((responseArea.getX() + freq1Pixel) / 2.f);
+        const float fM = freqAt((freq1Pixel + freq2Pixel) / 2.f);
+        const float fH = freqAt((freq2Pixel + responseArea.getRight()) / 2.f);
+        pillLowY  = dbToPixel(mLowGain  + lr4dB(fL, mLowMidCutoff, false));
+        pillMidY  = dbToPixel(mMidGain  + lr4dB(fM, mLowMidCutoff, true) + lr4dB(fM, mMidHighCutoff, false));
+        pillHighY = dbToPixel(mHighGain + lr4dB(fH, mMidHighCutoff, true));
+    }
+
     // Set Low-Gain Cursor Bounds
     // =========================================================================
     auto center = (responseArea.getX() + freq1Pixel) / 2.f;
@@ -735,7 +754,7 @@ void FrequencyResponse::updateResponse()
     if (showLowBand)
     {
         newCursorLowGain.setBounds  (   center - lowWidth / 2.f, 
-                                        gainLowPixel - cursorWidth / 2.f, 
+                                        pillLowY - cursorWidth / 2.f, 
                                         lowWidth, 
                                         cursorWidth
                                     );
@@ -752,7 +771,7 @@ void FrequencyResponse::updateResponse()
     if (showMidBand)
     {
         newCursorMidGain.setBounds  (   center - midWidth / 2.f, 
-                                        gainMidPixel - cursorWidth / 2.f, 
+                                        pillMidY - cursorWidth / 2.f, 
                                         midWidth, 
                                         cursorWidth
                                     );
@@ -768,7 +787,7 @@ void FrequencyResponse::updateResponse()
     if (showHighBand)
     {
     newCursorHighGain.setBounds (   center - highWidth / 2.f, 
-                                    gainHighPixel - cursorWidth / 2.f, 
+                                    pillHighY - cursorWidth / 2.f, 
                                     highWidth, 
                                     cursorWidth
                                 );

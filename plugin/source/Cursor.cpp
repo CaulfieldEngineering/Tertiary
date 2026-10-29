@@ -105,8 +105,8 @@ void Cursor::paint(juce::Graphics& g)
     if (! mIsVertical)
     {
         const float y = bounds.getCentreY();
-        g.setColour(colour.withAlpha(0.3f * t));
-        g.drawLine(bounds.getX(), y, bounds.getRight(), y, 1.f);
+        // [Claude 2026-10-29] only the pill; the faint band-coloured line across the band is gone (Joe: "remove that
+        // horizontal blue line ... Just need the thicker handle")
         const float w = juce::jmin(30.f, bounds.getWidth()), h = 5.f;
         juce::Rectangle<float> pill { bounds.getCentreX() - w / 2.f, y - h / 2.f, w, h };
         g.setColour(juce::Colours::black.withAlpha(0.5f));
