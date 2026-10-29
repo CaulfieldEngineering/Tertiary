@@ -91,6 +91,9 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       // [Claude 2026-10-27] Presets, over the left of the banner
       if (!fullScreenScope)
         addAndMakeVisible(presetBar);
+        // [Claude 2026-10-29] Activate and the menu in the new header open the About window, where activation is
+        topBanner.onActivate = [this] { aboutWindow.setVisible(true); };
+        topBanner.onMenu = [this] { aboutWindow.setVisible(! aboutWindow.isVisible()); };
 
       // [Claude 2026-10-27] Weekly serial-key re-check and update check, on the processor's own thread
       audioProcessor.licenseCheck.addChangeListener(this);
@@ -219,7 +222,7 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       using namespace juce;
 
       auto bounds = getLocalBounds();
-      bounds.reduce(5, 0);
+      bounds.reduce(0, 0);  // [Claude 2026-10-29] edge to edge (Joe: "expanding the sections all the way to the left/right edges"); was 5
 
       /* Create a horizontal FlexBox container to arrange the Oscilloscope and
        * Frequency Response */
@@ -228,7 +231,7 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       flexBoxRow.flexWrap = FlexBox::Wrap::noWrap;
 
       //auto spacerH = FlexItem().withWidth(5);  // Gap between O-Scope and Freq Resp
-      auto spacerH = FlexItem().withWidth(getWidth()*0.01f);  // Gap between O-Scope and Freq Resp
+      auto spacerH = FlexItem().withWidth(4);  // [Claude 2026-10-29] a narrow separator between the scope and the crossover (Joe: "this little gap is awkward", then "widen this separator just a bit"); was 1 % of the width
       //auto spacerH = FlexItem().withWidth(0);
 
       flexBoxRow.items.add(
@@ -253,7 +256,8 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
 
       // [Claude 2026-10-27] The preset bar sits on the left of the banner; the line under it is the
       // banner's own (the demo note, or the update link)
-      presetBar.setBounds(topBanner.getX() + 8, topBanner.getY() + 4, 230, 22);
+      // [Claude 2026-10-29] the preset sits in the middle of the new header
+      presetBar.setBounds(topBanner.getX() + 248, topBanner.getY() + (topBanner.getHeight() - 22) / 2, 170, 22);
 
 	  	if (fullScreenScope)
 		  wrapperOscilloscope.setBounds(getLocalBounds());

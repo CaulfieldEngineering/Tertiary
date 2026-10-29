@@ -109,9 +109,10 @@ namespace FontEditor::ParameterLabels
     }
 
     /* All Param Labels - Bold */
+    // [Claude 2026-10-29] Text hierarchy (Joe: "Let's do the text hierarchy"): values plain and clear, labels quieter, band names small and spaced.
     inline juce::Font::FontStyleFlags getFontStyle()
     {
-        bool isBold = 1;
+        bool isBold = 0;
         
         if (isBold)
             return juce::Font::bold;
@@ -120,7 +121,7 @@ namespace FontEditor::ParameterLabels
 
     /* All Param Labels - Font Color */
     inline juce::Colour getFontColor()
-    {return juce::Colour(0xff5b5353); }
+    {return juce::Colour(0xffb4b6bc); }
 
     /* All Param Labels - Transparency */
     inline float getFontTransparency()
@@ -147,15 +148,15 @@ namespace ColorScheme::BandColors
 {
     /* Low Band Color Coordination */
     inline juce::Colour getLowBandBaseColor()
-    { return juce::Colour(0xff7eff7e); }
+    { return juce::Colour(0xff56bd77); }  // [Claude 2026-10-29] Triad, around the Wonderland green (was 0xff7eff7e)
 
     /* Mid Band Color Coordination */
     inline juce::Colour getMidBandBaseColor()
-    { return juce::Colour(0xff7e7efd); }
+    { return juce::Colour(0xff64a6fa); }  // blue (was 0xff7e7efd)
 
     /* High Band Color Coordination */
     inline juce::Colour getHighBandBaseColor()
-    { return juce::Colour(0xffff7eff); }
+    { return juce::Colour(0xffc886dd); }  // purple (was 0xffff7eff)
 
     /* Bypass Band Color Coordination */
     inline juce::Colour getBypassBaseColor()
@@ -175,7 +176,7 @@ namespace ColorScheme::ScrollPadColors
 {
     /* Scroll Pad Slider Color */
     inline juce::Colour getScrollPadBaseColor ()
-    { return juce::Colour(0xff7a97f3); }
+    { return juce::Colour(0xff64a6fa); }  // [Claude 2026-10-29] the mid blue (was 0xff7a97f3)
 }
 
 namespace Gradients::FrequencyResponse
@@ -544,10 +545,12 @@ namespace AllColors
 	namespace PluginEditorColors
 	{
 		// GRADIENT ITEMS FOR MAIN BACKGROUND ==============================================================
-		inline Colour GRADIENT1() { return Colour(0xff000000); }
-		inline Colour GRADIENT2() { return Colour(0xff000000); }
-		inline Colour GRADIENT3() { return Colour(0xff221313); }
-		inline Colour GRADIENT4() { return Colour(0xd71e2038); }
+		// [Claude 2026-10-29] The window behind the sections is the header's grey (Joe: the gutters and the separator);
+		// was black to a red-brown and a blue
+		inline Colour GRADIENT1() { return Colour(0xff1a1b20); }
+		inline Colour GRADIENT2() { return Colour(0xff1a1b20); }
+		inline Colour GRADIENT3() { return Colour(0xff1a1b20); }
+		inline Colour GRADIENT4() { return Colour(0xff1a1b20); }
 
 		// BACKGROUND GRADIENT ==========================================================
 		inline ColourGradient BACKGROUND_GRADIENT(juce::Rectangle<float> bounds)
@@ -768,7 +771,7 @@ namespace AllColors
 		inline float gStep3 = 0.75f;
 		inline float gStep4 = 0.9f;
 
-		inline Colour BASE_COLOR() { return Colour(0xff181212); }
+		inline Colour BASE_COLOR() { return Colour(0xff03010d); }  // [Claude 2026-10-29] the crossover's near-black, so the two displays match (Joe); was 0xff181212
 
 
 		inline ColourGradient BACKGROUND_GRADIENT(Rectangle<float> bounds)
@@ -779,7 +782,7 @@ namespace AllColors
 			auto gradient = ColourGradient(	BASE_COLOR(),
 											bounds.getCentre(),
 											BASE_COLOR().withMultipliedAlpha(gStep1),
-											bounds.getTopLeft(), false);
+											bounds.getTopLeft(), true);
 
 			gradient.addColour( p1, BASE_COLOR().withMultipliedAlpha(gStep3));
 			gradient.addColour( p2, BASE_COLOR().withMultipliedAlpha(gStep4));

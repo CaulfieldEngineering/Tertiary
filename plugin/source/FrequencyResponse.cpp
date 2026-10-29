@@ -9,6 +9,7 @@
 
 
 #include "FrequencyResponse.h"
+#include <cstdlib>
 
 /* Constructor */
 // ===========================================================================================
@@ -246,7 +247,7 @@ void FrequencyResponse::resized()
     responseArea = getLocalBounds().toFloat();
     responseArea.reduce(2, 2);
     responseArea.removeFromBottom(20);
-    responseArea.removeFromLeft(32);
+    responseArea.removeFromLeft(4);  // [Claude 2026-10-29] the dB labels now sit inside the plot; was 32
     responseArea.removeFromRight(6);
 
     // =============================
@@ -296,6 +297,13 @@ void FrequencyResponse::paint(juce::Graphics& g)
     // =========================
     paintResponseRegions(g);
 
+    /* [Claude 2026-10-29] A gain tag over each band's handle while it is hovered or dragged, styled like the
+       frequency labels */
+    // =========================
+    paintGainTag(g, newCursorLowGain, mLowGain);
+    paintGainTag(g, newCursorMidGain, mMidGain);
+    paintGainTag(g, newCursorHighGain, mHighGain);
+
     /* Draw the frequency labels */
     // =========================
     drawLabels();
@@ -303,6 +311,24 @@ void FrequencyResponse::paint(juce::Graphics& g)
     /* Paint Border */
     // =========================
     paintBorder(g, ColorScheme::WindowBorders::getWindowBorderColor(), bounds);
+}
+
+void FrequencyResponse::paintGainTag(juce::Graphics& g, Cursor& cursor, float gainDb)
+{
+    const float t = juce::jmap(cursor.getFadeValue(), cursor.getFadeValueMin(), cursor.getFadeValueMax(), 0.f, 1.f);
+    if (t <= 0.01f || cursor.getWidth() == 0)
+        return;
+    juce::String text = (gainDb > 0.05f ? "+" : "") + juce::String(gainDb, 1) + " dB";
+    const auto c = cursor.getBounds().toFloat().getCentre();
+    const juce::Rectangle<float> r { c.x - 26.f, c.y - 24.f, 52.f, 17.f };
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff26282e).withMultipliedAlpha(t), r.getX(), r.getY(),
+                                           juce::Colour(0xff17181c).withMultipliedAlpha(t), r.getX(), r.getBottom(), false));
+    g.fillRoundedRectangle(r, 3.f);
+    g.setColour(juce::Colours::white.withAlpha(0.14f * t));
+    g.drawRoundedRectangle(r, 3.f, 1.f);
+    g.setColour(juce::Colour(0xffd9dade).withAlpha(t));
+    g.setFont(11.f);
+    g.drawFittedText(text, r.toNearestInt(), juce::Justification::centred, 1);
 }
 
 /* Draw vertical grid lines (frequency) */
@@ -321,8 +347,7 @@ void FrequencyResponse::paintGridFrequency(juce::Graphics& g)
     {
         float x = responseArea.getX() + responseArea.getWidth() * mapLog2(freqs[i]);
 
-        g.setColour(Colours::lightgrey);
-        g.setOpacity(0.35f);
+        g.setColour(Colours::lightgrey.withAlpha(0.12f));
         g.drawVerticalLine(x, responseArea.getY(), responseArea.getBottom());
 
         String strFreq;
@@ -334,11 +359,15 @@ void FrequencyResponse::paintGridFrequency(juce::Graphics& g)
         else
             strFreq << freqs[i];
         
-        g.setFont(fontHeight);
-        g.setColour(Colours::lightgrey);
+        g.setFont(fontHeight - 1);
+        g.setColour(Colours::lightgrey.withAlpha(0.6f));
 
         float xC = x - textWidth / 2;
-        g.drawFittedText(strFreq, xC, getHeight()-fontHeight-7, textWidth, fontHeight, Justification::centred, 1, 1);
+        // the first label sits inside the plot now that the dB scale has moved to the right
+        if (i == 0)
+            g.drawFittedText(strFreq, x + 2, getHeight()-fontHeight-7, textWidth, fontHeight, Justification::centredLeft, 1, 1);
+        else
+            g.drawFittedText(strFreq, xC, getHeight()-fontHeight-7, textWidth, fontHeight, Justification::centred, 1, 1);
     }
 }
 
@@ -359,11 +388,13 @@ void FrequencyResponse::paintGridGain(juce::Graphics& g)
     // DRAW THE HORIZONTAL GRIDS ===============
     for (int i = 1; i < gain.size()-1; i++)
     {
-        auto y = responseArea.getY() + jmap(gain[i], gMin, gMax, float(responseArea.getBottom()), responseArea.getY());
+        auto y = jmap(gain[i], gMin, gMax, float(responseArea.getBottom()), responseArea.getY());  // [Claude 2026-10-29] no second getY(), as for the gain cursors
 
-        g.setColour(juce::Colours::lightgrey);
-        g.setOpacity(0.35f);
+        g.setColour(juce::Colours::lightgrey.withAlpha(0.12f));
         g.drawHorizontalLine(y, responseArea.getX(), responseArea.getRight());
+
+        if (int(gain[i]) % 12 != 0)
+            continue;
 
         String strGain;
 
@@ -372,11 +403,9 @@ void FrequencyResponse::paintGridGain(juce::Graphics& g)
 
         strGain << gain[i];
 
-        float yC = y - fontHeight/2;
-
-        g.setFont(fontHeight);
-        g.setColour(Colours::lightgrey);
-        g.drawFittedText(strGain, 3, yC, textWidth, fontHeight, juce::Justification::centredRight, 1, 1);
+        g.setFont(fontHeight - 2);
+        g.setColour(Colours::lightgrey.withAlpha(0.5f));
+        g.drawFittedText(strGain, responseArea.getRight() - textWidth - 3, y - fontHeight, textWidth, fontHeight - 1, juce::Justification::centredRight, 1, 1);
 
     }
 }
@@ -413,6 +442,42 @@ void FrequencyResponse::paintResponseRegions(juce::Graphics& g)
     }
 }
 
+/* [Claude 2026-10-29] The bands drawn as their real response, not trapezoids (Joe liked this crossover view
+   better: "your version of the crossover better"): each band's gain with 24 dB/oct skirts at its crossovers,
+   the fill under the curve, and the line only where the band is above the floor. */
+// ===========================================================================================
+namespace
+{
+    struct BandCurve { juce::Path fill, line; };
+
+    BandCurve makeBandCurve(juce::Rectangle<float> area, float gainDb, float fLow, float fHigh)
+    {
+        BandCurve c;
+        const float bottom = area.getBottom();
+        const auto yOf = [&](float db) { return juce::jmap(juce::jmin(30.f, db), -30.f, 30.f, bottom, area.getY()); };
+        bool pen = false;
+        c.fill.startNewSubPath(area.getX(), bottom);
+        for (float x = area.getX(); x <= area.getRight(); x += 1.f)
+        {
+            const float t = (x - area.getX()) / area.getWidth();
+            const float f = 20.f * std::pow(1000.f, t);
+            float db = gainDb;
+            // Linkwitz-Riley 4th order, as the processor's juce::dsp::LinkwitzRileyFilter: 24 dB/oct, -6 dB at the crossover
+            if (fLow > 0.f)  db += -20.f * std::log10(1.f + std::pow(fLow / f, 4.f));
+            if (fHigh > 0.f) db += -20.f * std::log10(1.f + std::pow(f / fHigh, 4.f));
+            const float yRaw = yOf(db);
+            c.fill.lineTo(x, juce::jmin(bottom, yRaw));
+            // the line carries on below the floor and is clipped there, so no end shows (Joe: "Let them run off frame
+            // so you don't see the end caps")
+            if (yRaw < bottom + 24.f) { if (pen) c.line.lineTo(x, yRaw); else c.line.startNewSubPath(x, yRaw); pen = true; }
+            else pen = false;
+        }
+        c.fill.lineTo(area.getRight(), bottom);
+        c.fill.closeSubPath();
+        return c;
+    }
+}
+
 /* Paints the low-frequency trapezoid */
 // ===========================================================================================
 void FrequencyResponse::paintLowRegion(juce::Graphics& g, juce::Rectangle<float> bounds, float gainPixel, float freq1Pixel, float alpha)
@@ -442,14 +507,16 @@ void FrequencyResponse::paintLowRegion(juce::Graphics& g, juce::Rectangle<float>
 
     if (!lowBandMute && !lowBandSoloMute)
     {
+        const auto curve = makeBandCurve(responseArea, mLowGain, 0.f, mLowMidCutoff);
         g.setGradientFill    (  makeLowRegionGradient(bounds.toFloat(), lowBandBypass) );
-
         g.setOpacity(alpha);
-        g.fillPath(lowRegion.createPathWithRoundedCorners(10));
-
+        g.fillPath(curve.fill);
         g.setColour        (    makeOutlineColor(getLowBandBaseColor(), lowBandBypass ));
-
-        g.strokePath(lowRegion.createPathWithRoundedCorners(10), juce::PathStrokeType(2.f));
+        {
+            juce::Graphics::ScopedSaveState clip (g);
+            g.reduceClipRegion(responseArea.toNearestInt());
+            g.strokePath(curve.line, juce::PathStrokeType(1.2f));
+        }
     }
 }
 
@@ -485,14 +552,16 @@ void FrequencyResponse::paintMidRegion(juce::Graphics& g, juce::Rectangle<float>
 
     if (!midBandMute && !midBandSoloMute)
     {
+        const auto curve = makeBandCurve(responseArea, mMidGain, mLowMidCutoff, mMidHighCutoff);
         g.setGradientFill    ( makeMidRegionGradient(bounds.toFloat(), midBandBypass ));
-
         g.setOpacity(alpha);
-        g.fillPath(midRegion.createPathWithRoundedCorners(10));
-
+        g.fillPath(curve.fill);
         g.setColour        (    makeOutlineColor(getMidBandBaseColor(), midBandBypass ));
-
-        g.strokePath(midRegion.createPathWithRoundedCorners(10), juce::PathStrokeType(2.f));
+        {
+            juce::Graphics::ScopedSaveState clip (g);
+            g.reduceClipRegion(responseArea.toNearestInt());
+            g.strokePath(curve.line, juce::PathStrokeType(1.2f));
+        }
     }
 
 }
@@ -525,14 +594,16 @@ void FrequencyResponse::paintHighRegion(juce::Graphics& g, juce::Rectangle<float
 
     if (!highBandMute && !highBandSoloMute)
     {
+        const auto curve = makeBandCurve(responseArea, mHighGain, mMidHighCutoff, 0.f);
         g.setGradientFill    ( makeHighRegionGradient(bounds.toFloat(), highBandBypass ));
-
         g.setOpacity(alpha);
-        g.fillPath(highRegion.createPathWithRoundedCorners(10));
-
+        g.fillPath(curve.fill);
         g.setColour        (    makeOutlineColor(getHighBandBaseColor(), highBandBypass ));
-
-        g.strokePath(highRegion.createPathWithRoundedCorners(10), juce::PathStrokeType(2.f));
+        {
+            juce::Graphics::ScopedSaveState clip (g);
+            g.reduceClipRegion(responseArea.toNearestInt());
+            g.strokePath(curve.line, juce::PathStrokeType(1.2f));
+        }
     }
 }
 
@@ -544,8 +615,8 @@ void FrequencyResponse::drawLabels()
     //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, "");
 
     auto bounds = getLocalBounds();
-    int labelWidth = 65;
-    int labelHeight = 25;
+    int labelWidth = 58;
+    int labelHeight = 20;
     
     int marginX = 5;
     int marginY = 3;
@@ -642,9 +713,11 @@ void FrequencyResponse::updateResponse()
     mHighGain = *apvts.getRawParameterValue(params.at(Names::Gain_High_Band));
 
     // Convert band gain values to relative pixel values
-    gainLowPixel = responseArea.getY() + juce::jmap(mLowGain,    -30.f, 30.f, float(responseArea.getBottom()), responseArea.getY());
-    gainMidPixel = responseArea.getY() + juce::jmap(mMidGain,    -30.f, 30.f, float(responseArea.getBottom()), responseArea.getY());
-    gainHighPixel = responseArea.getY() + juce::jmap(mHighGain, -30.f, 30.f, float(responseArea.getBottom()), responseArea.getY());
+    // [Claude 2026-10-29] jmap already returns a position inside responseArea; adding getY() again put the gain
+    // cursors and the grid a little below the curves (Joe: "the gain ones, look like they are not center aligned").
+    gainLowPixel = juce::jmap(mLowGain,    -30.f, 30.f, float(responseArea.getBottom()), responseArea.getY());
+    gainMidPixel = juce::jmap(mMidGain,    -30.f, 30.f, float(responseArea.getBottom()), responseArea.getY());
+    gainHighPixel = juce::jmap(mHighGain, -30.f, 30.f, float(responseArea.getBottom()), responseArea.getY());
 
     // Set Cursor Widths. Cursors A Fraction of Band Width
     auto lowWidth = (freq1Pixel - responseArea.getX()) * 0.75f;
@@ -698,6 +771,21 @@ void FrequencyResponse::updateResponse()
     }
     else
         newCursorHighGain.setBounds(0,0,0,0);
+
+    // [Claude 2026-10-29] Each crossover's handle sits where its two bands meet: 6 dB under the higher of the two gains
+    const auto yAtDb = [&](float db) { return juce::jmap(juce::jlimit(-30.f, 30.f, db), -30.f, 30.f, float(responseArea.getBottom()), responseArea.getY()); };
+    newCursorLM.setMarkerY(yAtDb(juce::jmax(mLowGain, mMidGain) - 6.f) - newCursorLM.getY());
+    newCursorMH.setMarkerY(yAtDb(juce::jmax(mMidGain, mHighGain) - 6.f) - newCursorMH.getY());
+
+    // [Claude 2026-10-29] Review renders only: WLA_FOCUS=LM, MH or MID shows that handle as if hovered, so a still can
+    // show what emerges on hover. Never set in a release.
+    if (const char* focus = std::getenv("WLA_FOCUS"))
+    {
+        const juce::String f(focus);
+        if (f.contains("LM"))  newCursorLM.setFocus(true);
+        if (f.contains("MH"))  newCursorMH.setFocus(true);
+        if (f.contains("MID")) newCursorMidGain.setFocus(true);
+    }
 
     repaint(1,1,getWidth()-2, getHeight()-2);
 }
@@ -854,8 +942,8 @@ void FrequencyResponse::checkCursorFocus(const juce::MouseEvent& event)
     auto mousePoint = getLocalPoint(event.eventComponent, event.getPosition());
 
     // Establish top-bottom bounds of Dummy Sliders
-    auto sliderTop = responseArea.getY() + juce::jmap(24.f, -30.f, 30.f, float(responseArea.getBottom()), responseArea.getY())-5;
-    auto sliderBot = responseArea.getY() + juce::jmap(-24.f, -30.f, 30.f, float(responseArea.getBottom()), responseArea.getY())+5;
+    auto sliderTop = juce::jmap(24.f, -30.f, 30.f, float(responseArea.getBottom()), responseArea.getY())-5;
+    auto sliderBot = juce::jmap(-24.f, -30.f, 30.f, float(responseArea.getBottom()), responseArea.getY())+5;
 
     // Check if mouse is on cursor, place dummy slider underneath mouse
 

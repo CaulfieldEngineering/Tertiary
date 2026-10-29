@@ -146,6 +146,10 @@ struct ButtonOptionsLookAndFeel : juce::LookAndFeel_V4
 							juce::TextButton& button,
 							bool shouldDrawButtonAsHighlighted, 
 							bool shouldDrawButtonAsDown) override;
+
+	// [Claude 2026-10-29] The menu's rows: a check where the option is on, the name, a light row under the mouse
+	void drawToggleButton(	juce::Graphics& g, juce::ToggleButton& button,
+							bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
 };
 
 struct CustomSlider : juce::Component, juce::Slider::Listener, juce::Label::Listener

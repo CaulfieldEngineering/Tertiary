@@ -63,7 +63,7 @@ void WindowWrapperFrequency::resized()
     spectrumArea.removeFromLeft(32);
     spectrumArea.removeFromRight(6);
 
-    optionsMenu.setTopLeftPosition(1, 1);
+    optionsMenu.setTopLeftPosition(8, 7);  // [Claude 2026-10-29] inside the recess, clear of the frame (Joe: "contain it fully inside of the object's window"); was (1, 1)
 }
 
 void WindowWrapperFrequency::timerCallback()

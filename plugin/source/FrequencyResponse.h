@@ -36,6 +36,7 @@ struct FrequencyResponse :	juce::Component,
 
     void paintResponseRegions(juce::Graphics& g);
 
+	void paintGainTag(juce::Graphics& g, Cursor& cursor, float gainDb);
 	void paintLowRegion(	juce::Graphics& g,
                             juce::Rectangle<float> bounds,
                             float gainPixel,

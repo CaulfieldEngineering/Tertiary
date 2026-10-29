@@ -118,8 +118,19 @@ void ScopeChannel::paint(juce::Graphics& g)
     
     g.setGradientFill(BACKGROUND_GRADIENT(bounds));
     
+    // [Claude 2026-10-29] Each band its own lane (Joe: "I still want the visualization of 3 different lanes"): when
+    // the bands are stacked, a panel a step lighter than the black between lanes, a trace of the band's colour, and a
+    // lit top edge; the crossover's near-black stays the ground.
     if (bandsAreStacked)
+    {
         g.fillRoundedRectangle(bounds, 5.f);
+        g.setColour(juce::Colour(0xff0f1017).withAlpha(0.85f));
+        g.fillRoundedRectangle(bounds, 3.f);
+        g.setColour(strokeColor.withAlpha(0.07f));
+        g.fillRoundedRectangle(bounds, 3.f);
+        g.setColour(juce::Colours::white.withAlpha(0.05f));
+        g.drawHorizontalLine(0, bounds.getX() + 2.f, bounds.getRight() - 2.f);
+    }
 
     paintGridLines(g);
     paintWaveform(g);
@@ -365,8 +376,8 @@ void ScopeChannel::paintWaveform(juce::Graphics& g)
     /* Stroke */
     g.setColour(isBandBypassed ? makeOutlineColor(getBypassBaseColor()): strokeColor);
     g.setOpacity(isBandFocused ? 1.f : 0.75f);
-    g.strokePath(lfoPath, isBandFocused?    juce::PathStrokeType(2.25f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded) :
-                                            juce::PathStrokeType(2.f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded));
+    g.strokePath(lfoPath, isBandFocused?    juce::PathStrokeType(1.4f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded) :
+                                            juce::PathStrokeType(1.2f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded));
 }
 
 /* Parent method to recalculate scope waveform points*/
@@ -446,8 +457,12 @@ void ScopeChannel::generateLFOPathForDrawing(   juce::Path &lfoStrokePath,
     // Width of Area to Render Paint Data
     auto paintAreaWidth = playBackWidth;
 
-    for (int i = 0; i <= 3 * paintAreaWidth; i++)
+    // [Claude 2026-10-29] Four points per pixel, so a square's edges draw upright instead of as a one-pixel slant
+    // (Joe: "is there any way to get these square waves cleaner?").
+    constexpr int pointsPerPixel = 4;
+    for (int j = 0; j <= 3 * paintAreaWidth * pointsPerPixel; j++)
     {
+        const float i = j / (float) pointsPerPixel;
         bool sync = lfoSync;
 
         // Scale WaveTable by Multiplier, or by Rate, but not Both
@@ -471,32 +486,33 @@ void ScopeChannel::generateLFOPathForDrawing(   juce::Path &lfoStrokePath,
         auto increment = scalar * waveTable.size() / (beatSpacing);
 
         // Index sweeps through WaveTable Array
-        float index = fmod(i * increment + mRelativePhase, waveTable.size());
+        float index = fmod(i * increment + mRelativePhase, (float) waveTable.size());
 
         // Get value in terms of pixels.  Offset by Region's Midpoint
-        float y = midY + waveTable[index] * (float)bounds.getHeight();
+        float y = midY + waveTable[(size_t) index] * (float)bounds.getHeight();
 
         // Display Offset Establishes Wave Starting Point (In-Line with Grid)
         float displayOffsetStart = bounds.getX() + bounds.getCentreX() - paintAreaWidth;
 
         // Incorporate Pan Shift
         int point = displayOffsetStart + mDisplayPhase;
+        const float x = point + i;
 
         /* Of the calculated points, only render those which will be onscreen */
-        if (point + i == bounds.getX())
+        if (x == (float) bounds.getX())
         {
             lfoStrokePath.startNewSubPath(bounds.getX(), y);
             lfoFillPath.startNewSubPath(bounds.getX(), midY);
             lfoFillPath.lineTo(bounds.getX(), y);
         }
 
-        if (point + i > bounds.getX() && point + i < bounds.getRight())
+        if (x > bounds.getX() && x < bounds.getRight())
         {
-            lfoStrokePath.lineTo(point + i, y);
-            lfoFillPath.lineTo(point + i, y);
+            lfoStrokePath.lineTo(x, y);
+            lfoFillPath.lineTo(x, y);
         }
 
-        if (point + i == bounds.getRight())
+        if (x == (float) bounds.getRight())
         {
             lfoFillPath.lineTo(bounds.getRight(), y);
             lfoFillPath.lineTo(bounds.getRight(), midY);

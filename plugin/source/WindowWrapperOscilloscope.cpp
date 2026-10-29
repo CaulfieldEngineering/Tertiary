@@ -99,7 +99,7 @@ void WindowWrapperOscilloscope::resized()
     //if (setDebug)
     //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
 
-    optionsMenu.setTopLeftPosition(4,4);
+    optionsMenu.setTopLeftPosition(8, 7);  // [Claude 2026-10-29] inside the recess, as on the crossover; was (4, 4)
     
     oscilloscope.setSize(getWidth(), getHeight() );
 }

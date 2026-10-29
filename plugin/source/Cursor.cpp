@@ -9,6 +9,7 @@
 */
 
 #include "Cursor.h"
+#include "AllColors.h"
 
 using namespace juce;
 
@@ -65,6 +66,7 @@ void Cursor::timerCallback()
             {
                 timerCounter++;
                 repaint();
+                if (auto* p = getParentComponent()) p->repaint();  // the gain tag is drawn by the parent
             }
         }
         else
@@ -73,6 +75,7 @@ void Cursor::timerCallback()
             {
                 timerCounter--;
                 repaint();
+                if (auto* p = getParentComponent()) p->repaint();
             }  
         }
     }
@@ -85,17 +88,45 @@ void Cursor::paint(juce::Graphics& g)
     //if (setDebug)
     //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
 
-    auto cursorWidth = 3.f;
-
+    // [Claude 2026-10-29] Handles in place of the fading lines (Joe: "can you reinvent those fade-in cursors on the
+    // crossover?"). A gain cursor is a short pill in its band's colour on the band's flat top; a crossover cursor is
+    // a ring where the two bands meet, with ticks at the top and bottom edges. Both are always faintly there and come
+    // up on hover; the full line shows only while hovered.
     fadeValue = juce::jmap((float)timerCounter, (float)timerCounterMin, (float)timerCounterMax, fadeValueMin, fadeValueMax);
+    const float t = juce::jmap(fadeValue, fadeValueMin, fadeValueMax, 0.f, 1.f);
+    const auto bounds = getLocalBounds().toFloat();
 
-    if (mHasFocus)
-        cursorWidth = 4.f;
+    using namespace ColorScheme::BandColors;
+    juce::Colour colour = juce::Colours::white;
+    if (getName() == "LOW_GAIN_CURSOR")  colour = getLowBandBaseColor();
+    if (getName() == "MID_GAIN_CURSOR")  colour = getMidBandBaseColor();
+    if (getName() == "HIGH_GAIN_CURSOR") colour = getHighBandBaseColor();
 
-    g.setColour(juce::Colours::white);
-    g.setOpacity(fadeValue);
+    if (! mIsVertical)
+    {
+        const float y = bounds.getCentreY();
+        g.setColour(colour.withAlpha(0.3f * t));
+        g.drawLine(bounds.getX(), y, bounds.getRight(), y, 1.f);
+        const float w = juce::jmin(30.f, bounds.getWidth()), h = 5.f;
+        juce::Rectangle<float> pill { bounds.getCentreX() - w / 2.f, y - h / 2.f, w, h };
+        g.setColour(juce::Colours::black.withAlpha(0.5f));
+        g.fillRoundedRectangle(pill.translated(0.f, 1.f), h / 2.f);
+        g.setColour(colour.brighter(0.25f).withAlpha(0.55f + 0.45f * t));
+        g.fillRoundedRectangle(pill, h / 2.f);
+        return;
+    }
 
-    g.drawLine(mCursor, cursorWidth);
+    // The crossover handle: an open ring where the two bands meet, on a faint full-height line that brightens on
+    // hover (Joe: "i liked the open circles better, maybe an open circle with a more faint vertical line?").
+    const float x = bounds.getCentreX();
+    g.setColour(juce::Colours::white.withAlpha(0.16f + 0.18f * t));
+    g.drawLine(x, bounds.getY(), x, bounds.getBottom(), 1.75f);  // a little heavier than the 1 px grid (Joe)
+    const float my = mMarkerY >= 0.f ? mMarkerY : bounds.getCentreY();
+    const float r = 3.5f + 0.75f * t;
+    g.setColour(juce::Colours::black.withAlpha(0.6f));
+    g.fillEllipse(x - r - 1.f, my - r - 1.f, 2.f * r + 2.f, 2.f * r + 2.f);
+    g.setColour(juce::Colours::white.withAlpha(0.6f + 0.4f * t));
+    g.drawEllipse(x - r, my - r, 2.f * r, 2.f * r, 1.5f);
 }
 
 void Cursor::setHorizontalOrientation()

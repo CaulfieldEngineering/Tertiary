@@ -29,6 +29,10 @@ public:
     void mouseEnter(const juce::MouseEvent&) override;
     void mouseExit(const juce::MouseEvent&) override;
 
+    // [Claude 2026-10-29] The new header (Joe's header v4): Activate (demo) and the menu are click targets
+    void mouseUp(const juce::MouseEvent&) override;
+    std::function<void()> onActivate, onMenu;
+
 private:
     // Original source images
     juce::Image imageTopBanner;
@@ -54,6 +58,8 @@ private:
 	bool mIsDemoVersion {true};
 
 	bool mIsMouseOver { false };
+
+	juce::Rectangle<float> mActivateArea, mMenuArea;
 
 	// [Claude 2026-10-27] "Version X is available" link to the website
 	juce::HyperlinkButton mUpdateLink;

@@ -124,7 +124,7 @@ void CustomSlider::updateStringText()
 
 	label.setText(sliderValue, juce::NotificationType::dontSendNotification);
 
-	auto fontSize = slider.getHeight() * 0.75f;
+	auto fontSize = slider.getHeight() * 0.6f;
     auto titleFont = juce::Font(getTypeface(), fontSize, getFontStyle());
 
     // Set the initial font size
@@ -164,7 +164,7 @@ void CustomSlider::buildLabel()
 
 	label.setJustificationType(getJustification());
 
-	auto fontSize = slider.getHeight() * 0.75f;
+	auto fontSize = slider.getHeight() * 0.6f;
 	auto titleFont = juce::Font(getTypeface(), fontSize, getFontStyle());
 
 	// Set the initial font size
@@ -768,45 +768,70 @@ void ButtonOptionsLookAndFeel::drawButtonBackground(juce::Graphics& g,
 													bool shouldDrawButtonAsHighlighted,
 													bool shouldDrawButtonAsDown)
 {
-	auto bounds = button.getLocalBounds();
+	// [Claude 2026-10-29] The Options key in the header's style (Joe: "What about the Options menu that shows up in the
+	// corner?"): a small raised grey key with a lit top edge, pressed darker. Was a white bevelled block.
+	auto r = button.getLocalBounds().toFloat().reduced(0.5f);
+	const auto top = shouldDrawButtonAsDown ? juce::Colour(0xff26282e) : juce::Colour(0xff34363e);
+	const auto bot = shouldDrawButtonAsDown ? juce::Colour(0xff1f2126) : juce::Colour(0xff25272d);
+	g.setGradientFill(juce::ColourGradient(top, r.getX(), r.getY(), bot, r.getX(), r.getBottom(), false));
+	g.fillRoundedRectangle(r, 1.5f);
+	g.setColour(juce::Colours::white.withAlpha(shouldDrawButtonAsHighlighted ? 0.16f : 0.1f));
+	g.drawLine(r.getX() + 1.5f, r.getY() + 0.75f, r.getRight() - 1.5f, r.getY() + 0.75f, 1.f);
+	g.setColour(juce::Colours::black.withAlpha(0.7f));
+	g.drawRoundedRectangle(r, 1.5f, 1.f);
+}
 
+void ButtonOptionsLookAndFeel::drawButtonText(	juce::Graphics& g,
+												juce::TextButton& button,
+												bool shouldDrawButtonAsHighlighted,
+												bool shouldDrawButtonAsDown)
+{
+	auto bounds = button.getLocalBounds().toFloat();
+	g.setColour(juce::Colour(0xffc9cbd1));
+	g.setFont(juce::Font(11.f));
+	g.drawText("Options", bounds.withTrimmedRight(11.f), juce::Justification::centred, false);
+	// a small chevron
+	const float cx = bounds.getRight() - 9.f, cy = bounds.getCentreY();
+	juce::Path chevron;
+	chevron.startNewSubPath(cx - 2.5f, cy - 1.25f);
+	chevron.lineTo(cx, cy + 1.25f);
+	chevron.lineTo(cx + 2.5f, cy - 1.25f);
+	g.setColour(juce::Colour(0xff7d808a));
+	g.strokePath(chevron, juce::PathStrokeType(1.2f));
+}
 
-    
-	if (!shouldDrawButtonAsDown)
+void ButtonOptionsLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton& button,
+												bool shouldDrawButtonAsHighlighted, bool)
+{
+	auto r = button.getLocalBounds().toFloat();
+	if (shouldDrawButtonAsHighlighted)
 	{
-		g.fillAll(juce::Colours::white);
+		g.setColour(juce::Colours::white.withAlpha(0.07f));
+		g.fillRect(r.reduced(1.f, 0.f));
+	}
+	// a small square box at the left: empty when off, filled light with a dark tick when on (Joe: "show the unchecked
+	// as empty toggles")
+	const juce::Rectangle<float> box { r.getX() + 4.f, r.getCentreY() - 4.5f, 9.f, 9.f };
+	if (button.getToggleState())
+	{
+		g.setColour(juce::Colour(0xffe3e4e8));
+		g.fillRoundedRectangle(box, 1.f);
+		juce::Path tick;
+		const float x = box.getCentreX(), y = box.getCentreY();
+		tick.startNewSubPath(x - 2.5f, y);
+		tick.lineTo(x - 0.75f, y + 1.75f);
+		tick.lineTo(x + 2.5f, y - 2.f);
+		g.setColour(juce::Colour(0xff1d1f25));
+		g.strokePath(tick, juce::PathStrokeType(1.25f, juce::PathStrokeType::mitered, juce::PathStrokeType::square));
 	}
 	else
 	{
-		g.fillAll(juce::Colours::white.withMultipliedBrightness(0.8f));
+		g.setColour(juce::Colours::white.withAlpha(0.38f));
+		g.drawRoundedRectangle(box.reduced(0.5f), 1.f, 1.f);
 	}
-		
-    for (int i = 0; i < 4; i++)
-    {
-        g.setColour(juce::Colours::darkgrey.withMultipliedAlpha(1.f/((i*i)+0.75f)));
-        g.drawRect(bounds.toFloat(), 1.f);
-        bounds.reduce(1,1);
-    }
-
-}
-
-void ButtonOptionsLookAndFeel::drawButtonText(	juce::Graphics& g, 
-												juce::TextButton& button,
-												bool shouldDrawButtonAsHighlighted, 
-												bool shouldDrawButtonAsDown)
-{
-	auto bounds = button.getLocalBounds();
-
-	auto myTypeface = "Helvetica";
-	auto buttonFont = juce::Font(	myTypeface, 
-									bounds.getHeight() * 0.85f, 
-									juce::Font::FontStyleFlags::bold);
-
-    g.setColour(juce::Colours::black);
-    
-	g.setFont(buttonFont);
-
-	g.drawText("Options", bounds, juce::Justification::centred, false);
+	g.setColour(juce::Colour(button.getToggleState() ? 0xffe3e4e8 : 0xff9a9da6));
+	g.setFont(juce::Font(11.f));
+	g.drawText(button.getButtonText(), r.withTrimmedLeft(17.f), juce::Justification::centredLeft, false);
 }
 
 /* =========================================================================== */
@@ -849,17 +874,25 @@ void InOutLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int wid
 	juce::Path track;
 	track.startNewSubPath(bounds.getCentreX(), bounds.getY() + 10);
 	track.lineTo(bounds.getCentreX(), bounds.getBottom() - 10);
-	g.setColour(juce::Colours::black);
-	g.strokePath(track, juce::PathStrokeType(	6.f, juce::PathStrokeType::JointStyle::beveled, 
+	g.setColour(juce::Colours::black.withAlpha(0.85f));
+	g.strokePath(track, juce::PathStrokeType(	3.f, juce::PathStrokeType::JointStyle::beveled, 
 												juce::PathStrokeType::EndCapStyle::rounded));
 
-	juce::Rectangle<float> faderBounds;
-	faderBounds.setBounds(	bounds.getCentreX() - faderWidth/2.f,
-							faderRange - faderHeight / 2.f,
-							faderWidth, faderHeight);
-	
-	// Draw the Title
-	g.drawImage(imageFader, faderBounds.toFloat());
+	// [Claude 2026-10-29] A drawn cap in place of the chrome picture (FaderKnob.png): a short dark key, lit along its
+	// top edge, with one white index line at the value.
+	const float capW = faderWidth * 0.86f, capH = faderWidth * 0.62f;
+	juce::Rectangle<float> cap { bounds.getCentreX() - capW / 2.f, faderRange - capH / 2.f, capW, capH };
+	g.setColour(juce::Colours::black.withAlpha(0.6f));
+	g.fillRoundedRectangle(cap.translated(0.f, 1.5f), 2.f);
+	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff40434b), cap.getX(), cap.getY(),
+										   juce::Colour(0xff24262c), cap.getX(), cap.getBottom(), false));
+	g.fillRoundedRectangle(cap, 2.f);
+	g.setColour(juce::Colours::white.withAlpha(0.12f));
+	g.drawLine(cap.getX() + 2.f, cap.getY() + 0.75f, cap.getRight() - 2.f, cap.getY() + 0.75f, 1.f);
+	g.setColour(juce::Colours::black.withAlpha(0.8f));
+	g.drawRoundedRectangle(cap, 2.f, 1.f);
+	g.setColour(juce::Colours::white.withAlpha(0.9f));
+	g.drawLine(cap.getX() + 2.f, cap.getCentreY(), cap.getRight() - 2.f, cap.getCentreY(), 1.25f);
 }
 
 /* =========================================================================== */
@@ -980,10 +1013,11 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
 	  g.setColour(juce::Colours::lightgrey);
 
     // Start with a font size based on height (INV)
+	// [Claude 2026-10-29] Button words as small spaced capitals, not big type (Joe: "Now the INV etc seem too large").
 	if (mLabel == "INV")
 	{
-		float fontSize = bounds.getHeight() * 0.75f;
-		g.setFont(fontSize);
+		float fontSize = bounds.getHeight() * 0.42f;
+		g.setFont(juce::Font(fontSize, juce::Font::bold).withExtraKerningFactor(0.12f));
 
 		auto textWidth = g.getCurrentFont().getStringWidth(mLabel);
 
@@ -998,8 +1032,8 @@ void ToggleLookAndFeel::drawTickBox (   juce::Graphics& g, juce::Component& butt
 
     // Adjust the font size if the text width exceeds the bounds width (Byp, Solo, Mute buttons)
     if (mLabel != "INV") {
-		float fontSize = bounds.getHeight() * 0.5f;
-		g.setFont(fontSize);
+		float fontSize = bounds.getHeight() * 0.36f;
+		g.setFont(juce::Font(fontSize, juce::Font::bold).withExtraKerningFactor(0.12f));
     }
 
     // Draw the text centered within the bounds
@@ -1107,7 +1141,7 @@ void MultComboLookAndFeel::drawComboBox ( juce::Graphics& g,
 	  g.setColour(juce::Colours::lightgrey);
     
     juce::String selection = comboBox.getItemText(comboBox.getSelectedItemIndex());
-    g.setFont(height * 0.75f);
+    g.setFont(height * 0.56f);
     g.drawFittedText(selection, menuBounds, juce::Justification::centred, 1);
 }
 
@@ -1165,7 +1199,7 @@ void WaveComboLookAndFeel::drawComboBox ( juce::Graphics& g,
 	  g.setColour(juce::Colours::lightgrey);
     
     juce::String selection = comboBox.getItemText(comboBox.getSelectedItemIndex());
-    g.setFont(height * 0.8f);
+    g.setFont(height * 0.56f);
     g.drawFittedText(selection, bounds, juce::Justification::centred, 1);
     
 }

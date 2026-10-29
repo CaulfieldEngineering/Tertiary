@@ -30,6 +30,9 @@ public:
 
 	void setHorizontalOrientation();
 
+	// [Claude 2026-10-29] Where on a crossover cursor the two bands meet (local y), for its handle
+	void setMarkerY(float y) { mMarkerY = y; repaint(); }
+
 	void setFocus(bool hasFocus);
 
 	void timerCallback();
@@ -49,6 +52,7 @@ private:
 	bool setDebug{ true };
 
 	bool mIsVertical{ true };
+	float mMarkerY{ -1.f };
 
 	bool mHasFocus{ false };
 	bool mForceFocus{ false };

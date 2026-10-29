@@ -59,108 +59,81 @@ void TopBanner::updateVersionLink()
 
 void TopBanner::paint(juce::Graphics& g)
 {
+    // [Claude 2026-10-29] The header from the house-style work (Joe, header v4): a top-lit grey bar, the name and its
+    // line at the left, the preset in the middle (PresetBar, placed by the editor), the logo and a menu at the right,
+    // and in the demo a DEMO tag and an Activate key before the logo. Replaces the purple glow and the title image.
     auto bounds = getLocalBounds().toFloat();
-    auto boundsHeight = bounds.getHeight();
-    
-	if (mIsMouseOver)
-	{
-		juce::Graphics::ScopedSaveState state(g); // Optional safety
-		g.reduceClipRegion(getLocalBounds());     // Ensure no overpaint
-		g.setColour(juce::Colours::purple.withAlpha(0.2f));
-		g.fillRect(getLocalBounds());             // Flat and predictable
-	}
 
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff1f2026), 0.f, 0.f,
+                                           juce::Colour(0xff15161a), 0.f, bounds.getBottom(), false));
+    g.fillRect(bounds);
+    g.setColour(juce::Colours::white.withAlpha(0.07f));
+    g.drawHorizontalLine(0, 0.f, bounds.getRight());
+    g.setColour(juce::Colours::black);
+    g.drawHorizontalLine((int) bounds.getBottom() - 1, 0.f, bounds.getRight());
 
-    // Use Windows DPI scale
-    //float scale = getWindowsDPIScale(this);
-	float scale = (float) getDesktopScaleFactor();
+    const float cy = bounds.getCentreY();
 
-    DBG("Windows DPI Scale: " + juce::String(scale));
-    g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
+    // Name and line
+    auto nameFont = juce::Font(17.f, juce::Font::bold);
+    nameFont.setExtraKerningFactor(0.22f);
+    g.setFont(nameFont);
+    g.setColour(juce::Colour(0xffe9e9ec));
+    const juce::String name("TERTIARY");
+    const float nameW = (float) nameFont.getStringWidth(name);
+    g.drawText(name, juce::Rectangle<float>(14.f, cy - 10.f, nameW + 8.f, 20.f), juce::Justification::centredLeft, false);
+    g.setFont(juce::Font(12.5f));
+    g.setColour(juce::Colour(0xff8b8e97));
+    g.drawText("Multiband Tremolo", juce::Rectangle<float>(14.f + nameW + 12.f, cy - 9.f, 130.f, 18.f), juce::Justification::centredLeft, false);
 
-    // Plugin Title
-	// ==========================================================
-    if (!imagePluginTitle.isNull())
+    // Right side, right to left: menu, logo, then Activate and DEMO in the demo
+    float x = bounds.getRight() - 14.f;
+    mMenuArea = { x - 18.f, cy - 9.f, 18.f, 18.f };
+    g.setColour(juce::Colour(0xffa9abb3));
+    for (int i = -1; i <= 1; ++i)
+        g.fillRect(juce::Rectangle<float>(x - 16.f, cy + i * 5.f - 0.75f, 16.f, 1.5f));
+    x -= 16.f + 12.f;
+
+    if (! imageCompanyTitle.isNull())
     {
-        float newHeight = boundsHeight;
-        float newWidth = newHeight * (imagePluginTitle.getWidth() / (float)imagePluginTitle.getHeight());
-        
-        if (std::abs(lastPluginTitleScale - scale) > 0.01f || scaledPluginTitle.isNull())
-        {
-            scaledPluginTitle = applyResize(imagePluginTitle, 
-                                          juce::roundToInt(newWidth * scale), 
-                                          juce::roundToInt(newHeight * scale));
-            lastPluginTitleScale = scale;
-        }
-
-        auto pluginTitleBounds = juce::Rectangle<float>(
-            bounds.getCentreX() - (newWidth / 2.0f),
-            bounds.getY(),
-            newWidth,
-            boundsHeight
-        );
-
-        g.drawImage(scaledPluginTitle,
-                   pluginTitleBounds,
-                   juce::RectanglePlacement::centred);
+        const float logoH = 14.f, logoW = logoH * companyTitleOriginalAspect;
+        g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
+        g.drawImage(imageCompanyTitle, juce::Rectangle<float>(x - logoW, cy - logoH / 2.f, logoW, logoH));
+        x -= logoW + 14.f;
     }
 
-    // Company Title
-	// ==========================================================
-    if (!imageCompanyTitle.isNull())
+    mActivateArea = {};
+    if (mIsDemoVersion)
     {
-        float companyHeight = boundsHeight * 0.55f;
-        float companyWidth = companyHeight * (imageCompanyTitle.getWidth() / (float)imageCompanyTitle.getHeight());
-        
-        if (std::abs(lastCompanyTitleScale - scale) > 0.01f || scaledCompanyTitle.isNull())
-        {
-            scaledCompanyTitle = applyResize(imageCompanyTitle, 
-                                           juce::roundToInt(companyWidth * scale), 
-                                           juce::roundToInt(companyHeight * scale));
-            lastCompanyTitleScale = scale;
-        }
+        g.setFont(juce::Font(12.f));
+        const float actW = 62.f;
+        mActivateArea = { x - actW, cy - 11.f, actW, 22.f };
+        g.setGradientFill(juce::ColourGradient(juce::Colour(0xff5bbd7d), 0.f, mActivateArea.getY(),
+                                               juce::Colour(0xff3f9a5f), 0.f, mActivateArea.getBottom(), false));
+        g.fillRoundedRectangle(mActivateArea, 2.f);
+        g.setColour(juce::Colours::white.withAlpha(0.25f));
+        g.drawHorizontalLine((int) mActivateArea.getY() + 1, mActivateArea.getX() + 2.f, mActivateArea.getRight() - 2.f);
+        g.setColour(juce::Colour(0xff0f1a12));
+        g.drawText("Activate", mActivateArea, juce::Justification::centred, false);
+        x -= actW + 10.f;
 
-        g.drawImage(scaledCompanyTitle,
-                   bounds.getRight() - companyWidth,
-                   bounds.getCentreY() - (companyHeight / 2.0f),
-                   companyWidth,
-                   companyHeight,
-                   0, 0,
-                   scaledCompanyTitle.getWidth(),
-                   scaledCompanyTitle.getHeight());
+        auto tagFont = juce::Font(10.f, juce::Font::bold);
+        tagFont.setExtraKerningFactor(0.15f);
+        g.setFont(tagFont);
+        const float tagW = 46.f;
+        juce::Rectangle<float> tag { x - tagW, cy - 9.f, tagW, 18.f };
+        g.setColour(juce::Colour(0xffc886dd));
+        g.drawRoundedRectangle(tag.reduced(0.5f), 2.f, 1.f);
+        g.drawText("DEMO", tag, juce::Justification::centred, false);
     }
-
-	// Demo Declaration
-	// ==========================================================
-	if (mIsDemoVersion)
-	{
-		// [Claude 2026-10-27] One smaller line under the preset bar (which now takes the top left);
-		// it was two large lines here
-		auto line = juce::Rectangle<int>(10, 29, 226, 18);
-		g.setFont(juce::Font("Helvetica", 12.0f, juce::Font::bold));
-		g.setColour(juce::Colours::lightgrey.withAlpha(0.5f));
-		g.drawFittedText("DEMO - DOUBLE-CLICK TO ACTIVATE", line, juce::Justification::left, 1);
-	}
-
-	if (false)   // [Claude 2026-10-27] the old two-line demo text, kept for reference
-	{
-		auto area = getLocalBounds().withTrimmedRight(getWidth() * 0.60f).withLeft(25);
-
-		// "DEMO VERSION" - large text
-		g.setFont(juce::Font("Helvetica", 30.0f * scale, juce::Font::bold));
-		g.setColour(juce::Colours::lightgrey.withAlpha(0.5f));
-		auto demoTextBounds = area.removeFromTop(35);
-		g.drawText("DEMO VERSION", demoTextBounds, juce::Justification::left, false);
-
-		// "DOUBLE-CLICK TO ACTIVATE" - smaller text below
-		g.setFont(juce::Font("Helvetica", 16.0f * scale, juce::Font::bold));
-		g.setColour(juce::Colours::lightgrey.withAlpha(0.4f));
-		auto activateTextBounds = demoTextBounds.translated(0, 25); // vertical offset below first line
-		g.drawText("DOUBLE-CLICK TO ACTIVATE", activateTextBounds, juce::Justification::left, false);
-	}
-
 }
 
+void TopBanner::mouseUp(const juce::MouseEvent& e)
+{
+    const auto p = e.position;
+    if (mActivateArea.contains(p) && onActivate) onActivate();
+    else if (mMenuArea.expanded(4.f).contains(p) && onMenu) onMenu();
+}
 
 void TopBanner::mouseEnter(const juce::MouseEvent&)
 {

@@ -115,7 +115,7 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
 
     auto controlLabelsFontJustification = FontEditor::ControlLabels::getJustification();
     auto controlLabelsFontTypeface = FontEditor::ControlLabels::getTypeface();
-    auto controlLabelsFontSize = std::min(border2.getHeight(), border2.getWidth()) * 0.175f;
+    auto controlLabelsFontSize = std::min(border2.getHeight(), border2.getWidth()) * 0.15f;
     auto controlLabelsFontStyle = FontEditor::ControlLabels::getFontStyle();
     auto controlLabelsFontColor = FontEditor::ControlLabels::getFontColor();
     auto controlLabelsFontTransparency = FontEditor::ControlLabels::getFontTransparency();
@@ -238,10 +238,11 @@ void GlobalControls::paintBandLabels(juce::Graphics& g)
 
     // Beware of Magic Numbers
     // ==================================
-    auto controlLabelsFontSize = 23.f * (getHeight() / 250.f);
+    // [Claude 2026-10-29] Text hierarchy (Joe: "Let's do the text hierarchy"): values plain and clear, labels quieter, band names small and spaced.
+    auto controlLabelsFontSize = 16.f * (getHeight() / 250.f);  // a step up again (Joe: "a little more emphasized")
 
     auto controlLabelsFontStyle = juce::Font::FontStyleFlags::bold;
-    auto controlLabelsFontColor = juce::Colours::white.withAlpha(0.65f);
+    auto controlLabelsFontColor = juce::Colours::white.withAlpha(0.58f);
 
     g.setColour(controlLabelsFontColor);
 
@@ -255,6 +256,7 @@ void GlobalControls::paintBandLabels(juce::Graphics& g)
     int width = border3.getWidth();
 
     
+    titleFont.setExtraKerningFactor(0.18f);
     g.setFont(titleFont);
     g.setColour(controlLabelsFontColor);
     

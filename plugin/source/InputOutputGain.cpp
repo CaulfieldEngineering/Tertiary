@@ -108,8 +108,8 @@ void InputOutputGain::resized()
 	//spacing = bo unds.getHeight()*0.014f;			// Vertical Distance between LEDs
 	//ledHeight = bounds.getHeight()*0.006f;
 
-	ledOffGradient = makeMeterGradient(grillBounds, 0.75f);
-	ledOnGradient = makeMeterGradient(grillBounds, 2.5f);
+	ledOffGradient = makeMeterGradient(grillBounds, 0.22f);
+	ledOnGradient = makeMeterGradient(grillBounds, 1.f);
 
 	// Draw The Grill Image =======================================================
 	buildGrill(bounds);
@@ -123,15 +123,18 @@ void InputOutputGain::resized()
 
 juce::ColourGradient InputOutputGain::makeMeterGradient(juce::Rectangle<float> bounds, float brightness)
 {
+	// [Claude 2026-10-29] The meters in the product's own colours (Joe: "Yeah meters?"): the Wonderland green, lighter
+	// toward the top, and red only for the last segments. Was green, yellow and red at full strength.
 	juce::ColourGradient gradient = juce::ColourGradient {	
-									juce::Colour(0xff084008).withMultipliedBrightness(brightness),	
+									juce::Colour(0xff2a7346).withMultipliedBrightness(brightness),	
 									bounds.getBottomLeft(),
-									juce::Colour(0xff8a1414).withMultipliedBrightness(brightness),	
+									juce::Colour(0xffd0574f).withMultipliedBrightness(brightness),	
 									bounds.getTopLeft(), false };
 
-	gradient.addColour(0.9f,  juce::Colour(0xff8a1414).withMultipliedBrightness(brightness));	// Red
-	gradient.addColour(0.4f,  juce::Colour(0xff084008).withMultipliedBrightness(brightness));	// Green
-	gradient.addColour(0.75f, juce::Colour(0xff929224).withMultipliedBrightness(brightness));	// Yellow
+	gradient.addColour(0.55f, juce::Colour(0xff3c9b5d).withMultipliedBrightness(brightness));	// Wonderland green
+	gradient.addColour(0.84f, juce::Colour(0xff8fd3a6).withMultipliedBrightness(brightness));	// toward 0 dB
+	gradient.addColour(0.905f, juce::Colour(0xffcfe9d8).withMultipliedBrightness(brightness));
+	gradient.addColour(0.915f, juce::Colour(0xffd0574f).withMultipliedBrightness(brightness));	// over
 
 	return gradient;
 }
