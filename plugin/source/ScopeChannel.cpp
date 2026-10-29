@@ -304,17 +304,9 @@ void ScopeChannel::paintGridLines(juce::Graphics& g)
         // Draw Markers at Single-Beat Intervals
         if (i % juce::jmax(1, (int)beatSpacing) == 0)   // [Claude 2026-10-27] jmax: (int)beatSpacing could be 0, a divide-by-zero crash
         {
-            g.setColour(juce::Colours::darkgrey);
-
-            // Highlight Even Markers
-            if (num % 2 == 0)
-                g.setColour(juce::Colours::lightgrey);
-
-            // Highlight Origin
-            if (num == 0)
-                g.setColour(juce::Colours::slategrey);
-
-            g.setOpacity(0.35f);
+            // [Claude 2026-10-29] The crossover's grid: one quiet grey for every beat, the origin a step brighter
+            // (Joe: "make the gridlines the same style as the crossover"). Was dark and light grey alternating at 35 %.
+            g.setColour(juce::Colours::lightgrey.withAlpha(num == 0 ? 0.2f : 0.12f));
             
             // Draw Twice as Many Gridlines to Account for Panning
             rightGridLine = c + num * beatSpacing;
