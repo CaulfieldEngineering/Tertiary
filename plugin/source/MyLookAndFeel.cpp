@@ -661,8 +661,16 @@ static void drawRecessedTrack(juce::Graphics& g, juce::Rectangle<float> r)
 
 static void drawValueLine(juce::Graphics& g, juce::Rectangle<float> r, float x, juce::Colour c)
 {
-	g.setColour(c.brighter(0.35f));
-	g.fillRect(juce::Rectangle<float>(juce::jlimit(r.getX(), r.getRight() - 1.5f, x - 0.75f), r.getY(), 1.5f, r.getHeight()));
+	// a little width: a soft glow either side of a bright core (Joe: "add a pixel or two of width to it with a teeny
+	// gradient")
+	const float cx = juce::jlimit(r.getX() + 1.f, r.getRight() - 1.f, x);
+	const auto glow = c.brighter(0.2f);
+	juce::ColourGradient grad(glow.withAlpha(0.f), cx - 3.f, 0.f, glow.withAlpha(0.f), cx + 3.f, 0.f, false);
+	grad.addColour(0.5, glow.withAlpha(0.9f));
+	g.setGradientFill(grad);
+	g.fillRect(juce::Rectangle<float>(cx - 3.f, r.getY(), 6.f, r.getHeight()).getIntersection(r));
+	g.setColour(c.brighter(0.4f));
+	g.fillRect(juce::Rectangle<float>(cx - 0.75f, r.getY(), 1.5f, r.getHeight()));
 }
 
 void StandardSliderLookAndFeel::drawLinearSlider(	juce::Graphics& g, int x, int y, int width, int height,
