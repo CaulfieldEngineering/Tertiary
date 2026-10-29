@@ -31,7 +31,7 @@ OutputBaseFilename={#MyOutputBaseFilename}
 Compression=lzma
 SolidCompression=yes
 // [Claude 2026-10-29] the app icon on the installer and in Apps & features
-SetupIconFile=..pluginimagesicon	ertiary-icon.ico
+SetupIconFile=..\plugin\images\icon\tertiary-icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 DisableProgramGroupPage=yes
 ArchitecturesInstallIn64BitMode=x64
