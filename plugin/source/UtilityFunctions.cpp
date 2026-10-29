@@ -54,7 +54,7 @@ void paintBorderTight(juce::Graphics& g, juce::Colour baseColor, juce::Rectangle
 	for (float k : steps)
 	{
 		g.setColour(baseColor.withMultipliedBrightness(k));
-		g.drawRect(border, 1.f);  // square corners, so neighbouring frames meet without notches (Joe: "dead zones")
+		g.drawRoundedRectangle(border, 1.5f, 1.f);
 		border.reduce(1.f, 1.f);
 	}
 }
