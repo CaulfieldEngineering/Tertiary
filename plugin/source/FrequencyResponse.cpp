@@ -310,7 +310,7 @@ void FrequencyResponse::paint(juce::Graphics& g)
 
     /* Paint Border */
     // =========================
-    paintBorder(g, ColorScheme::WindowBorders::getWindowBorderColor(), bounds);
+    paintRecess(g, bounds);
 }
 
 void FrequencyResponse::paintGainTag(juce::Graphics& g, Cursor& cursor, float gainDb)
