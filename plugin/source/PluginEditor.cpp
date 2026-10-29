@@ -95,7 +95,8 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       if (!fullScreenScope)
         addAndMakeVisible(presetBar);
         // [Claude 2026-10-29] Activate and the menu in the new header open the About window, where activation is
-        topBanner.onActivate = [this] { aboutWindow.setVisible(true); };
+        topBanner.onActivate = [this] { aboutWindow.setVisible(true); aboutWindow.toFront(false); };
+        aboutWindow.toFront(false);   // [Claude 2026-10-29] above the preset bar, which was added after it
         topBanner.onMenu = [this] { aboutWindow.setVisible(! aboutWindow.isVisible()); };
 
       // [Claude 2026-10-27] Weekly serial-key re-check and update check, on the processor's own thread
@@ -221,8 +222,8 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
 
       auto bounds = getLocalBounds();
 
-      auto aboutWidth = 400;
-      auto aboutHeight = 450;
+      auto aboutWidth = 360;   // [Claude 2026-10-29] the rebuilt panel; was 400 x 450
+      auto aboutHeight = 300;
       auto aboutX = bounds.getCentreX() - aboutWidth / 2;
       auto aboutY = bounds.getCentreY() - aboutHeight / 2;
 

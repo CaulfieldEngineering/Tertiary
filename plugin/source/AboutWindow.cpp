@@ -15,6 +15,93 @@
 
 
 
+// [Claude 2026-10-29] The house style: keys like the header's (green when they activate), fields as recessed wells
+//==============================================================================
+void AboutWindow::Look::drawButtonBackground(juce::Graphics& g, juce::Button& b, const juce::Colour&, bool highlighted, bool down)
+{
+	auto r = b.getLocalBounds().toFloat().reduced(0.5f);
+	const bool primary = b.getProperties()["primary"];
+	juce::Colour top = primary ? juce::Colour(0xff5bbd7d) : juce::Colour(0xff34363e);
+	juce::Colour bot = primary ? juce::Colour(0xff3f9a5f) : juce::Colour(0xff25272d);
+	if (down) { top = top.darker(0.25f); bot = bot.darker(0.25f); }
+	else if (highlighted) { top = top.brighter(0.08f); bot = bot.brighter(0.08f); }
+	g.setGradientFill(juce::ColourGradient(top, 0.f, r.getY(), bot, 0.f, r.getBottom(), false));
+	g.fillRoundedRectangle(r, 1.5f);
+	g.setColour(juce::Colours::white.withAlpha(primary ? 0.25f : 0.1f));
+	g.fillRect(r.withHeight(1.f).reduced(1.5f, 0.f));
+	g.setColour(juce::Colours::black.withAlpha(0.7f));
+	g.drawRoundedRectangle(r, 1.5f, 1.f);
+}
+
+void AboutWindow::Look::drawButtonText(juce::Graphics& g, juce::TextButton& b, bool highlighted, bool)
+{
+	const bool primary = b.getProperties()["primary"];
+	if (b.getButtonText() == "X")
+	{
+		// the close key: a fine cross
+		auto c = b.getLocalBounds().toFloat().getCentre();
+		g.setColour(juce::Colour(highlighted ? 0xffd9dade : 0xffa9abb3));
+		g.drawLine(c.x - 3.5f, c.y - 3.5f, c.x + 3.5f, c.y + 3.5f, 1.3f);
+		g.drawLine(c.x - 3.5f, c.y + 3.5f, c.x + 3.5f, c.y - 3.5f, 1.3f);
+		return;
+	}
+	g.setColour(primary ? juce::Colour(0xff0f1a12) : juce::Colour(highlighted ? 0xffd9dade : 0xffb4b6bc));
+	g.setFont(juce::Font(13.f));
+	g.drawText(b.getButtonText(), b.getLocalBounds(), juce::Justification::centred, false);
+}
+
+void AboutWindow::Look::fillTextEditorBackground(juce::Graphics& g, int w, int h, juce::TextEditor&)
+{
+	juce::Rectangle<float> r { 0.5f, 0.5f, (float) w - 1.f, (float) h - 1.f };
+	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff0b0c0f), 0.f, r.getY(), juce::Colour(0xff15161a), 0.f, r.getBottom(), false));
+	g.fillRoundedRectangle(r, 1.5f);
+	g.setColour(juce::Colours::black.withAlpha(0.6f));
+	g.fillRect(r.withHeight(1.5f).reduced(1.5f, 0.f));
+}
+
+void AboutWindow::Look::drawTextEditorOutline(juce::Graphics& g, int w, int h, juce::TextEditor& e)
+{
+	g.setColour(e.hasKeyboardFocus(true) ? juce::Colour(0xff5bbd7d).withAlpha(0.7f) : juce::Colours::black.withAlpha(0.7f));
+	g.drawRoundedRectangle(juce::Rectangle<float>(0.5f, 0.5f, (float) w - 1.f, (float) h - 1.f), 1.5f, 1.f);
+	g.setColour(juce::Colours::white.withAlpha(0.06f));
+	g.fillRect(juce::Rectangle<float>(2.f, (float) h - 1.f, (float) w - 4.f, 1.f));
+}
+
+void AboutWindow::applyLook()
+{
+	for (juce::Component* c : { (juce::Component*) &mButtonClose, (juce::Component*) &mActionButton,
+	                            (juce::Component*) &mTextEditorEmailAddress, (juce::Component*) &mTextEditorSerialKey })
+		c->setLookAndFeel(&look);
+
+	for (auto* e : { &mTextEditorEmailAddress, &mTextEditorSerialKey })
+	{
+		e->setFont(juce::Font(13.f));
+		e->setJustification(juce::Justification::centredLeft);
+		e->setIndents(10, 0);
+		e->setColour(juce::TextEditor::textColourId, juce::Colour(0xffd6d7dc));
+		e->setColour(juce::TextEditor::highlightColourId, juce::Colour(0xff3f9a5f).withAlpha(0.5f));
+		e->setColour(juce::CaretComponent::caretColourId, juce::Colour(0xffd6d7dc));
+		e->setColour(juce::TextEditor::backgroundColourId, juce::Colours::transparentBlack);
+		e->setColour(juce::TextEditor::outlineColourId, juce::Colours::transparentBlack);
+		e->setColour(juce::TextEditor::focusedOutlineColourId, juce::Colours::transparentBlack);
+	}
+	mTextEditorEmailAddress.setTextToShowWhenEmpty("Email address", juce::Colour(0xff5d606a));
+	mTextEditorSerialKey.setTextToShowWhenEmpty("Serial key", juce::Colour(0xff5d606a));
+
+	// the demo shows the fields to activate; the full version shows who it is activated to instead
+	mTextEditorEmailAddress.setVisible(mIsDemoVersion);
+	mTextEditorSerialKey.setVisible(mIsDemoVersion);
+	mActionButton.getProperties().set("primary", mIsDemoVersion);
+	mActionButton.setButtonText(mIsDemoVersion ? "Activate" : "Deactivate this computer");
+
+	mButtonWebsiteLink.setFont(juce::Font(12.f), false, juce::Justification::centred);
+	mButtonWebsiteLink.setColour(juce::HyperlinkButton::textColourId, juce::Colour(0xff8b8e97));
+	mLabelStatus.setFont(juce::Font(12.f, juce::Font::italic));
+	mLabelStatus.setColour(juce::Label::textColourId, juce::Colour(0xffa9abb3));
+	resized();
+	repaint();
+}
+
 AboutWindow::AboutWindow(audio_plugin::AudioPluginAudioProcessor& p, audio_plugin::AudioPluginAudioProcessorEditor& e)
     : audioProcessor(p), pluginEditor(e)
 {
@@ -43,146 +130,114 @@ AboutWindow::AboutWindow(audio_plugin::AudioPluginAudioProcessor& p, audio_plugi
     setUpEmailEditor();
     setUpActionButton();
     setUpStatusLabel();
-
+    applyLook();
+    setAlpha(1.f);
 }
 
 AboutWindow::~AboutWindow()
 {
+	for (juce::Component* c : { (juce::Component*) &mButtonClose, (juce::Component*) &mActionButton,
+	                            (juce::Component*) &mTextEditorEmailAddress, (juce::Component*) &mTextEditorSerialKey })
+		c->setLookAndFeel(nullptr);
 
 }
 
 void AboutWindow::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colours::black);
-    auto bounds = getLocalBounds();
-    float scale = getWindowsDPIScale(this);
-    
-    g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
+    // [Claude 2026-10-29] A panel in the header's style: top-lit grey, a thin border, the wordmark and version at the
+    // top, then the licence state (Joe: "yes rebuild it"). Was the title pictures on black in a thick grey frame.
+    auto r = getLocalBounds().toFloat();
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff222329), 0.f, 0.f, juce::Colour(0xff17181c), 0.f, r.getBottom(), false));
+    g.fillRect(r);
+    g.setColour(juce::Colours::white.withAlpha(0.08f));
+    g.fillRect(r.withHeight(1.f).reduced(1.f, 0.f));
+    g.setColour(juce::Colours::black);
+    g.drawRect(r, 1.f);
 
-    // Draw Company Title (Wonderland Audio logo)
-	// ==========================================================
-    float companyTitleWidth = bounds.getWidth() * 0.75f;
-    float aspectRatio = static_cast<float>(targetCompanyHeight) / static_cast<float>(targetCompanyWidth);
-    float companyTitleHeight = companyTitleWidth * aspectRatio;
-    
-    if (std::abs(lastCompanyTitleScale - scale) > 0.01f || scaledCompanyTitle.isNull())
+    const float x = 20.f;
+
+    // the wordmark and version
+    auto nameFont = juce::Font(17.f, juce::Font::bold);
+    nameFont.setExtraKerningFactor(0.22f);
+    g.setFont(nameFont);
+    g.setColour(juce::Colour(0xffe9e9ec));
+    const juce::String name("TERTIARY");
+    const float nameW = (float) nameFont.getStringWidth(name);
+    g.drawText(name, juce::Rectangle<float>(x, 20.f, nameW + 8.f, 22.f), juce::Justification::centredLeft, false);
+    g.setFont(juce::Font(12.5f));
+    g.setColour(juce::Colour(0xff8b8e97));
+    g.drawText("Multiband Tremolo", juce::Rectangle<float>(x, 44.f, 200.f, 16.f), juce::Justification::centredLeft, false);
+    g.drawText("Version " + juce::String(JucePlugin_VersionString), juce::Rectangle<float>(x + 150.f, 44.f, r.getWidth() - x * 2.f - 150.f, 16.f),
+               juce::Justification::centredRight, false);
+
+    // the logo, small, at the top right beside the close key
+    if (! imageCompanyTitle.isNull())
     {
-        scaledCompanyTitle = applyResize(imageCompanyTitle, 
-                                       juce::roundToInt(companyTitleWidth * scale), 
-                                       juce::roundToInt(companyTitleHeight * scale));
-        lastCompanyTitleScale = scale;
+        const float h = 12.f, w = h * imageCompanyTitle.getWidth() / (float) imageCompanyTitle.getHeight();
+        g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
+        g.drawImage(imageCompanyTitle, juce::Rectangle<float>(r.getRight() - x - 26.f - w, 25.f, w, h));
     }
 
-    juce::Rectangle<float> companyBounds{
-        bounds.getCentreX() - companyTitleWidth / 2,
-        25,
-        companyTitleWidth,
-        companyTitleHeight
-    };
-    
-    if (!scaledCompanyTitle.isNull())
+    g.setColour(juce::Colours::black.withAlpha(0.5f));
+    g.fillRect(juce::Rectangle<float>(x, 72.f, r.getWidth() - x * 2.f, 1.f));
+    g.setColour(juce::Colours::white.withAlpha(0.05f));
+    g.fillRect(juce::Rectangle<float>(x, 73.f, r.getWidth() - x * 2.f, 1.f));
+
+    // the licence state
+    auto line = juce::Rectangle<float>(x, 86.f, r.getWidth() - x * 2.f, 18.f);
+    if (mIsDemoVersion)
     {
-        g.drawImage(scaledCompanyTitle, companyBounds);
+        g.setColour(juce::Colour(0xffc886dd));
+        g.setFont(juce::Font(12.f, juce::Font::bold).withExtraKerningFactor(0.12f));
+        g.drawText("DEMO", line, juce::Justification::centredLeft, false);
+        g.setColour(juce::Colour(0xffa9abb3));
+        g.setFont(juce::Font(12.5f));
+        g.drawFittedText("The effect bypasses for 10 seconds of every minute.\nActivate with the email and serial key from your purchase.",
+                         line.translated(0.f, 20.f).withHeight(34.f).toNearestInt(), juce::Justification::topLeft, 2);
     }
-
-    // Draw Plugin Title (TERTIARY)
-	// ==========================================================
-    juce::Rectangle<float> titleBounds{
-        bounds.getCentreX() - targetTitleWidth / 2,
-        companyBounds.getBottom() + 5,
-        static_cast<float>(targetTitleWidth),
-        static_cast<float>(targetTitleHeight)
-    };
-
-    if (std::abs(lastPluginTitleScale - scale) > 0.01f || scaledPluginTitle.isNull())
+    else
     {
-        scaledPluginTitle = applyResize(imagePluginTitle, 
-                                      juce::roundToInt(targetTitleWidth * scale), 
-                                      juce::roundToInt(targetTitleHeight * scale));
-        lastPluginTitleScale = scale;
+        g.setColour(juce::Colour(0xff5bbd7d));
+        g.setFont(juce::Font(12.f, juce::Font::bold).withExtraKerningFactor(0.12f));
+        g.drawText("ACTIVATED", line, juce::Justification::centredLeft, false);
+        const auto email = mTextEditorEmailAddress.getText().fromFirstOccurrenceOf("Email: ", false, true).trim();
+        const auto key = mTextEditorSerialKey.getText().fromFirstOccurrenceOf("Key: ", false, true).trim();
+        g.setColour(juce::Colour(0xffd6d7dc));
+        g.setFont(juce::Font(13.f));
+        g.drawText(email.isNotEmpty() ? email : juce::String("This computer"), line.translated(0.f, 22.f), juce::Justification::centredLeft, true);
+        if (key.isNotEmpty())
+        {
+            g.setColour(juce::Colour(0xff8b8e97));
+            g.setFont(juce::Font(12.f));
+            g.drawText("Key ending " + key.getLastCharacters(4), line.translated(0.f, 40.f), juce::Justification::centredLeft, false);
+        }
+        g.setColour(juce::Colour(0xffa9abb3));
+        g.setFont(juce::Font(12.5f));
+        g.drawText("Thank you for your purchase.", line.translated(0.f, 64.f), juce::Justification::centredLeft, false);
     }
-
-    if (!scaledPluginTitle.isNull())
-    {
-        g.drawImage(scaledPluginTitle, titleBounds);
-    }
-
-    // Set up text drawing with DPI scaling
-    float fontSize = 20.0f;
-    g.setFont(fontSize);
-
-    // Draw Version and Release info
-	// ==========================================================
-    g.setColour(juce::Colours::white);
-    #ifdef DEBUG
-        g.setColour(juce::Colours::red);
-    #endif
-
-    juce::Rectangle<int> versionBounds = bounds.removeFromTop(static_cast<int>(titleBounds.getBottom()) + 60)
-                                               .removeFromBottom(60);
-    juce::String versionNumber = JucePlugin_VersionString;
-    
-    juce::String releaseDate = formatBuildDateTime();
-    g.drawFittedText("Version: " + versionNumber, versionBounds.removeFromTop(30), juce::Justification::centred, 1);
-    g.drawFittedText("Release: " + releaseDate, versionBounds, juce::Justification::centred, 1);
-
-    // Draw Demo Version Disclaimer
-	// ==========================================================
-	if (mIsDemoVersion)
-	{
-		g.setFont(fontSize * 0.8f);
-		g.setColour(juce::Colours::lightgrey);
-		juce::Rectangle<int> disclaimerBounds = bounds.removeFromTop(60).reduced(5, 0);
-		g.drawFittedText("Demo Version: Effect is disabled once every\n50 seconds, for 10 seconds.",
-						 disclaimerBounds, juce::Justification::centred, 2);
-	}
-	else
-	{
-		g.setFont(fontSize * 0.8f);
-		g.setColour(juce::Colour(0xff409963)); // 0xff indicates full opacity
-		juce::Rectangle<int> thanksBounds = bounds.removeFromTop(60).reduced(5, 0);
-		g.drawFittedText("Full Version Activated\nThank you for your purchase!",
-						 thanksBounds, juce::Justification::centred, 1);
-
-
-	}
-
-    // Draw Window Border
-	// ==========================================================
-    paintBorder(g, juce::Colours::grey, getLocalBounds().toFloat());
 }
 
 void AboutWindow::resized()
 {
+    // [Claude 2026-10-29] laid out for the rebuilt panel
     auto bounds = getLocalBounds();
+    const int x = 20, w = bounds.getWidth() - x * 2;
 
-    // Position the Close ("X") button in the top-right corner
-    mButtonClose.setBounds(bounds.getRight() - 30, 5, 25, 25);
+    mButtonClose.setBounds(bounds.getRight() - x - 18, 22, 18, 18);
+    mButtonWebsiteLink.setBounds(bounds.getX(), bounds.getBottom() - 30, bounds.getWidth(), 20);
 
-    // Position the website link button at the bottom center
-    mButtonWebsiteLink.setBounds(bounds.getX(), bounds.getBottom() - 50, bounds.getWidth(), 30);
-
-	// ===============================
-	// Position Activation UI Elements
-	// ===============================
-
-	auto editorArea = bounds.withTrimmedTop(bounds.getHeight() * 0.575f).reduced(40, 0);
-
-	// Email Address Field
-	mTextEditorEmailAddress.setBounds(editorArea.removeFromTop(30));
-
-	// Serial Key Field
-	editorArea.removeFromTop(10); // spacing
-	mTextEditorSerialKey.setBounds(editorArea.removeFromTop(30));
-
-	// Action Button
-	auto buttonArea = editorArea.removeFromTop(30).translated(0, 10);
-	mActionButton.setBounds(buttonArea);
-
-	// Status Label
-	auto statusArea = buttonArea.translated(0, 35);
-	statusArea.setHeight(27);   // [Claude 2026-10-27] was 20; room for a two-line license-check message
-	mLabelStatus.setBounds(statusArea);
+    if (mIsDemoVersion)
+    {
+        mTextEditorEmailAddress.setBounds(x, 146, w, 26);
+        mTextEditorSerialKey.setBounds(x, 178, w, 26);
+        mActionButton.setBounds(x, 214, w, 28);
+        mLabelStatus.setBounds(x, 246, w, 28);
+    }
+    else
+    {
+        mActionButton.setBounds(x, 194, w, 26);
+        mLabelStatus.setBounds(x, 224, w, 28);
+    }
 }
 
 
@@ -566,11 +621,11 @@ void AboutWindow::updateAppOnActivationChange(bool isActivating)
 
 
 	// Reload local changes
+	mIsDemoVersion = !isActivating;
 	setUpSerialKeyEditor();
 	setUpEmailEditor();
 	setUpActionButton();
-
-	repaint();
+	applyLook();
 
 }
 
@@ -616,7 +671,6 @@ void AboutWindow::showLicenseCheckResult(const LicenseCheck::Result& result)
 {
     if (result.message.isNotEmpty())
     {
-        mLabelStatus.setFont(juce::Font(12.0f, juce::Font::italic));
         mLabelStatus.setText(result.message, juce::dontSendNotification);
     }
 
@@ -635,5 +689,5 @@ void AboutWindow::refreshActivationFields()
 	setUpSerialKeyEditor();
 	setUpEmailEditor();
 	setUpActionButton();
-	repaint();
+	applyLook();
 }

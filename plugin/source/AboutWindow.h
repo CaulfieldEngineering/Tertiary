@@ -99,6 +99,17 @@ private:
 
     juce::HyperlinkButton mButtonWebsiteLink;
 
+	// [Claude 2026-10-29] The window rebuilt in the house style (Joe: "yes rebuild it"): its keys and fields drawn here
+	struct Look : juce::LookAndFeel_V4
+	{
+		void drawButtonBackground(juce::Graphics&, juce::Button&, const juce::Colour&, bool highlighted, bool down) override;
+		void drawButtonText(juce::Graphics&, juce::TextButton&, bool highlighted, bool down) override;
+		void fillTextEditorBackground(juce::Graphics&, int w, int h, juce::TextEditor&) override;
+		void drawTextEditorOutline(juce::Graphics&, int w, int h, juce::TextEditor&) override;
+	};
+	Look look;
+	void applyLook();
+
 	// [Claude 2026-10-27] The server calls, behind an interface (LicenseServer.h). Shared with the request threads.
 	std::shared_ptr<LicenseServer> licenseServer { std::make_shared<WonderlandLicenseServer>() };
 
