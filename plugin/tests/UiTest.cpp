@@ -193,6 +193,15 @@ Envelope render (Processor& p, HostClock& clock, int band, double seconds, doubl
     return env;
 }
 
+/* [Claude 2026-10-30] The rate controls tell the scope through action messages, delivered on the message loop.
+   On a slow machine (GitHub's Intel Mac) a check could run before the message arrived; this lets it arrive
+   (up to 1 s; at once on a fast machine). A scope that never hears the control still fails the check after it. */
+void waitForScopeRate (ScopeChannel& scope, double rate)
+{
+    for (int waited = 0; waited < 1000 && std::abs (A::targetRate (scope) - rate) > 0.01; waited += 10)
+        pump (10);
+}
+
 /* A component's area in the editor's own pixels (the window is scaled, so this is where it really is) */
 juce::Rectangle<int> areaInEditor (Editor& editor, juce::Component& c)
 {
@@ -633,6 +642,7 @@ void bandRates()
             const double heard = rig.listen (b, 3.0).frequency();
             check (closeTo (heard, rate, 0.06 * rate + 0.05), juce::String (bandNames[b]) + " free rate " + fmt (rate) + " Hz is heard at that speed",
                    "measured " + fmt (heard) + " Hz");
+            waitForScopeRate (A::scope (rig.editor(), b), rate);   // [Claude 2026-10-30] the slow Intel Mac runner
             for (int f = 0; f < 60; ++f) A::tick (A::scope (rig.editor(), b));
             check (closeTo (A::drawnRate (A::scope (rig.editor(), b)), rate, 0.01), juce::String (bandNames[b]) + " the scope draws " + fmt (rate) + " Hz",
                    "scope " + fmt (A::drawnRate (A::scope (rig.editor(), b)), 3));
@@ -975,10 +985,7 @@ void freshLoadSyncOff()
         const double rate = value (*rig.proc, bandParam ("Rate", b));
         check (closeTo (rate, expected, 0.05 * expected + 0.05) && rate > 4.0, juce::String (bandNames[b]) + ": dragging the rate slider moves the rate", fmt (rate) + " Hz");
         auto& scope = A::scope (ed, b);
-        // [Claude 2026-10-30] the slider tells the scope through an action message, which arrives on the message loop:
-        // let it arrive (up to 1 s; at once on a fast machine). The slow Intel Mac runner checked before it had.
-        for (int waited = 0; waited < 1000 && ! closeTo (A::targetRate (scope), rate, 0.01); waited += 10)
-            pump (10);
+        waitForScopeRate (scope, rate);   // [Claude 2026-10-30] the slow Intel Mac runner checked before the message arrived
         check (closeTo (A::targetRate (scope), rate, 0.01), juce::String (bandNames[b]) + ": the scope hears the slider at once",
                "scope's rate " + fmt (A::targetRate (scope)), "the scope never heard the rate slider: the dead free-rate slider (R-06)");
         const double heard = rig.listen (b, 2.0).frequency();
