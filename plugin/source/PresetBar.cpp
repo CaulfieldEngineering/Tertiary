@@ -35,6 +35,7 @@ PresetBar::PresetBar(audio_plugin::AudioPluginAudioProcessor& p)
     mButtonNext.onClick     = [this] { presets.loadNext(); changed(); };
 
     startTimerHz(10);   // follows changes from the host (program change, automation, session load)
+    timerCallback();    // [Claude 2026-10-30] R-16: the name from the start, not on the first tick (the box opened empty)
 }
 
 PresetBar::~PresetBar()

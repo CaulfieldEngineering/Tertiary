@@ -379,6 +379,14 @@ void windowAtEachScale()
             if (! c->isShowing() || c->getWidth() <= 0) { allShowing = false; missing << c->getName() << " "; }
         check (allShowing, "header, preset bar, scope, crossover and controls all showing at " + pct, {}, "not showing: " + missing);
         check (! A::about (ed).isVisible(), "the About window starts closed at " + pct);
+        {
+            // [Claude 2026-10-30] R-16: the preset name was filled in on the bar's first timer tick, so a window opened
+            // with an empty name box for up to 100 ms (and this test's pictures caught it at random). A new bar, before
+            // any message is handled, must already show the current preset.
+            PresetBar fresh (*rig.proc);
+            check (A::shownName (fresh) == rig.proc->presets.getCurrentName() && A::shownName (fresh).isNotEmpty(),
+                   "the preset name shows the moment the window opens (R-16) at " + pct, A::shownName (fresh));
+        }
         snapshot (ed, "window_" + juce::String (juce::roundToInt (scale * 100)));
     }
 }
