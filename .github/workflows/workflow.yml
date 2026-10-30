@@ -20,7 +20,9 @@ on:
 #   build       Mac and Windows: build, unit tests and pluginval on the release build, sign, package,
 #               notarize, staple, then verify the final installers are signed (and stapled) before upload.
 #   publish     tag only, after BOTH builds passed: uploads both verified installers to WordPress, then
-#               points the download redirects at them, then removes the old copies.
+#               points the download redirects at them, then removes the old copies of the same version, then
+#               publishes the changelog page and the home page's version line from CHANGELOG.md, then sets the
+#               store's Software version.
 #   web-build   the web demo; on a tag it goes to WonderlandAudio.com only after publish succeeded.
 #   cleanup-failed-tag   deletes the tag of a failed release so it can be pushed again, but never when the
 #               tag check could not reach GitHub (that is not a verdict), never after publish started, and
@@ -202,6 +204,8 @@ jobs:
         if [ -z "${wWOO_PRODUCT_ID:-}" ]; then
           RELEASE_MISSING=$(printf '%s\n' "$RELEASE_MISSING" "WooCommerce product (config.cmake, not a secret): wWOO_PRODUCT_ID" | sed '/^$/d')
         fi
+        # [Claude 2026-10-30] The public changelog page (config.cmake). Empty means this plugin has no changelog page.
+        if [ -z "${wCHANGELOG_PAGE_ID:-}" ]; then echo "::warning::wCHANGELOG_PAGE_ID is not set in config.cmake, so a release updates no changelog page."; fi
 
         if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
           if [ -n "$SIGNING_MISSING$RELEASE_MISSING" ]; then
@@ -237,6 +241,29 @@ jobs:
       run: |
         python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --quiet pyyaml
         bash .github/scripts/test_publish_steps.sh
+
+    # The changelog - All Cases (a warning on staging, a stop on a tag)
+    # [Claude 2026-10-30] Joe: "Ideally the changelog gets auto-pushed and it's not Claude or Joe updating each time."
+    # CHANGELOG.md is the one source of the public changelog page. A tag stops here, before anything is built, if
+    # CHANGELOG.md has no entry for the tag's version or the entry still has its "<!-- draft" line (Joe deletes
+    # that line to approve the words; scripts/draft-changelog.mjs writes the draft).
+    # ==========================================================================================
+    - name: Test the Changelog Step (fake site, no network)
+      shell: bash
+      run: python3 .github/scripts/test_changelog.py
+
+    - name: Check CHANGELOG.md Has an Approved Entry for This Version
+      shell: bash
+      run: |
+        if [ -z "${wCHANGELOG_PAGE_ID:-}" ]; then
+          echo "::warning::wCHANGELOG_PAGE_ID is not set in config.cmake: no changelog page, so CHANGELOG.md is not checked."
+        elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          python3 .github/scripts/changelog.py check "${GITHUB_REF#refs/tags/v}"
+        elif ! out=$(python3 .github/scripts/changelog.py check "$wPROJECT_VERSION"); then
+          echo "::warning::Staging: ${out#::error::} A v${wPROJECT_VERSION} tag would stop here."
+        else
+          echo "$out"
+        fi
 
     - name: Check the WooCommerce Product Has a Working Key Source
       shell: bash
@@ -1293,8 +1320,12 @@ jobs:
       WORDPRESS_SITE: ${{ secrets.WORDPRESS_SITE }}
 
     steps:
-    - name: Checkout code (for config.cmake)
+    # [Claude 2026-10-30] Full history and every tag: the changelog step dates an entry headed "(release date)"
+    # from its v* tag.
+    - name: Checkout code (for config.cmake, CHANGELOG.md and the tags)
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
 
     - name: Extract and Set Configuration Variables
@@ -1494,6 +1525,26 @@ jobs:
             echo "::warning::Could not remove older copy, media id $id (the new installers are live; remove it by hand)"
           fi
         done
+
+
+    # The public changelog page and the home page's version line - Tag Only
+    # [Claude 2026-10-30] Joe: "Ideally the changelog gets auto-pushed and it's not Claude or Joe updating each time."
+    # .github/scripts/changelog.py publish: checks the entry again, finds the previous version's installers in the
+    # media library (titled as the upload step titles them; older versions are never deleted), writes every entry up
+    # to this version into the changelog page's one block (the Text Editor widget with CSS class wla-changelog; the
+    # rest of the page is Joe's and is never changed), sets "x.y.z, released <date>" in the home page's wla-version
+    # widget, clears Elementor's cache, reads both back and checks them live. Any mismatch fails the job. The new
+    # installers are already live by then; the store's Software version (next step) waits until this passes.
+    # ==========================================================================================
+    - name: Publish the Changelog Page and the Home Page Version Line
+      shell: bash
+      run: |
+        if [ -z "${wCHANGELOG_PAGE_ID:-}" ]; then
+          echo "::warning::wCHANGELOG_PAGE_ID is not set in config.cmake: no changelog page to update."
+          exit 0
+        fi
+        python3 .github/scripts/changelog.py publish "${GITHUB_REF#refs/tags/v}" \
+          --page-id "$wCHANGELOG_PAGE_ID" --plugin-name "$wPLUGIN_NAME"
 
 
     # Tell existing users about the new version - Tag Only, last

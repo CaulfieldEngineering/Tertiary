@@ -20,3 +20,8 @@ set(wPLUGIN_CATEGORY            Modulation)
 # checks it has a working key source before publishing, and sets its "Software version" to the tag's version
 # once the new installers are live (that is what the plugin's version check reports). Tertiary is 45.
 set(wWOO_PRODUCT_ID             "45")
+
+# [Claude 2026-10-30] The public changelog page on the store's site (WordPress page id). On a v* tag the pipeline writes
+# CHANGELOG.md into that page's changelog block and the version into the home page's version line
+# (.github/scripts/changelog.py). Leave it empty for a plugin with no changelog page. Tertiary's is /changelog/, 4716.
+set(wCHANGELOG_PAGE_ID          "4716")

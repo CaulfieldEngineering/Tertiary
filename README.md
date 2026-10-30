@@ -1,0 +1,78 @@
+# Tertiary
+
+Wonderland Audio's three-band tremolo (JUCE; VST3, AU and standalone). Settings that name the product live in
+`config.cmake`. What changed in each version is in `CHANGELOG.md`; how the code changed for 1.1 is in
+`CLAUDE_CHANGES.md`.
+
+## Releasing
+
+A push to `staging` builds and tests. A `v*` tag on `production` (it must match `wPROJECT_VERSION` in
+`config.cmake`) builds, signs and publishes the release: `.github/workflows/workflow.yml`, "Staging & Production
+Pipeline". Nobody tags without Joe's go.
+
+### The changelog
+
+`CHANGELOG.md` is the only place the changelog is written. The website's changelog page and the version line on the
+home page are filled from it by the pipeline; nobody edits them by hand at a release.
+
+1. **Draft** (at the release-candidate stage, on the mini PC): `node scripts/draft-changelog.mjs`. It reads what
+   changed since the last `v*` tag (commit messages, `CLAUDE_CHANGES.md`, the regression list in
+   `HQ/plans/tertiary-test-plan.md`) and has `claude -p` write the entry in user-facing words: at most 8 bullets, no
+   internal IDs or code words, no em-dashes, nothing that isn't in the changes. It goes into `CHANGELOG.md` as
+   `## <version> (release date)` with a `<!-- draft ... -->` line under the heading. `--dry-run` only prints it.
+2. **Approve** (Joe): read the entry, change any words, and delete the `<!-- draft` line. Or ask Claude to adjust it.
+   Commit it to the release branch.
+3. **Release**: on the `v*` tag the pipeline
+   - stops before building anything if `CHANGELOG.md` has no entry for the tag's version or the entry is still a
+     draft (preflight, "Check CHANGELOG.md Has an Approved Entry for This Version");
+   - after both installers are uploaded and the download links point at them, runs
+     `.github/scripts/changelog.py publish <version>` ("Publish the Changelog Page and the Home Page Version Line"):
+     - dates the entry: a date written in its heading wins; `(release date)` becomes the tag's date in New York
+       time (an annotated tag's own date; a lightweight tag has none, so the day the release runs);
+     - finds the previous version's installers in the WordPress media library (titled
+       `Tertiary Installer v<x.y.z> for Mac` / `for Windows`, as the upload step names them; older installers are
+       never deleted, only older copies of the same version);
+     - writes every entry up to this version, newest first, into the changelog page's block, with "Need the previous
+       version? <x.y.z> for Mac · Windows" under the newest entry (left out if those installers aren't there);
+     - sets the home page's version line to "<version>, released <date>";
+     - clears Elementor's cache, reads both pages back, and checks that the live pages read exactly what was
+       written (every word and link of the block, and the version line). Any mismatch fails the job with the
+       reason; the store's "Software version" (which tells existing users about the update) is set only after this
+       passes.
+
+   Safety rules in that step: every entry it would show must be approved (an older one still marked draft stops
+   it too); it reads both pages again just before writing and, if Joe saved one meanwhile, rebuilds on his new copy
+   so his edit is kept; if the home page can't be written, the changelog page is put back as it was; a re-run of the
+   same version keeps the date already on the page, and older entries keep the dates they were published with.
+
+The draft script runs `claude -p` with the style guide as its system prompt, no tools, no MCP servers and no hooks,
+from an empty folder: it can only answer with text, and its answer is checked (bullets only, at most 8, no
+em-dashes, no internal IDs or hashes) before it is written. Honesty can't be checked by a script, which is why Joe
+approves every entry.
+
+The changelog page is `wCHANGELOG_PAGE_ID` in `config.cmake` (4716, wonderlandaudio.com/changelog/). Empty means
+no changelog page.
+
+**What the pipeline writes on the site, and nothing else:**
+- the changelog page: the one Text Editor widget whose CSS Classes (Advanced tab) include `wla-changelog`,
+  "Changelog - entries (written by the release pipeline...)". Its text is replaced whole on every release. The
+  title, the intro text above it and anything Joe adds around it are his and never touched. Its spacing is in that
+  widget's Advanced > Custom CSS. On a page not built with Elementor, the block is the text between
+  `<!-- wla-changelog:start -->` and `<!-- wla-changelog:end -->`.
+- the home page (whichever page is the site's front page): the Text Editor widget whose CSS Classes include
+  `wla-version` (Specs > Version). Only its version number and date change; other words or a link in it stay. Remove
+  the class to stop the pipeline touching it. (Another plugin sold on the same site uses its own class,
+  `wla-version-<slug>`, set by the template's workflow, so the two never touch each other's line.)
+
+Keep exactly one `wla-changelog` widget on the changelog page; the pipeline refuses to guess between two.
+
+**Try it without the site:** `python3 .github/scripts/test_changelog.py` (fake site, also run in CI), and a dry run
+against saved copies of the pages (REST JSON, `?context=edit`):
+
+```
+python .github/scripts/changelog.py publish 1.1.0 --dry-run --release-date 2026-10-30 \
+  --page-id 4716 --plugin-name Tertiary --page-json page-4716.json --home-json page-4754.json \
+  --media-json media.json --out dry-run
+```
+
+It writes the new page data and `block.html` to `dry-run/` and touches nothing online.
