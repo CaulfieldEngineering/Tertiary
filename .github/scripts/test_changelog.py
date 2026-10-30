@@ -515,6 +515,70 @@ class Publish(unittest.TestCase):
         finally:
             urllib.request.urlopen = real
 
+    def test_cut_off_error_answer_becomes_fail(self):
+        import io
+        import urllib.error
+        import urllib.request
+        site = cl.LiveSite.__new__(cl.LiveSite)
+        site.site, site.auth = "https://s", "x"
+        real = urllib.request.urlopen
+
+        class Cut(io.BytesIO):
+            def read(self, *a):
+                import http.client
+                raise http.client.IncompleteRead(b"par")
+
+        def http500(*a, **k):
+            raise urllib.error.HTTPError("https://s/x", 500, "err", {}, Cut())
+        urllib.request.urlopen = http500
+        try:
+            with self.assertRaisesRegex(cl.Fail, "cut off"):
+                site.req("POST", "/x", {})
+        finally:
+            urllib.request.urlopen = real
+
+    def test_readback_fails_once_then_confirmed_carries_on(self):
+        # the changelog write lands, its first read-back fails, the check finds the new block: home is still updated,
+        # and no further read of the changelog page is needed to carry on
+        s = FakeLive([page(), home()])
+        state = {"written": False, "failed": False}
+
+        def mark(site, pid):
+            if pid == 10:
+                state["written"] = True
+        s.before_write = mark
+
+        def flaky(site, pid, n):
+            if pid == 10 and state["written"] and not state["failed"]:
+                state["failed"] = True
+                raise cl.Fail("GET page 10: connection reset")
+        s.on_read = flaky
+        self.run_publish(s)
+        self.assertIn("1.1.0, released 30 October 2026", cl.visible_text(s.served[20]))
+
+    def test_rerun_with_block_already_new_carries_on(self):
+        # a re-run: the page already has exactly the new block (so old == new); a failed read-back must not stop it
+        first = FakeLive([page(), home()])
+        self.run_publish(first)
+        s = FakeLive([first.pages[10], home()])
+        state = {"failed": False}
+
+        def flaky(site, pid, n):
+            if pid == 10 and n == 3 and not state["failed"]:
+                state["failed"] = True
+                raise cl.Fail("GET page 10: connection reset")
+        s.on_read = flaky
+        self.run_publish(s)
+        self.assertIn("1.1.0, released 30 October 2026", cl.visible_text(s.served[20]))
+
+    def test_served_widget_ignores_commented_out_copies(self):
+        body = ('<!-- <div class="elementor-element elementor-element-old wla-version elementor-widget"><p>0.9.0</p></div> -->'
+                '<div class="elementor-element elementor-element-v1 wla-version elementor-widget">'
+                '<div class="elementor-widget-container"><p>1.1.0</p></div></div>')
+        self.assertEqual(cl.visible_text(cl.served_widget(body, "wla-version")), "1.1.0")
+        only_comment = '<!-- <div class="elementor-element elementor-element-old wla-version elementor-widget"><p>1.1.0</p></div> -->'
+        self.assertIsNone(cl.served_widget(only_comment, "wla-version"))
+
     def test_served_widget_ignores_divs_in_comments(self):
         body = ('<div class="elementor-element elementor-element-v1 wla-version elementor-widget">'
                 '<div class="elementor-widget-container"><!-- old wrapper: <div> --><p>1.1.0</p></div></div><p>footer</p>')

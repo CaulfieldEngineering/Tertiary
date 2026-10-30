@@ -428,7 +428,10 @@ class LiveSite:
                 if e.code >= 500 and method == "GET" and attempt < 2:
                     time.sleep(5)
                     continue
-                return e.code, e.read().decode("utf-8", "replace")
+                try:
+                    return e.code, e.read().decode("utf-8", "replace")
+                except (OSError, http.client.HTTPException) as e2:
+                    raise Fail(f"{method} {url} answered HTTP {e.code} and the answer was cut off: {e2}")
             except (OSError, http.client.HTTPException) as e:   # URLError, resets, timeouts, truncated answers
                 if method == "GET" and attempt < 2:
                     time.sleep(5)
@@ -533,12 +536,12 @@ def links(fragment):
 def served_widget(body, css_class):
     """The inside of the one rendered widget with this CSS class in a page's HTML (up to its own closing </div>),
     or None."""
-    m = list(re.finditer(r'<div\b[^>]*\bclass="elementor-element\b[^"]*\s' + re.escape(css_class) + r'[\s"][^>]*>', body))
+    scan = re.sub(r"<!--.*?-->", lambda c: " " * len(c.group(0)), body, flags=re.S)   # comments out, same offsets
+    m = list(re.finditer(r'<div\b[^>]*\bclass="elementor-element\b[^"]*\s' + re.escape(css_class) + r'[\s"][^>]*>', scan))
     if len(m) != 1:
         return None
     depth, start = 1, m[0].end()
-    scan = re.sub(r"<!--.*?-->", lambda c: " " * len(c.group(0)), body[start:], flags=re.S)   # same offsets
-    for t in re.finditer(r"<div\b|</div\s*>", scan):
+    for t in re.finditer(r"<div\b|</div\s*>", scan[start:]):
         depth += 1 if t.group(0).startswith("<div") else -1
         if depth == 0:
             return body[start:start + t.start()]
@@ -636,14 +639,17 @@ def publish(site, entries, version, page_id, plugin, dry_run=False, release_date
             raise Fail(f"{what} did not take" + (f" ({err})" if err else "") + f"; it reads: {visible_text(str(now))[:200]}")
         return back, fresh
 
-    def block_state():
+    def observe_block():
+        """("new" | "old" | "other" | "unknown", page or None, words for the error message)."""
         try:
-            _, now = read_owned(page_id, current_block)
+            pg, now = read_owned(page_id, current_block)
         except Unknown as e:
-            return f"the changelog page could not be read to check ({e})"
-        return ("the changelog page shows the old entries" if now == before["block"] else
-                f"the changelog page shows {version}" if now == block else
-                "the changelog block reads something else; look at it")
+            return "unknown", None, f"the changelog page could not be read to check ({e})"
+        if now == block:   # the target first: on a re-run the old block can be the same as the new one
+            return "new", pg, f"the changelog page shows {version} (checked)"
+        if now == before["block"]:
+            return "old", pg, "the changelog page shows the entries it had before (checked)"
+        return "other", pg, "the changelog block reads something else (checked); look at it"
 
     def build_block(new_block, expect_now=None, remember=None):
         def build(pg):
@@ -666,18 +672,18 @@ def publish(site, entries, version, page_id, plugin, dry_run=False, release_date
         try:
             back, _ = write_owned(page_id, build_block(block, remember=before), current_block, "The changelog page")
         except Fail as e:
-            state = block_state()
-            if state != f"the changelog page shows {version}":
-                raise Fail(f"Writing the changelog page failed: {e}. Checked again: {state}. The home page was not touched.")
-            back = site.page(page_id)   # it did land after all
+            state, pg, words = observe_block()
+            if state != "new":
+                raise Fail(f"Writing the changelog page failed: {e}. Checked again: {words}. The home page was not touched.")
+            back = pg   # it did land after all
         log(f"✓ Changelog page {page_id} written and read back")
         if home_new is not None:
             try:
                 hb, _ = write_owned(home_id, build_home, lambda pg: version_line_texts(pg, version_class),
                                     "The home page's version line")
             except Unknown as e:
-                raise Fail(f"The home page's version line was written but {e}, so whether it shows {version} is not "
-                           f"known; {block_state()}. Look at both pages, then re-run the job.")
+                raise Fail(f"The home page's version line was sent but {e}, so whether it shows {version} is not "
+                           f"known (not checked); {observe_block()[2]}. Look at both pages, then re-run the job.")
             except Fail as e:
                 # Confirmed: the home page is not on the new version. Put only the changelog block back (built on a
                 # fresh read, and only if it is still the block just written), so the site never shows the new
@@ -687,7 +693,7 @@ def publish(site, entries, version, page_id, plugin, dry_run=False, release_date
                                 "Putting the changelog block back")
                     undo = "the changelog block was put back as it was (read back)"
                 except Fail as e2:
-                    undo = f"the changelog block was not put back ({e2}); now {block_state()}"
+                    undo = f"putting the changelog block back was not confirmed ({e2}); now {observe_block()[2]}"
                 raise Fail(f"The home page's version line could not be set: {e}. {undo}. Fix the cause and re-run the job.")
             log(f"✓ Home page {home_id} version line set to {version} and read back")
     finally:
