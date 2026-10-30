@@ -985,22 +985,21 @@ namespace audio_plugin {
         lastHostBpm = hostInfo.bpm;
       }
 
+      // [Claude 2026-10-29] V-05: the flag is cleared BEFORE the rebuild (exchange), not after it. A change that
+      // arrived while the wave was being rebuilt was wiped out with the flag, and the band kept the old setting.
       // Flag to update Low LFO parameters
-      if (parameterChangedLfoLow) {
+      if (parameterChangedLfoLow.exchange(false)) {   // [Claude 2026-10-29] V-05
         lowLFO.updateLFO(sampleRate, hostInfo.bpm);
-        parameterChangedLfoLow = false;
       }
 
       // Flag to update Mid LFO parameters
-      if (parameterChangedLfoMid) {
+      if (parameterChangedLfoMid.exchange(false)) {   // [Claude 2026-10-29] V-05
         midLFO.updateLFO(sampleRate, hostInfo.bpm);
-        parameterChangedLfoMid = false;
       }
 
       // Flag to update High LFO parameters
-      if (parameterChangedLfoHigh) {
+      if (parameterChangedLfoHigh.exchange(false)) {   // [Claude 2026-10-29] V-05
         highLFO.updateLFO(sampleRate, hostInfo.bpm);
-        parameterChangedLfoHigh = false;
       }
 
       // Update Crossover Params

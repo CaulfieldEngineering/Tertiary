@@ -28,6 +28,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "LicenseCheck.h"
+#include <thread>   // [Claude 2026-10-29] the V-05 test plays on a second thread
 
 //==============================================================================
 // Allocation counter: every new/delete in this program goes through here. While
@@ -497,6 +498,48 @@ struct ProcessorTests : juce::UnitTest
                 expectWithinAbsoluteError (pb[i]->getValue(), pa[i]->getValue(), 1.0e-6f, pa[i]->getName (64));
 
             b.setStateInformation ("garbage", 7);   // a bad state is ignored, not a crash
+        }
+
+        // [Claude 2026-10-29] V-05 of the 2026-10-29 review: an LFO setting that changed while processBlock was rebuilding the wave (after the
+        // settings were read, before the "changed" flag was cleared) was lost: the band kept the old setting. A second
+        // thread plays while this one changes the low band's depth twice in quick succession, as a preset change does.
+        beginTest ("An LFO setting changed during the wave rebuild is not lost");
+        {
+            audio_plugin::AudioPluginAudioProcessor p;
+            p.setDemoState (false);
+            p.setRateAndBufferSizeDetails (192000, 32);        // the largest table, so the rebuild takes longest
+            p.prepareToPlay (192000, 32);
+            runDC (p, 64, 32);
+
+            std::atomic<bool> stop { false };
+            std::thread audio ([&]
+            {
+                juce::AudioBuffer<float> buffer (2, 32);
+                juce::MidiBuffer midi;
+                while (! stop)
+                {
+                    buffer.clear();
+                    p.processBlock (buffer, midi);
+                }
+            });
+
+            int lost = 0;
+            const int trials = 100;
+            for (int trial = 0; trial < trials; ++trial)
+            {
+                const float target = (trial % 2 == 0) ? 30.f : 70.f;
+                setParam (p, "Depth Low Band", target + 10.f);   // starts a rebuild
+                const auto start = juce::Time::getHighResolutionTicks();
+                while (juce::Time::highResolutionTicksToSeconds (juce::Time::getHighResolutionTicks() - start) < 100.0e-6) {}
+                setParam (p, "Depth Low Band", target);          // most likely lands during that rebuild
+                juce::Thread::sleep (20);                        // many blocks later
+                if (std::abs (p.lowLFO.getWaveDepth() - target) > 0.01f)
+                    ++lost;
+            }
+            stop = true;
+            audio.join();
+            logMessage ("Depth changes lost: " + juce::String (lost) + " of " + juce::String (trials));
+            expectEquals (lost, 0);
         }
 
         beginTest ("Demo timing: on 50 s, off 10 s; activating during the gap turns it back on");
