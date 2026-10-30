@@ -13,13 +13,248 @@ on:
     tags:
       - 'v*'
 
+# [Claude 2026-10-29] The release path, job by job (Joe: "you can just fix them now"):
+#   preflight   tag checks (on production, matches config.cmake, newer than every tag) and the secrets check.
+#               On a v* tag a missing signing, notarization or WordPress secret fails here, before any build.
+#               On staging a missing secret is a warning and that step is skipped (unsigned test builds).
+#   build       Mac and Windows: build, unit tests and pluginval on the release build, sign, package,
+#               notarize, staple, then verify the final installers are signed (and stapled) before upload.
+#   publish     tag only, after BOTH builds passed: uploads both verified installers to WordPress, then
+#               points the download redirects at them, then removes the old copies.
+#   web-build   the web demo; on a tag it goes to WonderlandAudio.com only after publish succeeded.
+#   cleanup-failed-tag   deletes the tag of a failed release so it can be pushed again, but never when the
+#               tag check could not reach GitHub (that is not a verdict), never after publish started, and
+#               never if the tag was moved to another commit meanwhile.
+# ==========================================================================================
 jobs:
+
+  # Job: Preflight (tag checks and secrets, before anything is built)
+  # ==========================================================================================
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      # "done" once the tag check reached a verdict; the cleanup job deletes a tag only then
+      tag_check: ${{ steps.tag_on_production.outputs.tag_check }}
+      # "true" when that platform's signing (and, on the Mac, notarization) secrets are all present;
+      # always true on a tag that got past preflight. The build's verify steps run when it is "true".
+      sign_win: ${{ steps.secrets.outputs.sign_win }}
+      sign_mac: ${{ steps.secrets.outputs.sign_mac }}
+
+    steps:
+    - name: Checkout code (full history, for the production branch check)
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+
+    - name: Extract and Set Configuration Variables
+      shell: bash
+      run: |
+        while IFS=' ' read -r key value
+        do
+          value=$(echo $value | tr -d '"')
+          echo "$key=$value" >> $GITHUB_ENV
+        done < <(grep 'set(w' ${GITHUB_WORKSPACE}/config.cmake | sed -e 's/set(//g' -e 's/)//g' -e 's/\s\+/ /g')
+
+
+    # Confirm Tag is of Production Branch, and not Staging - Tag Only
+    # [Claude 2026-10-29] Was origin/main, which this repo doesn't have, so every tag failed and was deleted.
+    # A fetch or compare problem now fails WITHOUT tag_check=done, so the cleanup job keeps the tag.
+    # ==========================================================================================
+    - name: Ensure Tag is on Production Branch
+      id: tag_on_production
+      if: startsWith(github.ref, 'refs/tags/v')
+      shell: bash
+      run: |
+        TAG_COMMIT=$(git rev-parse "${GITHUB_SHA}^{commit}")
+
+        FETCHED=false
+        for attempt in 1 2 3; do
+          if git fetch --no-tags origin +refs/heads/production:refs/remotes/origin/production; then
+            FETCHED=true
+            break
+          fi
+          echo "Fetch of origin/production failed (attempt $attempt of 3)"
+          [ $attempt -lt 3 ] && sleep $((attempt * 10))
+        done
+        if [ "$FETCHED" != "true" ] || ! git rev-parse --verify -q refs/remotes/origin/production >/dev/null; then
+          echo "::error::Could not fetch origin/production, so the tag could not be checked. The tag is KEPT: re-run this workflow."
+          exit 1
+        fi
+
+        set +e
+        git merge-base --is-ancestor "$TAG_COMMIT" refs/remotes/origin/production
+        RC=$?
+        set -e
+
+        if [ $RC -eq 0 ]; then
+          echo "tag_check=done" >> "$GITHUB_OUTPUT"
+          echo "✓ Tag commit $TAG_COMMIT is part of the production branch history."
+        elif [ $RC -eq 1 ]; then
+          echo "tag_check=done" >> "$GITHUB_OUTPUT"
+          echo "::error::Tag commit $TAG_COMMIT is NOT on the production branch. Merge to production first, then tag. Aborting."
+          exit 1
+        else
+          echo "::error::git could not compare the tag with origin/production (exit $RC). The tag is KEPT: re-run this workflow."
+          exit 1
+        fi
+
+
+    # Confirm GitHub Tag Matches config.cmake tag - Tags Only
+    # ==========================================================================================
+    - name: Verify Tag Version Matches Config Version
+      if: startsWith(github.ref, 'refs/tags/v')
+      shell: bash
+      run: |
+        TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+        echo "GitHub Tag Version: $TAG_VERSION"
+        echo "config.cmake Version: $wPROJECT_VERSION"
+
+        if [ "$TAG_VERSION" != "$wPROJECT_VERSION" ]; then
+          echo "::error::Tag version ($TAG_VERSION) does not match config.cmake version ($wPROJECT_VERSION)."
+          exit 1
+        fi
+
+        echo "✓ Tag and config.cmake versions match"
+
+
+    # Confirm New Tag is Greater than Previous tags - Tags Only
+    # [Claude 2026-10-29] Uses the tags the full checkout already has (no second fetch that could fail).
+    # ==========================================================================================
+    - name: Ensure New Tag is Greater Than Previous Tags
+      if: startsWith(github.ref, 'refs/tags/v')
+      shell: bash
+      run: |
+        NEW_VERSION="${GITHUB_REF#refs/tags/v}"
+        echo "New Tag Version: $NEW_VERSION"
+
+        OTHER_TAGS=$(git tag -l "v*" | sed 's/^v//' | grep -v -x -F "$NEW_VERSION" | sort -V || true)
+        if [ -z "$OTHER_TAGS" ]; then
+          echo "✓ This is the first tag in the repository"
+          exit 0
+        fi
+
+        HIGHEST_VERSION=$(echo "$OTHER_TAGS" | tail -n 1)
+        echo "Highest Existing Version: $HIGHEST_VERSION"
+
+        if [ "$(printf "%s\n" "$HIGHEST_VERSION" "$NEW_VERSION" | sort -V | tail -n 1)" != "$NEW_VERSION" ]; then
+          echo "::error::New tag version ($NEW_VERSION) is not greater than the previous highest ($HIGHEST_VERSION)."
+          exit 1
+        fi
+
+        echo "✓ New version is greater than all previous tags"
+
+
+    # Check every secret the release needs - All Cases
+    # [Claude 2026-10-29] On a v* tag: fail now, naming each missing secret, so an unsigned or unnotarized
+    # installer can never be published. On staging: a warning, and the signing steps skip (as before).
+    # ==========================================================================================
+    - name: Check Required Secrets
+      id: secrets
+      shell: bash
+      env:
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
+        AZURE_CODE_SIGNING_NAME: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
+        AZURE_CERT_PROFILE_NAME: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
+        MAC_APPLICATION_CERTIFICATE_BASE64: ${{ secrets.MAC_APPLICATION_CERTIFICATE_BASE64 }}
+        MAC_INSTALLER_CERTIFICATE_BASE64: ${{ secrets.MAC_INSTALLER_CERTIFICATE_BASE64 }}
+        MAC_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
+        WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.WORDPRESS_APPLICATION_PASSWORD }}
+        WORDPRESS_SITE: ${{ secrets.WORDPRESS_SITE }}
+        WORDPRESS_SFTP_PASS: ${{ secrets.WORDPRESS_SFTP_PASS }}
+        CE_GITHUB_PAT: ${{ secrets.CE_GITHUB_PAT }}
+      run: |
+        missing_in() {   # $1 = group name, rest = variable names; prints the missing ones
+          local group=$1; shift
+          local out=""
+          for v in "$@"; do
+            [ -z "${!v}" ] && out="$out $v"
+          done
+          [ -n "$out" ] && echo "$group:$out"
+          return 0
+        }
+
+        WIN_MISSING=$(missing_in "Windows signing (Azure)" AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_ENDPOINT AZURE_CODE_SIGNING_NAME AZURE_CERT_PROFILE_NAME)
+        MAC_MISSING=$(
+          missing_in "Apple signing" MAC_APPLICATION_CERTIFICATE_BASE64 MAC_INSTALLER_CERTIFICATE_BASE64 MAC_CERTIFICATE_PASSWORD KEYCHAIN_PASSWORD
+          missing_in "Apple notarization" APPLE_ID APPLE_TEAM_ID APPLE_APP_SPECIFIC_PASSWORD
+        )
+        SIGNING_MISSING=$(printf '%s\n' "$WIN_MISSING" "$MAC_MISSING" | sed '/^$/d')
+        RELEASE_MISSING=$(
+          missing_in "WordPress upload" WORDPRESS_USERNAME WORDPRESS_APPLICATION_PASSWORD WORDPRESS_SITE
+          missing_in "WonderlandAudio.com web demo" WORDPRESS_SFTP_PASS
+          missing_in "Wonderlab checkout (web demo)" CE_GITHUB_PAT
+        )
+
+        if [ -z "$WIN_MISSING" ]; then echo "sign_win=true" >> "$GITHUB_OUTPUT"; else echo "sign_win=false" >> "$GITHUB_OUTPUT"; fi
+        if [ -z "$MAC_MISSING" ]; then echo "sign_mac=true" >> "$GITHUB_OUTPUT"; else echo "sign_mac=false" >> "$GITHUB_OUTPUT"; fi
+
+        if [ -z "${wWOO_PRODUCT_ID:-}" ]; then
+          RELEASE_MISSING=$(printf '%s\n' "$RELEASE_MISSING" "WooCommerce product (config.cmake, not a secret): wWOO_PRODUCT_ID" | sed '/^$/d')
+        fi
+
+        if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [ -n "$SIGNING_MISSING$RELEASE_MISSING" ]; then
+            echo "::error::A release needs every secret below. Nothing was built or published."
+            printf '%s\n' "$SIGNING_MISSING" "$RELEASE_MISSING" | sed '/^$/d' | while read -r line; do
+              echo "::error::Missing secret(s) for $line"
+            done
+            exit 1
+          fi
+          echo "✓ All release secrets are set"
+        else
+          if [ -z "${wWOO_PRODUCT_ID:-}" ]; then echo "::warning::wWOO_PRODUCT_ID is not set in config.cmake; a release tag would stop here."; fi
+          if [ -n "$SIGNING_MISSING" ]; then
+            printf '%s\n' "$SIGNING_MISSING" | while read -r line; do
+              echo "::warning::Staging build: missing secret(s) for $line. That step is skipped, so this build's installers are NOT signed or notarized."
+            done
+          else
+            echo "✓ All signing and notarization secrets are set"
+          fi
+        fi
+
+
+    # The store product can deliver a key - All Cases (a warning on staging, a stop on a tag)
+    # [Claude 2026-10-29] Joe found the product on "Generator rule" with no generator: purchases got no key.
+    # Checked here, before any build, and again in publish right before anything is uploaded.
+    # ==========================================================================================
+    - name: Test the Store Product Checks (fake store, no network)
+      shell: bash
+      run: bash .github/scripts/test_woo_product.sh
+
+    - name: Check the WooCommerce Product Has a Working Key Source
+      shell: bash
+      env:
+        WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
+        WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.WORDPRESS_APPLICATION_PASSWORD }}
+        WORDPRESS_SITE: ${{ secrets.WORDPRESS_SITE }}
+      run: |
+        if [[ "$GITHUB_REF" != refs/tags/v* ]]; then
+          if [ -z "$WORDPRESS_SITE" ] || [ -z "$WORDPRESS_USERNAME" ] || [ -z "$WORDPRESS_APPLICATION_PASSWORD" ] || [ -z "${wWOO_PRODUCT_ID:-}" ]; then
+            echo "Staging: no store credentials or product id, store product check skipped."
+            exit 0
+          fi
+          export WARN_ONLY=1
+        fi
+        WOO_PRODUCT_ID="$wWOO_PRODUCT_ID" bash .github/scripts/woo_product.sh check-key-source
+
 
   # Job: Build
   # ==========================================================================================
   build:
+    needs: preflight
     permissions:
-      contents: write
+      contents: read
 
     strategy:
       matrix:
@@ -59,12 +294,14 @@ jobs:
 
     # Configure Projects - All Cases
     # ==========================================================================================
+    # [Claude 2026-10-29] -DWLA_TESTS=ON adds the unit test and host test programs (separate targets; the
+    # plug-in, app and installers are built exactly as before), so "Run Tests" below tests this very build.
     - name: Configure CMake
       run: |
         if [ "${{ matrix.version }}" == "Demo" ]; then
-          cmake -S "${{github.workspace}}" -B "${{github.workspace}}/build" -DBUILD_DEMO=ON ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake -S "${{github.workspace}}" -B "${{github.workspace}}/build" -DBUILD_DEMO=ON -DWLA_TESTS=ON ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
         elif [ "${{ matrix.version }}" == "Full" ]; then
-          cmake -S "${{github.workspace}}" -B "${{github.workspace}}/build" -DBUILD_DEMO=OFF ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake -S "${{github.workspace}}" -B "${{github.workspace}}/build" -DBUILD_DEMO=OFF -DWLA_TESTS=ON ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
         else
           echo "Unexpected version: ${{ matrix.version }}"
           exit 1
@@ -85,80 +322,8 @@ jobs:
       shell: bash
       
 
-    # Confirm Tag is of Production Branch, and not Staging - Tag Only
-    # ==========================================================================================
-    - name: Ensure Tag is on Production Branch
-      if: startsWith(github.ref, 'refs/tags/v')
-      shell: bash
-      run: |
-        git fetch origin main
-        TAG_COMMIT=$(git rev-parse HEAD)
-        if git merge-base --is-ancestor $TAG_COMMIT origin/main; then
-          echo "✓ Tag commit is part of main branch history."
-        else
-          echo "::error::Tag commit is NOT based on main branch. Aborting."
-          exit 1
-        fi
+    # [Claude 2026-10-29] The tag checks moved to the preflight job, so they run once, before any build.
 
-
-    # Confirm GitHub Tag Matches config.cmake tag - Tags Only
-    # ==========================================================================================
-    - name: Verify Tag Version Matches Config Version
-      if: startsWith(github.ref, 'refs/tags/v')
-      shell: bash
-      run: |
-        TAG_VERSION="${GITHUB_REF#refs/tags/v}"
-        echo "GitHub Tag Version: $TAG_VERSION"
-        echo "config.cmake Version: $wPROJECT_VERSION"
-        
-        if [ "$TAG_VERSION" != "$wPROJECT_VERSION" ]; then
-          echo "::error::Tag version ($TAG_VERSION) does not match config.cmake version ($wPROJECT_VERSION)."
-          exit 1
-        fi
-    
-        echo "✓ Tag and config.cmake versions match"
-    
-
-# Confirm New Tag is Greater than Previous tags - Tags Only
-# ==========================================================================================
-    - name: Ensure New Tag is Greater Than Previous Tags
-      if: startsWith(github.ref, 'refs/tags/v')
-      shell: bash
-      run: |
-        NEW_VERSION="${GITHUB_REF#refs/tags/v}"
-        echo "New Tag Version: $NEW_VERSION"
-        
-        # Fetch all tags with full history
-        git fetch --prune --tags --force
-        
-        # Get only the current active tags (not deleted ones)
-        CURRENT_TAGS=$(git tag -l "v*" | sed 's/^v//' | sort -V)
-        
-        echo "Current active tags:"
-        echo "$CURRENT_TAGS"
-        
-        # Skip the duplicate check entirely - we're pushing a new tag
-        # and it's valid because GitHub allows it to exist
-        
-        # If there are no tags, first tag is valid
-        if [ -z "$CURRENT_TAGS" ]; then
-          echo "✓ This is the first tag in the repository"
-          exit 0
-        fi
-        
-        # Get highest version from current active tags
-        HIGHEST_VERSION=$(echo "$CURRENT_TAGS" | tail -n 1)
-        
-        echo "Highest Existing Version: $HIGHEST_VERSION"
-        
-        # Compare versions
-        if [ "$(printf "%s\n" "$HIGHEST_VERSION" "$NEW_VERSION" | sort -V | tail -n 1)" != "$NEW_VERSION" ]; then
-          echo "::error::New tag version ($NEW_VERSION) is not greater than the previous highest ($HIGHEST_VERSION)."
-          exit 1
-        fi
-        
-        echo "✓ New version is greater than all previous tags"
-  
 
     # Compile Executables - All Cases
     # ==========================================================================================
@@ -166,11 +331,33 @@ jobs:
       run: cmake --build ${{github.workspace}}/build --config ${{ matrix.build_type }}
 
 
-    # Production Testing
+    # Production Testing - All Cases
+    # [Claude 2026-10-29] Was a TODO, so a release was never tested. Now the unit tests and pluginval run on
+    # the plug-in this job is about to sign and ship; a failure stops the build before anything is signed.
+    # The full suite (renders, auval, the Intel Mac, the host test) is test.yml, run on the work branches.
     # ==========================================================================================
-    - name: Run Tests
+    - name: Run Tests (unit tests and pluginval on this build)
+      shell: bash
+      env:
+        PLUGINVAL_TAG: v1.0.4
+        STRICTNESS: 10
       run: |
-        echo "TODO: Insert test runner here"
+        set -o pipefail
+        A="build/plugin"
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          T=$(cygpath -m "$RUNNER_TEMP"); EXE=".exe"; PV_ZIP="pluginval_Windows.zip"; PV="$T/pv/pluginval.exe"
+        else
+          T="$RUNNER_TEMP"; EXE=""; PV_ZIP="pluginval_macOS.zip"; PV="$T/pv/pluginval.app/Contents/MacOS/pluginval"
+        fi
+        curl -fsSL -o "$T/pv.zip" "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_TAG/$PV_ZIP"
+        unzip -q -o "$T/pv.zip" -d "$T/pv"
+
+        echo "Unit tests..."
+        "$A/${wPLUGIN_NAME}Tests_artefacts/Release/${wPLUGIN_NAME}Tests$EXE"
+
+        echo "pluginval (strictness $STRICTNESS) on the VST3..."
+        "$PV" --strictness-level "$STRICTNESS" --validate-in-process           --validate "$A/${wPLUGIN_NAME}_artefacts/Release/VST3/${wPLUGIN_NAME}.vst3"
+        echo "✓ Tests passed"
 
 
     # Debug; print project variables - All Cases
@@ -202,7 +389,12 @@ jobs:
       shell: bash
       run: |
         if [ -z "${{ secrets.AZURE_TENANT_ID }}" ] || [ -z "${{ secrets.AZURE_CLIENT_ID }}" ] || [ -z "${{ secrets.AZURE_CLIENT_SECRET }}" ] || [ -z "${{ secrets.AZURE_ENDPOINT }}" ] || [ -z "${{ secrets.AZURE_CODE_SIGNING_NAME }}" ] || [ -z "${{ secrets.AZURE_CERT_PROFILE_NAME }}" ]; then
-          echo "Required secrets for Azure signing are not set. Skipping signing step."
+          # [Claude 2026-10-29] Never an unsigned release (preflight already stops this; belt and braces)
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "::error::Azure signing secrets are missing on a release tag. Stopping."
+            exit 1
+          fi
+          echo "::warning::Required secrets for Azure signing are not set. Skipping signing step (staging only)."
           echo "proceed=false" >> $GITHUB_OUTPUT
         else
           echo "proceed=true" >> $GITHUB_OUTPUT
@@ -271,7 +463,8 @@ jobs:
       run: |
         # Check for required secrets
         if [ -z "$APPLICATION_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
-          echo "Required secrets for application signing are not set. Skipping application signing step."
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "::error::Signing or notarization secrets are missing on a release tag. Stopping."; exit 1; fi
+          echo "::warning::Required secrets for application signing are not set. Skipping application signing step."
           exit 0
         fi
 
@@ -543,7 +736,8 @@ jobs:
       run: |
         # Check for required secrets
         if [ -z "$INSTALLER_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
-          echo "Required secrets for installer signing are not set. Skipping installer signing step."
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "::error::Signing or notarization secrets are missing on a release tag. Stopping."; exit 1; fi
+          echo "::warning::Required secrets for installer signing are not set. Skipping installer signing step."
           exit 0
         fi
 
@@ -690,7 +884,8 @@ jobs:
       run: |
         # Check for required secrets
         if [ -z "$INSTALLER_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
-          echo "Required secrets for installer signing are not set. Skipping installer signing step."
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "::error::Signing or notarization secrets are missing on a release tag. Stopping."; exit 1; fi
+          echo "::warning::Required secrets for installer signing are not set. Skipping installer signing step."
           exit 0
         fi
 
@@ -756,7 +951,8 @@ jobs:
       run: |
         # Check for required secrets
         if [ -z "$APPLE_ID" ] || [ -z "$APPLE_TEAM_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
-          echo "Required secrets for notarization are not set. Skipping notarization step."
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "::error::Signing or notarization secrets are missing on a release tag. Stopping."; exit 1; fi
+          echo "::warning::Required secrets for notarization are not set. Skipping notarization step."
           exit 0
         fi
 
@@ -832,11 +1028,15 @@ jobs:
       if: matrix.os == 'macos-latest'
       env:
         REPOSITORY_NAME: ${{ github.event.repository.name }}
-        APPLE_ID: ${{ secrets.APPLE_ID }}  # Used to check if notarization was run
+        # [Claude 2026-10-29] All three, as the notarize step checks (was APPLE_ID alone)
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       run: |
         # Check if notarization was meant to run
-        if [ -z "$APPLE_ID" ]; then
-          echo "Notarization credentials not set. Skipping stapling step."
+        if [ -z "$APPLE_ID" ] || [ -z "$APPLE_TEAM_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "::error::Notarization secrets are missing on a release tag. Stopping."; exit 1; fi
+          echo "::warning::Notarization credentials not set. Skipping stapling step."
           exit 0
         fi
     
@@ -861,240 +1061,89 @@ jobs:
         echo "Stapling process completed successfully."
 
 
+    # Verify the Final Installers Are Signed (and Stapled) - whenever signing ran; always on a tag
+    # [Claude 2026-10-29] Checks the files customers download, not the steps' word for it. Writes a .sha256
+    # next to each installer; the publish job uploads only a file whose hash still matches.
+    # ==========================================================================================
+    - name: Verify Mac Installer Is Signed, Notarized and Stapled
+      if: matrix.os == 'macos-latest' && needs.preflight.outputs.sign_mac == 'true'
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+      shell: bash
+      run: |
+        SUFFIX=""
+        if [[ "${{ matrix.version }}" == "Demo" ]]; then SUFFIX=".D"; fi
+        PKG="${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
+        [ -s "$PKG" ] || { echo "::error::Installer not found: $PKG"; exit 1; }
+
+        echo "Installer signature..."
+        SIG=$(pkgutil --check-signature "$PKG")
+        echo "$SIG"
+        grep -q "Developer ID Installer" <<< "$SIG" || { echo "::error::$PKG is not signed with a Developer ID Installer certificate"; exit 1; }
+
+        echo "Notarization ticket stapled, and Gatekeeper accepts it..."
+        xcrun stapler validate "$PKG"
+        spctl --assess --type install -vv "$PKG"
+
+        echo "Every bundle inside the installer is signed (Developer ID Application, hardened runtime)..."
+        X="$RUNNER_TEMP/pkg-expanded"
+        rm -rf "$X"
+        pkgutil --expand-full "$PKG" "$X"
+        for want in $wFORMATS; do
+          case "$want" in
+            VST3) ext="vst3" ;;
+            AU) ext="component" ;;
+            Standalone) ext="app" ;;
+            *) continue ;;
+          esac
+          FOUND=$(find "$X" -type d -name "*.${ext}" -prune | head -n 1)
+          [ -n "$FOUND" ] || { echo "::error::No .${ext} found inside $PKG (wFORMATS lists $want)"; exit 1; }
+          codesign --verify --deep --strict --verbose=2 "$FOUND"
+          INFO=$(codesign -dv --verbose=2 "$FOUND" 2>&1)
+          grep -q "Authority=Developer ID Application" <<< "$INFO" || { echo "::error::$FOUND is not signed with Developer ID Application"; exit 1; }
+          grep -q "runtime" <<< "$INFO" || { echo "::error::$FOUND is not signed with the hardened runtime"; exit 1; }
+          echo "✓ $(basename "$FOUND")"
+        done
+
+        shasum -a 256 "$PKG" | awk '{print $1}' > "$PKG.sha256"
+        echo "✓ Mac installer verified: $(basename "$PKG")  sha256 $(cat "$PKG.sha256")"
+
+
+    - name: Verify Windows Installer and Binaries Are Signed
+      if: matrix.os == 'windows-latest' && needs.preflight.outputs.sign_win == 'true'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $exe = @(Get-ChildItem "build\*WinInstaller_$($env:wPROJECT_VERSION).exe")
+        if ($exe.Count -ne 1) { Write-Host "::error::Expected one Windows installer for $($env:wPROJECT_VERSION), found $($exe.Count)"; exit 1 }
+        $artefacts = "build\plugin\$($env:wPLUGIN_NAME)_artefacts\Release"
+        $files = @($exe[0].FullName) + @(Get-ChildItem $artefacts -Recurse -File -Include *.exe,*.vst3 | ForEach-Object FullName)
+        if ($files.Count -lt 2) { Write-Host "::error::No plug-in or app binaries found under $artefacts"; exit 1 }
+        foreach ($f in $files) {
+          $sig = Get-AuthenticodeSignature $f
+          if ($sig.Status -ne 'Valid') { Write-Host "::error::Not validly signed ($($sig.Status)): $f"; exit 1 }
+          Write-Host "OK  $f  ($($sig.SignerCertificate.Subject))"
+        }
+        $hash = (Get-FileHash $exe[0].FullName -Algorithm SHA256).Hash.ToLower()
+        [IO.File]::WriteAllText("$($exe[0].FullName).sha256", $hash)
+        Write-Host "Windows installer verified: $($exe[0].Name)  sha256 $hash"
+
+
     # UPLOAD ARTIFACTS - All Cases
     # ==========================================================================================
     - name: Upload Final Installer Artifact
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.os }}-installer
+        if-no-files-found: error
         path: |
           build/*Installer_*.pkg
           build/*Installer_*.exe
+          build/*Installer_*.sha256
 
 
-    # Upload Installers to WordPress Media Library - Tag Only
-    # ==========================================================================================
-    - name: Upload Installers to WordPress
-      if: startsWith(github.ref, 'refs/tags/v')
-      env:
-        WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
-        WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.WORDPRESS_APPLICATION_PASSWORD }}
-        WORDPRESS_SITE: ${{ secrets.WORDPRESS_SITE }}
-      shell: bash
-      run: |
-        set -e  # Exit immediately if any command exits with a non-zero status
-
-        # Function to URL encode a string
-        urlencode() {
-          local string="${1}"
-          local strlen=${#string}
-          local encoded=""
-          local pos c o
-          for (( pos=0 ; pos<strlen ; pos++ )); do
-            c=${string:$pos:1}
-            case "$c" in
-              [-_.~a-zA-Z0-9]) o="${c}" ;;
-              *) printf -v o '%%%02x' "'$c"
-            esac
-            encoded+="${o}"
-          done
-          echo "${encoded}"
-        }
-
-        # Check if WordPress credentials are set
-        if [ -z "$WORDPRESS_USERNAME" ] || [ -z "$WORDPRESS_APPLICATION_PASSWORD" ] || [ -z "$WORDPRESS_SITE" ]; then
-          echo "WordPress credentials not set. Skipping WordPress upload step."
-          exit 0
-        fi
-
-        # Extract repository name
-        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
-        
-        # Set file paths and titles based on OS
-        if [ "${{ matrix.os }}" == "macos-latest" ]; then
-          FILE_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
-          FILE_TITLE="${wPLUGIN_NAME} Installer v${wPROJECT_VERSION} for Mac"
-          FILE_NAME="${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
-        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
-          FILE_PATH="${GITHUB_WORKSPACE}/build/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
-          FILE_TITLE="${wPLUGIN_NAME} Installer v${wPROJECT_VERSION} for Windows"
-          FILE_NAME="${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
-        else
-          echo "Unsupported OS for WordPress upload"
-          exit 1
-        fi
-
-        # Check if file exists
-        if [ ! -f "$FILE_PATH" ]; then
-          echo "File not found: $FILE_PATH"
-          exit 1
-        fi
-
-        # Search for existing file
-        ENCODED_TITLE=$(urlencode "$FILE_TITLE")
-        echo "Searching for existing file with title: $FILE_TITLE"
-        EXISTING_FILE_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE}/wp-json/wp/v2/media?search=${ENCODED_TITLE}" \
-          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
-        EXISTING_FILE_ID=$(echo "$EXISTING_FILE_RESPONSE" | jq -r '.[] | select(.title.rendered == "'"$FILE_TITLE"'") | .id')
-
-        # Delete existing file if found
-        if [ -n "$EXISTING_FILE_ID" ]; then
-          echo "Existing file found with ID: $EXISTING_FILE_ID. Deleting..."
-          DELETE_RESPONSE=$(curl -s -X DELETE "${WORDPRESS_SITE}/wp-json/wp/v2/media/${EXISTING_FILE_ID}?force=true" \
-            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
-          
-          if echo "$DELETE_RESPONSE" | jq -e '.deleted == true' > /dev/null; then
-            echo "Existing file successfully deleted."
-          else
-            echo "Failed to delete existing file. Response: $DELETE_RESPONSE"
-            exit 1
-          fi
-        else
-          echo "No existing file found with the exact title."
-        fi
-
-        # Upload new file to WordPress Media Library
-        echo "Uploading new file to WordPress Media Library..."
-        UPLOAD_RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE}/wp-json/wp/v2/media" \
-          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
-          -H "Content-Disposition: attachment; filename=$(basename "$FILE_PATH")" \
-          -F "file=@${FILE_PATH}" \
-          -F "title=${FILE_TITLE}" \
-          -F "alt_text=${REPO_NAME} Installer" \
-          -F "caption=Installer for ${REPO_NAME} v${wPROJECT_VERSION}" \
-          -F "description=${FILE_TITLE}")
-
-        # Check upload response and extract URL
-        if echo "$UPLOAD_RESPONSE" | jq -e '.id' > /dev/null; then
-          echo "PASS: File successfully uploaded to WordPress Media Library."
-          FILE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.source_url')
-        else
-          echo "FAIL: Upload failed. Response: $UPLOAD_RESPONSE"
-          exit 1
-        fi
-
-        echo "Uploaded file URL: $FILE_URL"
-
-        # Extract and save URL root path
-        URL_ROOT_PATH=$(dirname "$FILE_URL")
-        echo "URL root path: $URL_ROOT_PATH"
-        echo "URL_ROOT_PATH=$URL_ROOT_PATH" >> $GITHUB_ENV
-        
-
-    # Update the Download Redirect URLs - Tag Only
-    # Interfaces with the WordPress "Redirection" Plugin
-    # ==========================================================================================
-    - name: Update Download Redirect URLs
-      if: startsWith(github.ref, 'refs/tags/v')
-      env:
-        WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
-        WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.WORDPRESS_APPLICATION_PASSWORD }}
-        WORDPRESS_SITE_URL: ${{ secrets.WORDPRESS_SITE }}
-      shell: bash
-      run: |
-        set -e  # Exit immediately if any command exits with a non-zero status
-        echo "Starting update of download redirect URLs in WordPress..."
-        
-        # Validate required variables
-        if [ -z "$WORDPRESS_USERNAME" ] || [ -z "$WORDPRESS_APPLICATION_PASSWORD" ] || [ -z "$WORDPRESS_SITE_URL" ]; then
-          echo "Error: Missing WordPress credentials or site URL."
-          exit 0
-        fi
-        
-        # Fetch and debug group response
-        echo "Fetching default group ID..."
-        GROUP_RESPONSE=$(curl -s -X GET "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/group" \
-          -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
-        echo "Raw group response: $GROUP_RESPONSE"
-        
-        # Extract default group ID based on response structure
-        DEFAULT_GROUP=$(echo "$GROUP_RESPONSE" | jq -r '.items[0].id')
-        if [ -z "$DEFAULT_GROUP" ]; then
-          echo "Error: Failed to retrieve default group ID."
-          exit 1
-        fi
-        echo "Default group ID: $DEFAULT_GROUP"
-        
-        # Get repository name in both cases
-        REPO_NAME=$(echo $GITHUB_REPOSITORY | awk -F / '{print $2}')
-        REPO_NAME_LOWER=$(echo $REPO_NAME | tr '[:upper:]' '[:lower:]')
-        
-        # Construct destination URLs (keeping original case for file names)
-        FILE_URL_MAC="${URL_ROOT_PATH}/${REPO_NAME}MacInstaller_${wPROJECT_VERSION}.pkg"
-        FILE_URL_WIN="${URL_ROOT_PATH}/${REPO_NAME}WinInstaller_${wPROJECT_VERSION}.exe"
-        
-        # Construct Source URLs (in lowercase)
-        SOURCE_URL_MAC="/${REPO_NAME_LOWER}-download-mac"
-        SOURCE_URL_WIN="/${REPO_NAME_LOWER}-download-windows"
-        
-        # Function to update or create redirect
-        update_redirect() {
-          local source_url=$1
-          local target_url=$2
-          
-          echo "Processing redirect for ${source_url}"
-          
-          # First, try to find existing redirect
-          echo "Checking for existing redirect..."
-          EXISTING_REDIRECT=$(curl -s -X GET "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/redirect?search=${source_url}" \
-            -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD")
-          
-          # Extract redirect ID if it exists
-          REDIRECT_ID=$(echo "$EXISTING_REDIRECT" | jq -r '.items[] | select(.url=="'"${source_url}"'") | .id')
-          
-          if [ ! -z "$REDIRECT_ID" ]; then
-            echo "Found existing redirect (ID: ${REDIRECT_ID}). Updating..."
-            RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/redirect/${REDIRECT_ID}" \
-              -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
-              -H "Content-Type: application/json" \
-              -d '{
-                "url": "'"${source_url}"'",
-                "action_data": {
-                  "url": "'"${target_url}"'",
-                  "code": 301
-                },
-                "match_type": "url",
-                "action_type": "url",
-                "regex": false,
-                "status": "enabled",
-                "group_id": '"${DEFAULT_GROUP}"'
-              }')
-          else
-            echo "No existing redirect found. Creating new one..."
-            RESPONSE=$(curl -s -X POST "${WORDPRESS_SITE_URL}/wp-json/redirection/v1/redirect" \
-              -u "$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD" \
-              -H "Content-Type: application/json" \
-              -d '{
-                "url": "'"${source_url}"'",
-                "action_data": {
-                  "url": "'"${target_url}"'",
-                  "code": 301
-                },
-                "match_type": "url",
-                "action_type": "url",
-                "regex": false,
-                "status": "enabled",
-                "group_id": '"${DEFAULT_GROUP}"'
-              }')
-          fi
-          
-          # Check for errors in response
-          if echo "$RESPONSE" | jq -e 'has("code")' > /dev/null; then
-            echo "Error in API response: $RESPONSE"
-            return 1
-          fi
-          
-          echo "Successfully processed redirect for ${source_url}"
-        }
-        
-        # Update redirections
-        update_redirect "$SOURCE_URL_MAC" "$FILE_URL_MAC"
-        update_redirect "$SOURCE_URL_WIN" "$FILE_URL_WIN"
-        
-        echo "Redirect URLs updated successfully."
-
-
-
+    # [Claude 2026-10-29] The WordPress upload and the download redirects moved to the publish job, which runs
+    # only after BOTH the Mac and the Windows build passed (before, the Mac could publish while Windows failed).
 
 
     # Check SSH Credentials Available
@@ -1212,44 +1261,234 @@ jobs:
 
 
 
-    # Install GitHub CLI - Tag Only
-    # ==========================================================================================
-    - name: Install GitHub CLI
-      if: failure() && startsWith(github.ref, 'refs/tags/v')
-      run: |
-        if [[ "$RUNNER_OS" == "Windows" ]]; then
-          choco install gh -y
-        else
-          brew install gh || (which apt && sudo apt update && sudo apt install gh -y)
-        fi
+  # Job: Publish (tag only, after both builds passed and verified their installers)
+  # [Claude 2026-10-29] Was two steps inside each build job, so the Mac could upload and repoint the downloads
+  # while Windows was still building or had failed. Now: both installers or neither. Order: upload both, check
+  # each upload by downloading it again, repoint the redirects, and only then remove older copies of the same
+  # version, so the download links never point at a deleted file.
+  # ==========================================================================================
+  publish:
+    needs: [preflight, build]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
+      WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.WORDPRESS_APPLICATION_PASSWORD }}
+      WORDPRESS_SITE: ${{ secrets.WORDPRESS_SITE }}
+
+    steps:
+    - name: Checkout code (for config.cmake)
+      uses: actions/checkout@v4
+
+
+    - name: Extract and Set Configuration Variables
       shell: bash
+      run: |
+        while IFS=' ' read -r key value
+        do
+          value=$(echo $value | tr -d '"')
+          echo "$key=$value" >> $GITHUB_ENV
+        done < <(grep 'set(w' ${GITHUB_WORKSPACE}/config.cmake | sed -e 's/set(//g' -e 's/)//g' -e 's/\s\+/ /g')
 
 
-    # Delete Failed Release & Tag if unsuccessful - Tag Only
+    - name: Download Both Verified Installers
+      uses: actions/download-artifact@v4
+      with:
+        pattern: '*-installer'
+        merge-multiple: true
+        path: dist
+
+
+    - name: Check Both Installers (this version, unchanged since they were verified)
+      shell: bash
+      run: |
+        shopt -s nullglob
+        cd dist
+        ls -la
+        MAC=( *MacInstaller_"${wPROJECT_VERSION}".pkg )
+        WIN=( *WinInstaller_"${wPROJECT_VERSION}".exe )
+        [ ${#MAC[@]} -eq 1 ] || { echo "::error::Expected one Mac installer for ${wPROJECT_VERSION}, found ${#MAC[@]}. Nothing was published."; exit 1; }
+        [ ${#WIN[@]} -eq 1 ] || { echo "::error::Expected one Windows installer for ${wPROJECT_VERSION}, found ${#WIN[@]}. Nothing was published."; exit 1; }
+        for f in "${MAC[0]}" "${WIN[0]}"; do
+          [ -s "$f.sha256" ] || { echo "::error::$f has no .sha256, so it was never verified as signed. Nothing was published."; exit 1; }
+          [ "$(sha256sum "$f" | awk '{print $1}')" = "$(tr -d '[:space:]' < "$f.sha256")" ] || { echo "::error::$f changed after it was verified. Nothing was published."; exit 1; }
+          echo "✓ $f matches its verified hash"
+        done
+        echo "MAC_FILE=${GITHUB_WORKSPACE}/dist/${MAC[0]}" >> "$GITHUB_ENV"
+        echo "WIN_FILE=${GITHUB_WORKSPACE}/dist/${WIN[0]}" >> "$GITHUB_ENV"
+
+
+    - name: Check the WooCommerce Product Has a Working Key Source (before anything is uploaded)
+      shell: bash
+      run: WOO_PRODUCT_ID="$wWOO_PRODUCT_ID" bash .github/scripts/woo_product.sh check-key-source
+
+
+    # Upload Installers to WordPress Media Library - Tag Only
     # ==========================================================================================
+    - name: Upload Installers to WordPress
+      shell: bash
+      run: |
+        set -euo pipefail
+        AUTH="$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD"
+        REPO_NAME="${GITHUB_REPOSITORY#*/}"
+        urlencode() { jq -rn --arg s "$1" '$s|@uri'; }
+
+        upload() {   # $1 file, $2 title, $3 MAC or WIN
+          local file=$1 title=$2 key=$3 old resp id url
+          echo "Existing copies titled: $title"
+          old=$(curl -fsS -u "$AUTH" "${WORDPRESS_SITE}/wp-json/wp/v2/media?search=$(urlencode "$title")&per_page=100" \
+                | jq -r --arg t "$title" '.[] | select(.title.rendered == $t) | .id' | tr '\n' ' ')
+          echo "  ${old:-none} (removed only after the redirects point at the new upload)"
+
+          echo "Uploading $(basename "$file")..."
+          resp=$(curl -sS -X POST "${WORDPRESS_SITE}/wp-json/wp/v2/media" -u "$AUTH" \
+            -H "Content-Disposition: attachment; filename=$(basename "$file")" \
+            -F "file=@${file}" \
+            -F "title=${title}" \
+            -F "alt_text=${REPO_NAME} Installer" \
+            -F "caption=Installer for ${REPO_NAME} v${wPROJECT_VERSION}" \
+            -F "description=${title}")
+          id=$(jq -r '.id // empty' <<< "$resp" 2>/dev/null || true)
+          url=$(jq -r '.source_url // empty' <<< "$resp" 2>/dev/null || true)
+          if [ -z "$id" ] || [ -z "$url" ]; then
+            echo "::error::Upload of $(basename "$file") failed. Response: $resp"
+            exit 1
+          fi
+
+          echo "Checking the upload by downloading it again..."
+          curl -fsSL -o "$RUNNER_TEMP/check.bin" "$url"
+          if [ "$(sha256sum "$RUNNER_TEMP/check.bin" | awk '{print $1}')" != "$(sha256sum "$file" | awk '{print $1}')" ]; then
+            echo "::error::The file WordPress serves at $url is not the verified installer."
+            exit 1
+          fi
+          echo "✓ $url (media id $id)"
+          echo "${key}_URL=$url" >> "$GITHUB_ENV"
+          echo "${key}_OLD_IDS=$old" >> "$GITHUB_ENV"
+        }
+
+        upload "$MAC_FILE" "${wPLUGIN_NAME} Installer v${wPROJECT_VERSION} for Mac" MAC
+        upload "$WIN_FILE" "${wPLUGIN_NAME} Installer v${wPROJECT_VERSION} for Windows" WIN
+
+
+    # Update the Download Redirect URLs - Tag Only
+    # Interfaces with the WordPress "Redirection" Plugin
+    # [Claude 2026-10-29] Points at the URLs WordPress actually returned (was a path guessed from the Mac
+    # upload), and a non-JSON answer now counts as a failure (it used to pass).
+    # ==========================================================================================
+    - name: Update Download Redirect URLs
+      shell: bash
+      run: |
+        set -euo pipefail
+        AUTH="$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD"
+
+        GROUP_RESPONSE=$(curl -fsS -u "$AUTH" "${WORDPRESS_SITE}/wp-json/redirection/v1/group")
+        DEFAULT_GROUP=$(jq -r '.items[0].id // empty' <<< "$GROUP_RESPONSE")
+        if [ -z "$DEFAULT_GROUP" ]; then
+          echo "::error::Failed to retrieve the Redirection group ID. Response: $GROUP_RESPONSE"
+          exit 1
+        fi
+        echo "Default group ID: $DEFAULT_GROUP"
+
+        REPO_NAME="${GITHUB_REPOSITORY#*/}"
+        REPO_NAME_LOWER=$(echo "$REPO_NAME" | tr '[:upper:]' '[:lower:]')
+
+        update_redirect() {   # $1 source path, $2 target URL
+          local source_url=$1 target_url=$2 existing redirect_id body response endpoint
+          echo "Redirect ${source_url} -> ${target_url}"
+          existing=$(curl -fsS -u "$AUTH" "${WORDPRESS_SITE}/wp-json/redirection/v1/redirect?search=${source_url}")
+          redirect_id=$(jq -r --arg u "$source_url" '.items[] | select(.url == $u) | .id' <<< "$existing" | head -n 1)
+          body=$(jq -n --arg u "$source_url" --arg t "$target_url" --argjson g "$DEFAULT_GROUP" \
+            '{url: $u, action_data: {url: $t, code: 301}, match_type: "url", action_type: "url", regex: false, status: "enabled", group_id: $g}')
+          endpoint="${WORDPRESS_SITE}/wp-json/redirection/v1/redirect"
+          [ -n "$redirect_id" ] && endpoint="${endpoint}/${redirect_id}"
+          response=$(curl -sS -X POST "$endpoint" -u "$AUTH" -H "Content-Type: application/json" -d "$body")
+          if ! jq -e . >/dev/null 2>&1 <<< "$response" || jq -e 'type == "object" and has("code")' >/dev/null <<< "$response"; then
+            echo "::error::Redirection API error for ${source_url}: $response"
+            exit 1
+          fi
+          echo "✓ ${source_url}"
+        }
+
+        update_redirect "/${REPO_NAME_LOWER}-download-mac" "$MAC_URL"
+        update_redirect "/${REPO_NAME_LOWER}-download-windows" "$WIN_URL"
+        echo "Redirect URLs updated successfully."
+
+
+    - name: Remove Older Copies of This Version from WordPress
+      shell: bash
+      run: |
+        AUTH="$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD"
+        for id in $MAC_OLD_IDS $WIN_OLD_IDS; do
+          if curl -fsS -X DELETE -u "$AUTH" "${WORDPRESS_SITE}/wp-json/wp/v2/media/${id}?force=true" | jq -e '.deleted == true' >/dev/null; then
+            echo "✓ Removed older copy, media id $id"
+          else
+            echo "::warning::Could not remove older copy, media id $id (the new installers are live; remove it by hand)"
+          fi
+        done
+
+
+    # Tell existing users about the new version - Tag Only, last
+    # [Claude 2026-10-29] The product's Serial Numbers "Software version" is what the plugin's version_check
+    # route returns ("new version available"), so it changes only now that both new installers are live and
+    # the download links point at them. Read back and compared; a mismatch fails the job.
+    # ==========================================================================================
+    - name: Set the WooCommerce Software Version to the Tag Version
+      shell: bash
+      run: WOO_PRODUCT_ID="$wWOO_PRODUCT_ID" bash .github/scripts/woo_product.sh set-version "${GITHUB_REF#refs/tags/v}"
+
+
+  # Job: Delete the tag of a failed release, so the same tag can be pushed again - Tag Only
+  # [Claude 2026-10-29] Was a step in each build job. It now keeps the tag when:
+  #   - the tag check never reached a verdict (GitHub could not be reached): that is not a bad tag;
+  #   - publishing failed part-way: files may already be live, and the tag records what was released;
+  #   - the tag now points at another commit (it was moved by hand meanwhile).
+  # Any error in here also keeps the tag.
+  # ==========================================================================================
+  cleanup-failed-tag:
+    needs: [preflight, build, publish]
+    if: failure() && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
     - name: Remove GitHub Tag and Release on Failure
-      if: failure() && startsWith(github.ref, 'refs/tags/v')
-      shell: bash  # Explicitly specify bash shell
+      shell: bash
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG_CHECK: ${{ needs.preflight.outputs.tag_check }}
+        PUBLISH_RESULT: ${{ needs.publish.result }}
       run: |
+        set -euo pipefail
         TAG_NAME="${GITHUB_REF#refs/tags/}"
+
+        if [ "$TAG_CHECK" != "done" ]; then
+          echo "::warning::The tag check did not reach a verdict (for example GitHub could not be reached), so $TAG_NAME is KEPT. Re-run the workflow."
+          exit 0
+        fi
+        if [ "$PUBLISH_RESULT" = "failure" ] || [ "$PUBLISH_RESULT" = "cancelled" ]; then
+          echo "::error::Publishing to WordPress stopped part-way, so files may already be live. $TAG_NAME is KEPT. Check the media library and the download redirects, then re-run the failed jobs."
+          exit 0
+        fi
+
+        TAG_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG_NAME}" --jq .sha)
+        if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+          echo "::warning::$TAG_NAME now points at $TAG_SHA, not the commit this run built ($GITHUB_SHA). Leaving it alone."
+          exit 0
+        fi
+
         echo "Cleaning up failed release and tag: $TAG_NAME"
-        
-        # Delete GitHub release (if exists)
-        RELEASE_ID=$(gh api repos/${GITHUB_REPOSITORY}/releases \
-          --jq ".[] | select(.tag_name==\"$TAG_NAME\") | .id")
-        
+        RELEASE_ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate --jq ".[] | select(.tag_name==\"$TAG_NAME\") | .id")
         if [ -n "$RELEASE_ID" ]; then
           echo "Deleting release ID: $RELEASE_ID"
-          gh api -X DELETE repos/${GITHUB_REPOSITORY}/releases/$RELEASE_ID
+          gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/$RELEASE_ID"
         else
           echo "No matching release found for tag: $TAG_NAME"
         fi
-        
-        # Delete the tag itself
+
         echo "Deleting tag: $TAG_NAME"
-        gh api -X DELETE repos/${GITHUB_REPOSITORY}/git/refs/tags/$TAG_NAME
+        gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/$TAG_NAME"
 
 
   # Job: Web Build (Wonderlab)
@@ -1258,7 +1497,9 @@ jobs:
   # to CaulfieldEngineering.com/plug-ins/{repo_name}/web/
   # ==========================================================================================
   web-build:
-    needs: build
+    # [Claude 2026-10-29] On a tag, only after the installers were published (publish is skipped on staging)
+    needs: [build, publish]
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.publish.result == 'success' || needs.publish.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1521,8 +1762,10 @@ jobs:
 
     # Deploy Web App to WonderlandAudio.com (tagged releases only)
     # ==========================================================================================
+    # [Claude 2026-10-29] Was also gated on SSH_ID, which this step doesn't use, so a missing SSH_ID silently
+    # skipped the production demo. It uses WORDPRESS_SFTP_PASS, which preflight requires on a tag.
     - name: Deploy Web App to WonderlandAudio.com
-      if: steps.check_ssh_web.outputs.ssh_available == 'true' && startsWith(github.ref, 'refs/tags/v')
+      if: startsWith(github.ref, 'refs/tags/v')
       env:
         REPOSITORY_NAME: ${{ github.event.repository.name }}
       shell: bash
