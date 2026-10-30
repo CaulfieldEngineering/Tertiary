@@ -62,7 +62,9 @@ private:
     void timerCallback() override;
     float targetRate{ 0.f };
     bool rateShown{ false };
-    double targetBpm{ 120.0 };   // [Claude 2026-10-29] the host tempo; mHostBpm is the one drawn, eased toward it
+    double targetBpm{ 120.0 };
+    float targetZoom{ 1.f }, targetCenter{ 0.f };   // [Claude 2026-10-29] the scroll bar's view; scrollZoom/scrollCenter ease to it
+    bool viewShown{ false };   // [Claude 2026-10-29] the host tempo; mHostBpm is the one drawn, eased toward it
 
     bool isBandBypassed{false};
     bool bypassHasChanged{false};

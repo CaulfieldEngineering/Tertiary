@@ -164,29 +164,15 @@ void ScrollPad::updatePoints(int x1, int y1)
 				shouldZoom = true;	// Boundary Checking On Zoom Engaged
 		}
 
-		// Apply Zoom... Larger Upward Motion = Larger Zoom Increment
-
+		// Apply Zoom: up shrinks the range (zooms in), down widens it (zooms out)
+		// [Claude 2026-10-29] In proportion to how far the mouse moved (Joe: "When zooming out, the zoom kind of happens
+		// in discrete steps instead of smoothly"). It was a whole 6 to 10 pixels of range for every mouse event, however
+		// small the move, truncated to whole pixels.
 		if (shouldZoom)
 		{
-			zoomScale = juce::jmap(ang, 0.f, 90.f, 0.f, zoomIncrement);
-
-			// When Zooming In... Shrink 'Width' until Min
-			if (yAbs < 0.f)
-			{
-				currentWidth -= zoomScale;
-
-				if (currentWidth < minWidth)
-					currentWidth = minWidth;
-			}
-
-			// When Zooming Out... Expand 'Width' until Max
-			if (yAbs > 0.f)
-			{
-				currentWidth += zoomScale;
-
-				if (currentWidth > maxWidth)
-					currentWidth = maxWidth;
-			}
+			constexpr float rangePerPixel = 3.f;   // about the old speed
+			zoomScale = std::abs(yAbs) * rangePerPixel;
+			currentWidth = juce::jlimit((float) minWidth, (float) maxWidth, currentWidth + (yAbs < 0.f ? -zoomScale : zoomScale));
 		}
 
 		int c0 = (p01 + p02) / 2.f; // Actual Center of Points at time of Downclick

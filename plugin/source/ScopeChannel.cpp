@@ -248,8 +248,16 @@ void ScopeChannel::actionListenerCallback(const juce::String& message)
 
     if (paramName == "SCROLLBAR")
     {
-        scrollZoom = sliderScroll.getScrollZoom();
-        scrollCenter = sliderScroll.getScrollCenter();
+        // [Claude 2026-10-29] The view eases to the scroll bar's (timerCallback), so a zoom or pan drag is smooth;
+        // the first one is taken at once
+        targetZoom = sliderScroll.getScrollZoom();
+        targetCenter = sliderScroll.getScrollCenter();
+        if (! viewShown)
+        {
+            scrollZoom = targetZoom;
+            scrollCenter = targetCenter;
+            viewShown = true;
+        }
         //shouldUpdateScope = true;
 
         generateLFOPathForDrawing(lfoPath, lfoFill, waveTable, localLFO);
@@ -314,8 +322,16 @@ void ScopeChannel::timerCallback()
         localLFO.updateTempo(mSampleRate, mHostBpm);
         changed = true;
     }
-    if (changed && ! localLFO.isSyncedToHost())
-        repaint();   // paint redraws the path from the rate and tempo
+    bool viewChanged = false;
+    if (viewShown && (scrollZoom != targetZoom || scrollCenter != targetCenter))
+    {
+        scrollZoom = (float) ease(scrollZoom, targetZoom, 0.0005);
+        scrollCenter = (float) ease(scrollCenter, targetCenter, 0.00005);
+        viewChanged = true;
+    }
+
+    if (viewChanged || (changed && ! localLFO.isSyncedToHost()))
+        repaint();   // paint redraws the grid and the path from the view, rate and tempo
 }
 
 /* Paint grid lines */
@@ -522,11 +538,10 @@ void ScopeChannel::generateLFOPathForDrawing(   juce::Path &lfoStrokePath,
     const float increment = scalar * waveTable.size() / (beatSpacing);
 
     // [Claude 2026-10-29] Free rate (Joe: changing the rate "goes haywire"): the wave's start (t = 0) is the scope's
-    // origin, the centre gridline (point + paintAreaWidth, panned with the scroll bar), with the band's phase there,
-    // so a rate change squeezes or stretches the wave evenly about the centre. Before, its phase was counted from
-    // point, two playback widths off screen to the left, so each small rate change slid the visible wave by many
-    // cycles. Synced waves already meet the origin at their phase (whole cycles from point) and are drawn as before.
-    // The window is the same span of beats as the synced view, at the host tempo, for every band.
+    // origin, the centre gridline (panned with the scroll bar), with the band's phase there, so a rate change squeezes
+    // or stretches the wave evenly about the centre. Before, its phase was counted from point, two playback widths off
+    // screen to the left, so each small rate change slid the visible wave by many cycles. Synced waves use the same
+    // origin. The window is the same span of beats as the synced view, at the host tempo, for every band.
     const float pixelsPerCycle = increment > 0.f ? (float) waveTable.size() / increment : 1.0e6f;
 
     // [Claude 2026-10-29] Four points per pixel, so a square's edges draw upright instead of as a one-pixel slant
@@ -554,6 +569,7 @@ void ScopeChannel::generateLFOPathForDrawing(   juce::Path &lfoStrokePath,
     const int point = displayOffsetStart + mDisplayPhase;
 
     const float tableSize = (float) waveTable.size();
+    const float origin = bounds.getCentreX() + mDisplayPhase;   // the origin gridline: t = 0
 
     for (int j = 0; j <= 3 * paintAreaWidth * pointsPerPixel; j++)
     {
@@ -564,14 +580,11 @@ void ScopeChannel::generateLFOPathForDrawing(   juce::Path &lfoStrokePath,
             continue;
 
         // Index sweeps through WaveTable Array
-        float index;
-        if (sync)
-            index = fmod(i * increment + mRelativePhase, tableSize);
-        else
-        {
-            index = fmod((i - (float) paintAreaWidth) * increment + mRelativePhase, tableSize);
-            if (index < 0.f) index += tableSize;
-        }
+        // [Claude 2026-10-29] Phase counted from the origin gridline itself (origin, as paintGridLines draws it), for
+        // synced and free bands alike. It was counted from point, a whole pixel, so the wave sat up to a pixel off
+        // the origin and jumped by that as a zoom or pan moved it; synced waves are otherwise as before.
+        float index = fmod((x - origin) * increment + mRelativePhase, tableSize);
+        if (index < 0.f) index += tableSize;
 
         // Get value in terms of pixels.  Offset by Region's Midpoint
         float y = midY + waveTable[(size_t) index] * (float)bounds.getHeight();
