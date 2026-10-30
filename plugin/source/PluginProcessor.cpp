@@ -1362,6 +1362,7 @@ namespace audio_plugin {
           parameterID == params.at(Skew_Low_LFO) ||
           parameterID == params.at(Depth_Low_LFO) ||
           parameterID == params.at(Rate_Low_LFO) ||
+          parameterID == params.at(Sync_Low_LFO) ||   // [Claude 2026-10-29] a loaded sync state reaches the LFO at once
           parameterID == params.at(Multiplier_Low_LFO) ||
           parameterID == params.at(Relative_Phase_Low_LFO) ||
           parameterID == params.at(Invert_Low_LFO)) {
@@ -1373,6 +1374,7 @@ namespace audio_plugin {
           parameterID == params.at(Skew_Mid_LFO) ||
           parameterID == params.at(Depth_Mid_LFO) ||
           parameterID == params.at(Rate_Mid_LFO) ||
+          parameterID == params.at(Sync_Mid_LFO) ||   // [Claude 2026-10-29] a loaded sync state reaches the LFO at once
           parameterID == params.at(Multiplier_Mid_LFO) ||
           parameterID == params.at(Relative_Phase_Mid_LFO) ||
           parameterID == params.at(Invert_Mid_LFO)) {
@@ -1384,6 +1386,7 @@ namespace audio_plugin {
           parameterID == params.at(Skew_High_LFO) ||
           parameterID == params.at(Depth_High_LFO) ||
           parameterID == params.at(Rate_High_LFO) ||
+          parameterID == params.at(Sync_High_LFO) ||   // [Claude 2026-10-29] a loaded sync state reaches the LFO at once
           parameterID == params.at(Multiplier_High_LFO) ||
           parameterID == params.at(Relative_Phase_High_LFO) ||
           parameterID == params.at(Invert_High_LFO)) {

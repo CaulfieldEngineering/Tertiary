@@ -192,41 +192,32 @@ void BandControl::buildRateOrRhythm()
     addAndMakeVisible(mDropRhythm);
     addAndMakeVisible(mSliderRate);
     
+    // [Claude 2026-10-29] Both always broadcast. Each was wired only in the other's branch (the rate slider's only
+    // while synced, when it is hidden), so a band that opened unsynced had a rate slider the scope never heard (Joe:
+    // "on first startup, the low channel initiated to not-synced. But the frequency slider did not do anything").
+    mSliderRate.slider.onValueChange = [this]()
+    {
+        sendBroadcast("RATE", (juce::String)mSliderRate.slider.getValue());
+    };
+    mDropRhythm.onChange = [this]()
+    {
+        sendBroadcast("RHYTHM", (juce::String)mDropRhythm.getSelectedItemIndex());
+    };
+
     if (isSyncedToHost)
     {
-
         mDropRhythm.setLookAndFeel(&multComboLookAndFeel);
         mDropRhythm.setTextWhenNothingSelected("Rhythm");
-        
+
         placeholder = &mDropRhythm;
         mDropRhythm.setVisible(true);
         mSliderRate.setVisible(false);
-        
-        // Broadcast Rate Changes to Oscilloscope
-        mSliderRate.slider.onValueChange = [this]()
-        {
-            auto paramName = "RATE";
-            auto paramValue = (juce::String)mSliderRate.slider.getValue();
-
-            sendBroadcast(paramName, paramValue);
-        };
-        
     }
     else
     {
         placeholder = &mSliderRate;
         mDropRhythm.setVisible(false);
         mSliderRate.setVisible(true);
-        
-        // Broadcast Rhythm Changes to Oscilloscope
-        mDropRhythm.onChange = [this]()
-        {
-            auto paramName = "RHYTHM";
-
-            auto paramValue = (juce::String)mDropRhythm.getSelectedItemIndex();
-
-            sendBroadcast(paramName, paramValue);
-        };
     }
 
 
@@ -396,7 +387,8 @@ void BandControl::buttonClicked(juce::Button* button)
 {
     if (button == &mToggleSync.mToggleButton)
     {
-        isSyncedToHost = !isSyncedToHost;
+        // [Claude 2026-10-29] from the key's state, not flipped: also right when a preset or session sets it
+        isSyncedToHost = mToggleSync.mToggleButton.getToggleState();
         
         buildRateOrRhythm();
         updateFlexBox();
@@ -443,6 +435,16 @@ void BandControl::broadcastInitialParameters()
 {
     juce::String paramName = "";
     juce::String paramValue = "";
+
+    // [Claude 2026-10-29] Show the rate or the rhythm for the sync state the band opened with (defaults, a preset or
+    // a saved session); it was a flag that started false and flipped on each click, and a state that matched the
+    // default never clicked it
+    if (isSyncedToHost != mToggleSync.mToggleButton.getToggleState())
+    {
+        isSyncedToHost = mToggleSync.mToggleButton.getToggleState();
+        buildRateOrRhythm();
+        updateFlexBox();
+    }
 
     paramName = "SYNC";
     paramValue = mToggleSync.mToggleButton.getToggleStateValue().toString();
