@@ -46,6 +46,7 @@
 #else
  #include <sys/resource.h>
 #endif
+#include <ctime>
 
 using Clock = std::chrono::steady_clock;
 
@@ -79,6 +80,20 @@ static double privateMB()   // Windows: private bytes (commit); Mac: resident si
     return (double) info.resident_size / (1024.0 * 1024.0);
    #else
     return 0.0;
+   #endif
+}
+
+static double threadCpuSeconds()   // the calling thread's own CPU time
+{
+   #if JUCE_WINDOWS
+    FILETIME c, e, k, u;
+    GetThreadTimes (GetCurrentThread(), &c, &e, &k, &u);
+    auto toS = [] (FILETIME f) { return (double) (((juce::uint64) f.dwHighDateTime << 32) | f.dwLowDateTime) * 1e-7; };
+    return toS (k) + toS (u);
+   #else
+    timespec t {};
+    clock_gettime (CLOCK_THREAD_CPUTIME_ID, &t);
+    return (double) t.tv_sec + t.tv_nsec * 1e-9;
    #endif
 }
 
@@ -236,8 +251,11 @@ struct AudioThread
     double rate = 48000.0;
     int block = 512;
     std::atomic<bool> stop { false };
-    std::atomic<double> busySeconds { 0.0 };
-    std::atomic<juce::int64> blocks { 0 }, overruns { 0 };
+    std::atomic<double> busySeconds { 0.0 };   // elapsed time inside processBlock (includes being preempted)
+    std::atomic<double> cpuSeconds { 0.0 };    // [Claude 2026-10-30] the audio thread's real CPU time (Codex review)
+    // [Claude 2026-10-30] a late block is one that finished after its deadline (its scheduled start + one period),
+    // however late it started; missedPeriods counts whole periods lost before catching up (Codex review)
+    std::atomic<juce::int64> blocks { 0 }, overruns { 0 }, missedPeriods { 0 };
     std::vector<double> blockUs;   // read only after join
     std::thread thread;
 
@@ -251,8 +269,9 @@ struct AudioThread
             juce::AudioBuffer<float> buf (2, block);
             juce::MidiBuffer midi;
             Signal sig;
-            const auto period = std::chrono::duration<double> (block / rate);
-            auto next = Clock::now();
+            const auto period = std::chrono::duration_cast<Clock::duration> (std::chrono::duration<double> (block / rate));
+            const double cpu0 = threadCpuSeconds();
+            auto next = Clock::now();   // this block's scheduled start
             blockUs.reserve (1 << 20);
             while (! stop.load())
             {
@@ -262,11 +281,15 @@ struct AudioThread
                 clock->samples += block;
                 const double us = std::chrono::duration<double, std::micro> (t1 - t0).count();
                 busySeconds = busySeconds.load() + us * 1e-6;
-                if (us > block / rate * 1e6) ++overruns;
+                cpuSeconds = threadCpuSeconds() - cpu0;
+                if (t1 > next + period) ++overruns;   // finished after its deadline
                 ++blocks;
                 if (blockUs.size() < blockUs.capacity()) blockUs.push_back (us);
-                next += std::chrono::duration_cast<Clock::duration> (period);
-                if (next < Clock::now()) next = Clock::now();   // behind: carry on from now (the overrun is counted)
+                next += period;
+                if (t1 > next + period) {   // more than a whole period behind: those periods are lost; carry on from now
+                    missedPeriods += (juce::int64) ((t1 - next) / period);
+                    next = t1;
+                }
                 std::this_thread::sleep_until (next);
             }
         });
@@ -284,6 +307,7 @@ static juce::var phase (const juce::String& name, double seconds, AudioThread* a
     const auto t0 = Clock::now();
     const double cpu0 = processCpuSeconds();
     const double busy0 = audio ? audio->busySeconds.load() : 0.0;
+    const double acpu0 = audio ? audio->cpuSeconds.load() : 0.0;
     const auto overruns0 = audio ? audio->overruns.load() : 0;
     for (;;)
     {
@@ -294,7 +318,8 @@ static juce::var phase (const juce::String& name, double seconds, AudioThread* a
     }
     const double wall = s.back().t;
     const double cpuPct = 100.0 * s.back().cpu / wall;
-    const double audioPct = audio ? 100.0 * (audio->busySeconds.load() - busy0) / wall : 0.0;
+    const double audioPct = audio ? 100.0 * (audio->cpuSeconds.load() - acpu0) / wall : 0.0;      // audio thread CPU
+    const double busyPct = audio ? 100.0 * (audio->busySeconds.load() - busy0) / wall : 0.0;      // elapsed in processBlock
     // Memory trend: least-squares slope over the second half (after anything that settles on open)
     double sx = 0, sy = 0, sxx = 0, sxy = 0; int n = 0;
     double mbMax = 0;
@@ -311,11 +336,12 @@ static juce::var phase (const juce::String& name, double seconds, AudioThread* a
               << juce::String (s.front().mb, 1).paddedRight (' ', 9) << juce::String (s.back().mb, 1).paddedRight (' ', 9)
               << juce::String (mbMax, 1).paddedRight (' ', 9) << juce::String (slope, 3).paddedRight (' ', 12)
               << juce::String (s.front().gui) << " -> " << juce::String (s.back().gui)
-              << "   overruns " << juce::String (audio ? (juce::int64) (audio->overruns.load() - overruns0) : (juce::int64) 0) << "\n";
+              << "   in processBlock (elapsed) " << juce::String (busyPct, 2) << "%   late blocks " << juce::String (audio ? (juce::int64) (audio->overruns.load() - overruns0) : (juce::int64) 0) << "\n";
     auto* o = new juce::DynamicObject();
     o->setProperty ("phase", name); o->setProperty ("seconds", wall);
     o->setProperty ("processCpuPctCore", cpuPct); o->setProperty ("audioThreadPctCore", audioPct);
     o->setProperty ("otherPctCore", cpuPct - audioPct);
+    o->setProperty ("audioElapsedPctCore", busyPct);
     o->setProperty ("mbStart", s.front().mb); o->setProperty ("mbEnd", s.back().mb); o->setProperty ("mbMax", mbMax);
     o->setProperty ("mbPerMinSecondHalf", slope);
     o->setProperty ("guiObjectsStart", s.front().gui); o->setProperty ("guiObjectsEnd", s.back().gui);
@@ -332,7 +358,8 @@ static int runLive (double seconds)
     juce::Array<juce::var> rows;
     std::cout << "T2-02 CPU and memory, 48 kHz / 512, " << seconds << " s each (CPU in % of one core; memory = "
               << (JUCE_WINDOWS ? "private bytes" : "resident") << ", MB)\n"
-              << "phase                 s     process CPU   audio thread  everything else  MB start MB end   MB max   MB/min(2nd half)  GUI objects\n";
+              << "phase                 s     process CPU   audio thread  everything else  MB start MB end   MB max   MB/min(2nd half)  GUI objects\n"
+              << "(audio thread and everything else: CPU time; in processBlock (elapsed): wall time, preemption included)\n";
 
     AudioThread audio; audio.plugins = { p.get() }; audio.clock = &clock; audio.rate = rate; audio.block = block;
     audio.start();
@@ -388,7 +415,8 @@ static int runInstances (int count, int block, double seconds)
     const double mx = audio.blockUs.empty() ? 0.0 : *std::max_element (audio.blockUs.begin(), audio.blockUs.end());
     std::cout << "T2-03 " << count << " instances on one real-time thread, 48 kHz / " << block << " (" << juce::String (blockUs, 0) << " us per block), "
               << juce::String (wall, 0) << " s\n"
-              << "  blocks " << audio.blocks.load() << ", dropouts (block over its time) " << audio.overruns.load() << "\n"
+              << "  blocks " << audio.blocks.load() << " of " << (juce::int64) (wall * rate / block) << " due; dropouts (finished after the deadline) "
+              << audio.overruns.load() << ", whole periods missed " << audio.missedPeriods.load() << "\n"
               << "  all instances per block: mean " << juce::String (mean, 1) << " us (" << juce::String (100.0 * mean / blockUs, 1)
               << "% of the block), p99 " << juce::String (p99, 1) << " us (" << juce::String (100.0 * p99 / blockUs, 1)
               << "%), max " << juce::String (mx, 1) << " us (" << juce::String (100.0 * mx / blockUs, 1) << "%)\n"
@@ -397,13 +425,14 @@ static int runInstances (int count, int block, double seconds)
     auto* o = new juce::DynamicObject();
     o->setProperty ("count", count); o->setProperty ("block", block); o->setProperty ("seconds", wall);
     o->setProperty ("blocks", audio.blocks.load()); o->setProperty ("dropouts", audio.overruns.load());
+    o->setProperty ("missedPeriods", audio.missedPeriods.load()); o->setProperty ("blocksDue", (juce::int64) (wall * rate / block));
     o->setProperty ("meanUs", mean); o->setProperty ("p99Us", p99); o->setProperty ("maxUs", mx);
     o->setProperty ("meanPctBlock", 100.0 * mean / blockUs); o->setProperty ("p99PctBlock", 100.0 * p99 / blockUs);
     o->setProperty ("maxPctBlock", 100.0 * mx / blockUs);
     o->setProperty ("mbForAll", mbLoaded - mb0);
     put ("instances_" + juce::String (block), juce::var (o));
     for (auto& p : owned) p->releaseResources();
-    return audio.overruns.load() == 0 ? 0 : 3;
+    return audio.overruns.load() == 0 && audio.missedPeriods.load() == 0 ? 0 : 3;
 }
 
 //==============================================================================
