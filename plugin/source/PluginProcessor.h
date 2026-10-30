@@ -165,6 +165,9 @@ namespace audio_plugin {
         void updateState();  // Process Block, Update State
 
         void forceSynchronization(LFO& lfo);
+        void relockToHost(LFO& lfo);   // [Claude 2026-10-29] a synced LFO follows the host's beat position
+        float lfoGain(LFO& lfo, float waveTableSize);   // [Claude 2026-10-29] this sample's gain, through any jump fade
+        int jumpFadeSamples() const { return juce::jmax(1, (int) (0.01 * getSampleRate())); }   // 10 ms
         double playPosition;
         
 		/* Demo Version */

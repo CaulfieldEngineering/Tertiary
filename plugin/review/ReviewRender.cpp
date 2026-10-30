@@ -18,6 +18,7 @@
 // [Claude 2026-10-29] --bpm-at t:bpm  the host tempo changes to bpm at t seconds (repeatable; the beat position then
 //                counts on smoothly), to check that the scope follows a live tempo change
 // [Claude 2026-10-29] --jump-at t:beats  the host's position jumps to beats at t seconds (a loop or a locate)
+// [Claude 2026-10-29] --stop t0:t1  the host stops at t0 and plays on from the same beat at t1
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -37,12 +38,13 @@ struct Clock : juce::AudioPlayHead
     juce::int64 sample = 0;
     bool tempoChanges = false;   // [Claude 2026-10-29] with --bpm-at: the beat position is counted up block by block
     double ppq = 0;
+    bool playing = true;         // [Claude 2026-10-29] --stop
     juce::Optional<PositionInfo> getPosition() const override
     {
         PositionInfo p;
         p.setBpm (bpm);
         p.setTimeSignature (TimeSignature { 4, 4 });
-        p.setIsPlaying (true);
+        p.setIsPlaying (playing);
         p.setTimeInSamples (sample);
         p.setTimeInSeconds (sample / rate);
         const double beats = tempoChanges ? ppq : sample / rate * bpm / 60.0;
@@ -159,6 +161,7 @@ int main (int argc, char* argv[])
     std::vector<Ramp> ramps;
     std::vector<std::pair<double, double>> tempoAt;   // [Claude 2026-10-29] --bpm-at
     std::vector<std::pair<double, double>> jumpAt;    // [Claude 2026-10-29] --jump-at (each used once)
+    std::vector<std::pair<double, double>> stops;     // [Claude 2026-10-29] --stop
     for (int i = 0; i < args.size(); ++i)
     {
         if (args[i] == "--set" && i + 1 < args.size())
@@ -166,6 +169,9 @@ int main (int argc, char* argv[])
             const auto kv = args[i + 1];
             setParam (*proc, kv.upToFirstOccurrenceOf ("=", false, false), kv.fromFirstOccurrenceOf ("=", false, false));
         }
+        if (args[i] == "--stop" && i + 1 < args.size())
+            stops.push_back ({ args[i + 1].upToFirstOccurrenceOf (":", false, false).getDoubleValue(),
+                               args[i + 1].fromFirstOccurrenceOf (":", false, false).getDoubleValue() });
         if (args[i] == "--jump-at" && i + 1 < args.size())
             jumpAt.push_back ({ args[i + 1].upToFirstOccurrenceOf (":", false, false).getDoubleValue(),
                                 args[i + 1].fromFirstOccurrenceOf (":", false, false).getDoubleValue() });
@@ -249,15 +255,18 @@ int main (int argc, char* argv[])
             for (auto& ta : tempoAt)
                 if (t >= ta.first) clock.bpm = ta.second;
         }
-        if (! jumpAt.empty())   // [Claude 2026-10-29] --jump-at
+        if (! jumpAt.empty() || ! stops.empty())   // [Claude 2026-10-29] --jump-at, --stop
         {
             if (! clock.tempoChanges) { clock.tempoChanges = true; clock.ppq = pos / rate * clock.bpm / 60.0; }
+            clock.playing = true;
+            for (auto& st : stops)
+                if (t >= st.first && t < st.second) clock.playing = false;
             for (auto& ja : jumpAt)
                 if (ja.first >= 0 && t >= ja.first) { clock.ppq = ja.second; ja.first = -1; }
         }
         clock.sample = pos;
         proc->processBlock (view, midi);
-        if (clock.tempoChanges) clock.ppq += n / rate * clock.bpm / 60.0;
+        if (clock.tempoChanges && clock.playing) clock.ppq += n / rate * clock.bpm / 60.0;
         for (int c = 0; c < result.getNumChannels(); ++c) result.copyFrom (c, pos, io, juce::jmin (c, outCh - 1), 0, n);
         for (int c = 0; c < juce::jmin (2, outCh); ++c)
             for (int i = 0; i < n; ++i)

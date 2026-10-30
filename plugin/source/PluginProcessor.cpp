@@ -735,7 +735,8 @@ namespace audio_plugin {
         float playPositionScaled = fmod(playPosition, div);
         float newPhase =
             playPositionScaled * lfo.getWaveMultiplier() * lfo.getWaveTableSize();
-        lfo.setPosition(fmod(newPhase, lfo.getWaveTableSize()));
+        // [Claude 2026-10-29] faded, not set: a hard jump of the gain clicked
+        lfo.jumpTo(fmod(newPhase, lfo.getWaveTableSize()), jumpFadeSamples());
       } else if (!hostInfo.isPlaying && lfo.isSyncedToHost()) {
         /* When no host BPM, force LFO position to sync to each other */
         if (lowLFO.isSyncedToHost())
@@ -745,6 +746,41 @@ namespace audio_plugin {
         else if (highLFO.isSyncedToHost())
           lfo.setPosition(highLFO.getPosition());
       }
+    }
+
+    /* [Claude 2026-10-29] While the host plays, a synced LFO follows the host's beat position (Joe: loops and jumps
+       should land on the grid every pass). Each block its position is compared with where the host's beat position
+       says it should be; more than 1 % of a cycle apart (a loop, a locate, a start mid-bar) it jumps there, faded
+       over 10 ms so it does not click. Steady playback agrees to far less than that, so it is left alone. The band's
+       phase offset is added later, as before. Not playing, or no host (the standalone): it free-runs as before. */
+    //==============================================================================
+    void AudioPluginAudioProcessor::relockToHost(LFO& lfo) {
+      if (!hostInfo.isPlaying || !lfo.isSyncedToHost())
+        return;
+      const double size = lfo.getWaveTableSize();
+      if (size <= 0)
+        return;
+      const double cycles = hostInfo.ppqPosition * lfo.getWaveMultiplier();
+      const double expected = (cycles - std::floor(cycles)) * size;
+      double diff = expected - lfo.getPosition();
+      diff -= size * std::round(diff / size);   // the shorter way round
+      if (std::abs(diff) > 0.01 * size)
+        lfo.jumpTo((float) std::fmod(expected, size), jumpFadeSamples());
+    }
+
+    /* [Claude 2026-10-29] The LFO's gain this sample (its position plus the band's phase offset); during a jump fade,
+       blended from the old position's gain, and the old position kept running */
+    float AudioPluginAudioProcessor::lfoGain(LFO& lfo, float waveTableSize) {
+      int index = fmod((lfo.getPosition() + lfo.getRelativePhaseInSamples()), waveTableSize);
+      float gain = lfo.getWaveTableScaled()[index];
+      if (lfo.fadeLeft > 0) {
+        int oldIndex = fmod((lfo.fadeFromPosition + lfo.getRelativePhaseInSamples()), waveTableSize);
+        const float a = (float) lfo.fadeLeft / (float) lfo.fadeLength;
+        gain += (lfo.getWaveTableScaled()[oldIndex] - gain) * a;
+        lfo.fadeFromPosition = fmod(lfo.fadeFromPosition + lfo.getIncrement(), waveTableSize);
+        --lfo.fadeLeft;
+      }
+      return gain;
     }
 
     //==============================================================================
@@ -1016,6 +1052,11 @@ namespace audio_plugin {
           setLatchPlay = false;
         }
       }
+
+      // [Claude 2026-10-29] synced LFOs follow the host's beat position (loops, locates)
+      relockToHost(lowLFO);
+      relockToHost(midLFO);
+      relockToHost(highLFO);
     }
 
     /* Updates FFT information for FrequencyResponse Module */
@@ -1116,22 +1157,11 @@ namespace audio_plugin {
         auto waveTableSize = lowLFO.getWaveTableSize();
         auto totalNumInputChannels = getTotalNumInputChannels();
 
-        /* Index = Current Position in the Given WaveTable.
-        Apply a single offset based on the Relative Phase Shift.*/
-        int lowIndex =
-            fmod((lowLFO.getPosition() + lowLFO.getRelativePhaseInSamples()),
-                 (float)waveTableSize);
-        int midIndex =
-            fmod((midLFO.getPosition() + midLFO.getRelativePhaseInSamples()),
-                 (float)waveTableSize);
-        int highIndex =
-            fmod((highLFO.getPosition() + highLFO.getRelativePhaseInSamples()),
-                 (float)waveTableSize);
-
-        /* LFO Instantaneous Amplitude, usd to Modulate Input Signal */
-        float mGainLowLFO = lowLFO.getWaveTableScaled()[lowIndex];
-        float mGainMidLFO = midLFO.getWaveTableScaled()[midIndex];
-        float mGainHighLFO = highLFO.getWaveTableScaled()[highIndex];
+        /* LFO Instantaneous Amplitude, usd to Modulate Input Signal: the current position plus the band's phase
+           offset [Claude 2026-10-29] (lfoGain: through a re-lock's fade) */
+        float mGainLowLFO = lfoGain(lowLFO, (float) waveTableSize);
+        float mGainMidLFO = lfoGain(midLFO, (float) waveTableSize);
+        float mGainHighLFO = lfoGain(highLFO, (float) waveTableSize);
 
         /* Update the LFO's Instantaneous Position */
         lowLFO.setPosition(
