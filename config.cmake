@@ -20,3 +20,8 @@ set(wPLUGIN_CATEGORY            Modulation)
 # checks it has a working key source before publishing, and sets its "Software version" to the tag's version
 # once the new installers are live (that is what the plugin's version check reports). Tertiary is 45.
 set(wWOO_PRODUCT_ID             "45")
+
+# [Claude 2026-10-30] The web demo folders on CaulfieldEngineering.com/plug-ins/{repo}/. A staging push deploys only
+# to the private preview (noindex); a v* tag promotes that preview to the live folder and to WonderlandAudio.com.
+set(wWEB_STAGING_DIR            "web-staging")
+set(wWEB_LIVE_DIR               "web")

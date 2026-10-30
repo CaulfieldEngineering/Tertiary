@@ -21,7 +21,9 @@ on:
 #               notarize, staple, then verify the final installers are signed (and stapled) before upload.
 #   publish     tag only, after BOTH builds passed: uploads both verified installers to WordPress, then
 #               points the download redirects at them, then removes the old copies.
-#   web-build   the web demo; on a tag it goes to WonderlandAudio.com only after publish succeeded.
+#   web-build   the web demo. On staging it goes only to a private preview (CaulfieldEngineering.com
+#               /plug-ins/{repo}/web-staging/, noindex). On a tag, only after publish succeeded, it promotes
+#               that preview's exact files to the live demos (see the note above its deploy steps).
 #   cleanup-failed-tag   deletes the tag of a failed release so it can be pushed again, but never when the
 #               tag check could not reach GitHub (that is not a verdict), never after publish started, and
 #               never if the tag was moved to another commit meanwhile.
@@ -1216,7 +1218,10 @@ jobs:
         echo "REPO_NAME set to: $REPO_NAME"
 
         # Set destination path (installers subfolder)
-        DEST_PATH="/home/caulfiel/public_html/plug-ins/${REPO_NAME}/installers/"
+        # [Claude 2026-10-30] Staging builds go to installers-staging/, so a staging push never replaces the
+        # copies a release put in installers/ (same file names, same version). Tags still use installers/.
+        if [[ "$GITHUB_REF" == refs/tags/v* ]]; then INSTALLERS_DIR="installers"; else INSTALLERS_DIR="installers-staging"; fi
+        DEST_PATH="/home/caulfiel/public_html/plug-ins/${REPO_NAME}/${INSTALLERS_DIR}/"
         SERVER="CaulfieldEngineering.com"
 
         echo "Checking if destination directory exists on the server..."
@@ -1259,7 +1264,7 @@ jobs:
           exit 1
         fi
 
-        echo "Installer deployed to: https://caulfieldengineering.com/plug-ins/${REPO_NAME}/${INSTALLER_NAME}"
+        echo "Installer deployed to: https://caulfieldengineering.com/plug-ins/${REPO_NAME}/${INSTALLERS_DIR}/${INSTALLER_NAME}"
 
 
 
@@ -1570,8 +1575,9 @@ jobs:
 
   # Job: Web Build (Wonderlab)
   # ==========================================================================================
-  # Builds the plugin to WebAssembly using the Wonderlab framework and deploys
-  # to CaulfieldEngineering.com/plug-ins/{repo_name}/web/
+  # Builds the plugin to WebAssembly using the Wonderlab framework. Staging: deploys a private preview to
+  # CaulfieldEngineering.com/plug-ins/{repo_name}/web-staging/. v* tag: promotes it to
+  # CaulfieldEngineering.com/plug-ins/{repo_name}/web/ and WonderlandAudio.com/demo/{repo_name}/.
   # ==========================================================================================
   web-build:
     # [Claude 2026-10-29] On a tag, only after the installers were published (publish is skipped on staging)
@@ -1580,6 +1586,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    # [Claude 2026-10-30] Releases deploy one at a time. Staging runs are not queued (a queued run can be replaced
+    # by an older one): each deploys only if staging still points at its commit, so only the newest ever swaps.
+    concurrency:
+      group: web-demo-${{ startsWith(github.ref, 'refs/tags/v') && 'release' || format('staging-{0}', github.run_id) }}
+      cancel-in-progress: false
 
     steps:
 
@@ -1790,103 +1801,306 @@ jobs:
           StrictHostKeyChecking no" > ~/.ssh/config
 
 
-    # Deploy Web App to CaulfieldEngineering.com (every push)
+    # [Claude 2026-10-30] Release flow for the web demo (Joe: staging is "a place to view what WILL/SHOULD be
+    # customer-facing with one last look before its live"; nothing public changes until the tag).
+    #   staging push  deploys ONLY to the private preview, CaulfieldEngineering.com/plug-ins/{repo}/web-staging/
+    #                 (noindex, linked from nowhere). The live demos are not touched.
+    #   v* tag        promotes the exact files from that preview to the two live demos (CaulfieldEngineering.com
+    #                 /web/ and WonderlandAudio.com/demo/{repo}/, the "Try it in your browser" iframe), but only
+    #                 if the preview was built from this commit or from a commit with the same source tree (the
+    #                 usual "Merge branch 'staging' into production"), and every file matches its checksum.
+    #                 Otherwise it deploys the build made in this run, as before, with a warning in the summary.
+    # The folder names come from config.cmake (wWEB_STAGING_DIR, wWEB_LIVE_DIR); the defaults are below.
     # ==========================================================================================
-    - name: Deploy Web App to CaulfieldEngineering.com
-      if: steps.check_ssh_web.outputs.ssh_available == 'true'
-      env:
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
+
+    # Collect the Web Demo Files (one folder, exactly what gets deployed, with its commit and checksums)
+    # ==========================================================================================
+    - name: Collect the Web Demo Files
       shell: bash
       run: |
-        set -e
+        set -euo pipefail
+        SRC="${GITHUB_WORKSPACE}/build/web"
+        B="${GITHUB_WORKSPACE}/build/web-bundle"
+        rm -rf "$B"
+        mkdir -p "$B"
+        for f in index.html plugin-config.js "${wPLUGIN_NAME}Web.js" "${wPLUGIN_NAME}Web.wasm"; do
+          cp "${SRC}/${f}" "${B}/"
+        done
+        if [ -f "${SRC}/${wPLUGIN_NAME}WebFallback.js" ]; then
+          cp "${SRC}/${wPLUGIN_NAME}WebFallback.js" "${SRC}/${wPLUGIN_NAME}WebFallback.wasm" "${B}/"
+        fi
+        if [ -d "${SRC}/audio" ]; then
+          mkdir -p "${B}/audio"
+          cp -a "${SRC}/audio/." "${B}/audio/"
+        fi
+        # File names the checksum list and the remote commands can carry safely (no backslash, quote or newline)
+        NL=$'\n'
+        bad=$(cd "$B" && find . -type f \( -name '*\\*' -o -name "*'*" -o -name '*"*' -o -name "*${NL}*" \) -print)
+        if [ -n "$bad" ]; then
+          echo "::error::Web demo file names must not contain a backslash, a quote or a newline: ${bad}"
+          exit 1
+        fi
+        echo "${GITHUB_SHA}" > "${B}/build-commit.txt"
+        ( cd "$B" && find . -type f ! -name build-manifest.sha256 -printf '%P\0' | sort -z | xargs -0 sha256sum > build-manifest.sha256 )
+        echo "Web demo bundle (commit ${GITHUB_SHA}):"
+        cat "${B}/build-manifest.sha256"
 
-        WEB_BUILD_DIR="${GITHUB_WORKSPACE}/build/web"
-        WONDERLAB_DIR="${GITHUB_WORKSPACE}/Wonderlab"
 
+    # Check the Web Demo Folder Names (from config.cmake)
+    # ==========================================================================================
+    - name: Check the Web Demo Folder Names
+      id: webdirs
+      shell: bash
+      run: |
+        set -euo pipefail
+        STAGING_DIR="${wWEB_STAGING_DIR:-web-staging}"
+        LIVE_DIR="${wWEB_LIVE_DIR:-web}"
+        for d in "$STAGING_DIR" "$LIVE_DIR"; do
+          # No dots: the deploys use <name>.old, <name>.previous and <name>.incoming-*, which can then never be the other folder
+          if ! [[ "$d" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; then
+            echo "::error::Web demo folder name '$d' (config.cmake wWEB_STAGING_DIR / wWEB_LIVE_DIR) must be letters, digits, - or _"
+            exit 1
+          fi
+        done
+        if [ "$STAGING_DIR" = "$LIVE_DIR" ]; then
+          echo "::error::wWEB_STAGING_DIR and wWEB_LIVE_DIR are both '$LIVE_DIR'; the preview must not be the live demo"
+          exit 1
+        fi
+        echo "staging_dir=${STAGING_DIR}" >> "$GITHUB_OUTPUT"
+        echo "live_dir=${LIVE_DIR}" >> "$GITHUB_OUTPUT"
+
+
+    # Deploy the Web Demo Preview to CaulfieldEngineering.com (staging only, private, noindex)
+    # ==========================================================================================
+    - name: Deploy Web Demo Preview (staging only)
+      if: ${{ steps.check_ssh_web.outputs.ssh_available == 'true' && !startsWith(github.ref, 'refs/tags/v') }}
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        STAGING_DIR: ${{ steps.webdirs.outputs.staging_dir }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        B="${GITHUB_WORKSPACE}/build/web-bundle"
         CE_SERVER="CaulfieldEngineering.com"
-        CE_DEST="/home/caulfiel/public_html/plug-ins/${REPOSITORY_NAME}/web/"
+        BASE="/home/caulfiel/public_html/plug-ins/${REPOSITORY_NAME}"
+        STG="${BASE}/${STAGING_DIR}"
+        INC="${STG}.incoming-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+        URL="https://caulfieldengineering.com/plug-ins/${REPOSITORY_NAME}/${STAGING_DIR}/"
 
-        echo "Deploying web app to ${CE_SERVER}:${CE_DEST}..."
+        # The preview's .htaccess: the demo's headers, plus noindex so search engines never list it
+        HT="${RUNNER_TEMP}/staging-htaccess"
+        cat "${GITHUB_WORKSPACE}/Wonderlab/web/htaccess" > "$HT"
+        printf '\n# Staging preview: never indexed\nHeader always set X-Robots-Tag "noindex, nofollow, noarchive"\n' >> "$HT"
 
-        ssh $CE_SERVER "mkdir -p ${CE_DEST} ${CE_DEST}audio/"
-
-        echo "Uploading web files..."
-        scp "${WEB_BUILD_DIR}/index.html" "$CE_SERVER:${CE_DEST}"
-        scp "${WEB_BUILD_DIR}/plugin-config.js" "$CE_SERVER:${CE_DEST}"
-        scp "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.js" "$CE_SERVER:${CE_DEST}"
-        scp "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.wasm" "$CE_SERVER:${CE_DEST}"
-
-        if [ -f "${WEB_BUILD_DIR}/${REPOSITORY_NAME}WebFallback.js" ]; then
-          echo "Uploading fallback WASM..."
-          scp "${WEB_BUILD_DIR}/${REPOSITORY_NAME}WebFallback.js" "$CE_SERVER:${CE_DEST}"
-          scp "${WEB_BUILD_DIR}/${REPOSITORY_NAME}WebFallback.wasm" "$CE_SERVER:${CE_DEST}"
+        # A slower, older staging run must not replace a newer preview: deploy only if staging is still this commit
+        HEAD_SHA=$(git -C "$GITHUB_WORKSPACE" ls-remote origin refs/heads/staging | cut -f1) || HEAD_SHA=""
+        if [ "$HEAD_SHA" != "$GITHUB_SHA" ]; then
+          echo "::notice::staging is now ${HEAD_SHA:-unknown}, not ${GITHUB_SHA}; this older build does not replace the preview."
+          echo "Web demo preview not updated: staging moved on to \`${HEAD_SHA:-unknown}\`." >> "$GITHUB_STEP_SUMMARY"
+          exit 0
         fi
 
-        if [ -d "${WEB_BUILD_DIR}/audio" ]; then
-          echo "Uploading audio samples..."
-          scp "${WEB_BUILD_DIR}/audio/"* "$CE_SERVER:${CE_DEST}audio/"
+        echo "Uploading the preview to ${CE_SERVER}:${INC}"
+        ssh "$CE_SERVER" "rm -rf '${INC}' && mkdir -p '${INC}'"
+        scp -r "${B}/"* "${CE_SERVER}:${INC}/"
+        scp "$HT" "${CE_SERVER}:${INC}/.htaccess"
+
+        # Swap the whole folder, so no file from an older preview is left behind (it would be promoted on the tag)
+        ssh "$CE_SERVER" "rm -rf '${STG}.old' && if [ -d '${STG}' ]; then mv '${STG}' '${STG}.old'; fi && [ ! -e '${STG}' ] && mv '${INC}' '${STG}' && rm -rf '${STG}.old'"
+
+        echo "Staging preview: ${URL}"
+        {
+          echo "### Web demo preview (staging)"
+          echo ""
+          echo "Preview: ${URL}"
+          echo ""
+          echo "Commit \`${GITHUB_SHA}\`, build id \`${GITHUB_SHA::8}\`. Not indexed, linked from nowhere."
+          echo "The live demos were not changed; a v* tag promotes these exact files."
+        } >> "$GITHUB_STEP_SUMMARY"
+
+
+    # Still the Newest Release (tag only): a re-run of an older release must not put its demo back live
+    # ==========================================================================================
+    - name: Still the Newest Release Tag (web demo)
+      if: startsWith(github.ref, 'refs/tags/v')
+      shell: bash
+      run: |
+        set -euo pipefail
+        THIS="${GITHUB_REF#refs/tags/v}"
+        TAGS=$(git -C "$GITHUB_WORKSPACE" ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/v##') || { echo "::error::Could not list the tags on GitHub. The web demo was not deployed."; exit 1; }
+        NEWEST=$(printf '%s\n' "$TAGS" "$THIS" | sort -V | tail -n 1)
+        if [ "$NEWEST" != "$THIS" ]; then
+          echo "::error::v$NEWEST is newer than v$THIS, so this run does not deploy the web demo."
+          exit 1
         fi
+        echo "v$THIS is still the newest release tag"
 
-        echo "Uploading .htaccess..."
-        scp "${WONDERLAB_DIR}/web/htaccess" "$CE_SERVER:${CE_DEST}.htaccess"
 
-        echo ""
-        echo "==========================================================================="
-        echo "  CaulfieldEngineering.com deployed"
-        echo "  URL: https://caulfieldengineering.com/plug-ins/${REPOSITORY_NAME}/web/"
-        echo "==========================================================================="
+    # Choose the Web Demo to Release (tag only): the staging preview if it is this source, else this run's build
+    # ==========================================================================================
+    - name: Choose the Web Demo to Release (tag only)
+      id: release_web
+      if: startsWith(github.ref, 'refs/tags/v')
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        STAGING_DIR: ${{ steps.webdirs.outputs.staging_dir }}
+        SSH_AVAILABLE: ${{ steps.check_ssh_web.outputs.ssh_available }}
+      shell: bash
+      run: |
+        set -uo pipefail
+        FRESH="${GITHUB_WORKSPACE}/build/web-bundle"
+        DL="${RUNNER_TEMP}/web-staging-download"
+        STG="/home/caulfiel/public_html/plug-ins/${REPOSITORY_NAME}/${STAGING_DIR}"
+        DIR="$FRESH"; SOURCE="fresh"; STG_SHA=""; REASON=""
+
+        check_staging() {   # returns 0 and sets STG_SHA when the downloaded preview can be released as it is
+          rm -rf "$DL"
+          if [ "$SSH_AVAILABLE" != "true" ]; then REASON="no SSH credentials to read the preview"; return 1; fi
+          scp -r "CaulfieldEngineering.com:${STG}" "$DL" || { REASON="could not download ${STG}"; return 1; }
+          rm -f "${DL}/.htaccess"
+          [ -f "${DL}/build-commit.txt" ] && [ -f "${DL}/build-manifest.sha256" ] || { REASON="the preview has no build-commit.txt or manifest (deployed before this pipeline change)"; return 1; }
+          STG_SHA=$(tr -d '[:space:]' < "${DL}/build-commit.txt")
+          [[ "$STG_SHA" =~ ^[0-9a-f]{40}$ ]] || { REASON="build-commit.txt is not a commit id"; return 1; }
+          # Every file matches its checksum, and there is no file the manifest does not list
+          ( cd "$DL" && sha256sum --check --strict --quiet build-manifest.sha256 ) || { REASON="a preview file does not match its checksum (changed during the download?)"; return 1; }
+          listed=$(sed -E 's/^[0-9a-f]{64} [ *]//' "${DL}/build-manifest.sha256" | sort)
+          present=$(cd "$DL" && find . -type f ! -name build-manifest.sha256 -printf '%P\n' | sort)
+          [ "$listed" = "$present" ] || { REASON="the preview folder holds files the manifest does not list"; return 1; }
+          for f in index.html plugin-config.js "${wPLUGIN_NAME}Web.js" "${wPLUGIN_NAME}Web.wasm"; do
+            [ -f "${DL}/${f}" ] || { REASON="the preview has no ${f}"; return 1; }
+          done
+          # A plugin-config.js with a build id (Wonderlab assemble-web.js) must carry this commit's
+          if grep -q '"buildId"' "${DL}/plugin-config.js"; then
+            grep -q "\"buildId\": \"${STG_SHA::8}\"" "${DL}/plugin-config.js" || { REASON="plugin-config.js build id is not ${STG_SHA::8}"; return 1; }
+          fi
+          # The preview's commit is the tag's commit, or has the same source tree (a merge of staging into production)
+          if [ "$STG_SHA" = "$GITHUB_SHA" ]; then return 0; fi
+          git -C "$GITHUB_WORKSPACE" fetch --no-tags --depth=1 origin "$STG_SHA" > /dev/null 2>&1 || { REASON="preview commit ${STG_SHA::8} could not be fetched"; return 1; }
+          tag_tree=$(git -C "$GITHUB_WORKSPACE" rev-parse "${GITHUB_SHA}^{tree}") || { REASON="could not read the tag's tree"; return 1; }
+          stg_tree=$(git -C "$GITHUB_WORKSPACE" rev-parse "${STG_SHA}^{tree}") || { REASON="could not read the preview's tree"; return 1; }
+          [ "$tag_tree" = "$stg_tree" ] || { REASON="the preview is commit ${STG_SHA::8}, whose source differs from the tag ${GITHUB_SHA::8}"; return 1; }
+          return 0
+        }
+
+        if check_staging; then
+          DIR="$DL"; SOURCE="staging"
+          echo "Releasing the staging preview as it is: commit ${STG_SHA}, every file checked."
+        else
+          echo "::warning::Web demo: not promoting the staging preview (${REASON}). Deploying this run's build of ${GITHUB_SHA::8} instead."
+        fi
+        echo "dir=${DIR}" >> "$GITHUB_OUTPUT"
+        echo "source=${SOURCE}" >> "$GITHUB_OUTPUT"
+        {
+          echo "### Web demo release"
+          echo ""
+          if [ "$SOURCE" = "staging" ]; then
+            echo "Promoted the staging preview unchanged: commit \`${STG_SHA}\` (build id \`${STG_SHA::8}\`), same source as the tag \`${GITHUB_SHA::8}\`."
+          else
+            echo "**Not promoted from staging:** ${REASON}. Deployed this run's build of \`${GITHUB_SHA::8}\` instead."
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"
+        exit 0
+
+
+    # Deploy Web App to CaulfieldEngineering.com (tagged releases only)
+    # ==========================================================================================
+    - name: Deploy Web App to CaulfieldEngineering.com (tag only)
+      if: ${{ steps.check_ssh_web.outputs.ssh_available == 'true' && startsWith(github.ref, 'refs/tags/v') }}
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        LIVE_DIR: ${{ steps.webdirs.outputs.live_dir }}
+        RELEASE_DIR: ${{ steps.release_web.outputs.dir }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        [ -n "$RELEASE_DIR" ] && [ -f "${RELEASE_DIR}/index.html" ] || { echo "::error::No web demo to release"; exit 1; }
+        CE_SERVER="CaulfieldEngineering.com"
+        LIVE="/home/caulfiel/public_html/plug-ins/${REPOSITORY_NAME}/${LIVE_DIR}"
+        INC="${LIVE}.incoming-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+        echo "Deploying web app to ${CE_SERVER}:${LIVE}/ ..."
+        ssh "$CE_SERVER" "rm -rf '${INC}' && mkdir -p '${INC}'"
+        scp -r "${RELEASE_DIR}/"* "${CE_SERVER}:${INC}/"
+        scp "${GITHUB_WORKSPACE}/Wonderlab/web/htaccess" "${CE_SERVER}:${INC}/.htaccess"
+        # Swap the folder; the one it replaces is kept as <live>.previous for a quick rollback
+        ssh "$CE_SERVER" "rm -rf '${LIVE}.previous' && if [ -d '${LIVE}' ]; then mv '${LIVE}' '${LIVE}.previous'; fi && [ ! -e '${LIVE}' ] && mv '${INC}' '${LIVE}'"
+
+        URL="https://caulfieldengineering.com/plug-ins/${REPOSITORY_NAME}/${LIVE_DIR}/"
+        echo "CaulfieldEngineering.com deployed: ${URL}"
+        echo "- CaulfieldEngineering.com: ${URL}" >> "$GITHUB_STEP_SUMMARY"
 
 
     # Deploy Web App to WonderlandAudio.com (tagged releases only)
     # ==========================================================================================
     # [Claude 2026-10-29] Was also gated on SSH_ID, which this step doesn't use, so a missing SSH_ID silently
     # skipped the production demo. It uses WORDPRESS_SFTP_PASS, which preflight requires on a tag.
+    # [Claude 2026-10-30] Uploads the folder chosen above (the staging preview when it checks out). This is the
+    # demo in the "Try it in your browser" iframe on WonderlandAudio.com. The password goes through SSHPASS
+    # (sshpass -e), not the command line.
     - name: Deploy Web App to WonderlandAudio.com
       if: startsWith(github.ref, 'refs/tags/v')
       env:
         REPOSITORY_NAME: ${{ github.event.repository.name }}
+        RELEASE_DIR: ${{ steps.release_web.outputs.dir }}
+        SSHPASS: ${{ secrets.WORDPRESS_SFTP_PASS }}
       shell: bash
       run: |
-        set -e
-
-        WEB_BUILD_DIR="${GITHUB_WORKSPACE}/build/web"
+        set -euo pipefail
+        [ -n "$RELEASE_DIR" ] && [ -f "${RELEASE_DIR}/index.html" ] || { echo "::error::No web demo to release"; exit 1; }
         WONDERLAB_DIR="${GITHUB_WORKSPACE}/Wonderlab"
 
-        echo "Tagged release — deploying to WonderlandAudio.com..."
+        echo "Tagged release, deploying to WonderlandAudio.com..."
 
         WP_HOST="sftp.wp.com"
         WP_USER="wonderlandaudio.wordpress.com"
         WP_DEST="/srv/htdocs/demo/${REPOSITORY_NAME}"
+        WP_SSH_OPTS=(-o StrictHostKeyChecking=no)
 
         # Install sshpass for non-interactive SFTP password auth
         sudo apt-get install -y -q sshpass > /dev/null 2>&1
 
-        # Upload web files via SFTP
-        sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" ssh -o StrictHostKeyChecking=no ${WP_USER}@${WP_HOST} "mkdir -p ${WP_DEST}/audio"
+        sshpass -e ssh "${WP_SSH_OPTS[@]}" "${WP_USER}@${WP_HOST}" "mkdir -p ${WP_DEST}/audio"
+
+        # Files the previous release put there and this one does not have (an old track, an old fallback build)
+        # are removed, so the live folder holds exactly this release. The previous set is its manifest; a folder
+        # deployed before manifests existed counts every file in audio/ and the fallback build instead. Nothing
+        # else is touched. If a removal fails, the new manifest is not uploaded, so the next release retries it.
+        OLD_LIST="${RUNNER_TEMP}/wp-old-files.txt"
+        if sshpass -e scp "${WP_SSH_OPTS[@]}" "${WP_USER}@${WP_HOST}:${WP_DEST}/build-manifest.sha256" "${RUNNER_TEMP}/wp-old-manifest.sha256" 2>/dev/null; then
+          sed -E 's/^[0-9a-f]{64} [ *]//' "${RUNNER_TEMP}/wp-old-manifest.sha256" | sort -u > "$OLD_LIST"
+        else
+          echo "No manifest on WordPress yet: comparing audio/ and the fallback build with this release."
+          { sshpass -e ssh "${WP_SSH_OPTS[@]}" "${WP_USER}@${WP_HOST}" "cd '${WP_DEST}/audio' 2>/dev/null && ls -1A" < /dev/null | sed 's#^#audio/#' || true
+            printf '%s\n' "${wPLUGIN_NAME}WebFallback.js" "${wPLUGIN_NAME}WebFallback.wasm"; } | sort -u > "$OLD_LIST"
+        fi
+        sed -E 's/^[0-9a-f]{64} [ *]//' "${RELEASE_DIR}/build-manifest.sha256" | sort -u > "${RUNNER_TEMP}/wp-new-files.txt"
+        comm -23 "$OLD_LIST" "${RUNNER_TEMP}/wp-new-files.txt" > "${RUNNER_TEMP}/wp-stale.txt"
+        CLEAN=true
+        while IFS= read -r f; do
+          case "$f" in ""|/*|*..*|*\'*|*\\*) echo "::warning::Not removing '$f' from WordPress (unexpected name)"; continue ;; esac
+          echo "Removing ${f} (not in this release)"
+          if ! sshpass -e ssh "${WP_SSH_OPTS[@]}" "${WP_USER}@${WP_HOST}" "rm -f -- '${WP_DEST}/${f}'" < /dev/null; then
+            echo "::warning::Could not remove ${f} from WordPress; the next release tries again"
+            CLEAN=false
+          fi
+        done < "${RUNNER_TEMP}/wp-stale.txt"
 
         echo "Uploading web files to WordPress..."
-        sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/index.html" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
-        sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/plugin-config.js" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
-        sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.js" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
-        sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/${REPOSITORY_NAME}Web.wasm" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
-
-        if [ -f "${WEB_BUILD_DIR}/${REPOSITORY_NAME}WebFallback.js" ]; then
-          echo "Uploading fallback WASM..."
-          sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/${REPOSITORY_NAME}WebFallback.js" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
-          sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/${REPOSITORY_NAME}WebFallback.wasm" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
+        UPLOAD=()
+        for p in "${RELEASE_DIR}/"*; do
+          [ "$(basename "$p")" = "build-manifest.sha256" ] || UPLOAD+=("$p")
+        done
+        sshpass -e scp "${WP_SSH_OPTS[@]}" -r "${UPLOAD[@]}" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
+        if [ "$CLEAN" = "true" ]; then
+          sshpass -e scp "${WP_SSH_OPTS[@]}" "${RELEASE_DIR}/build-manifest.sha256" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
         fi
 
         echo "Uploading PHP wrappers..."
-        sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WONDERLAB_DIR}/web/index.php" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
-        sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WONDERLAB_DIR}/web/serve.php" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
-
-        if [ -d "${WEB_BUILD_DIR}/audio" ]; then
-          echo "Uploading audio samples..."
-          sshpass -p "${{ secrets.WORDPRESS_SFTP_PASS }}" scp -o StrictHostKeyChecking=no "${WEB_BUILD_DIR}/audio/"* "${WP_USER}@${WP_HOST}:${WP_DEST}/audio/"
-        fi
+        sshpass -e scp "${WP_SSH_OPTS[@]}" "${WONDERLAB_DIR}/web/index.php" "${WONDERLAB_DIR}/web/serve.php" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
 
         echo ""
         echo "==========================================================================="
         echo "  WonderlandAudio.com deployed (production)"
         echo "  URL: https://wonderlandaudio.com/demo/${REPOSITORY_NAME}/"
         echo "==========================================================================="
+        echo "- WonderlandAudio.com: https://wonderlandaudio.com/demo/${REPOSITORY_NAME}/" >> "$GITHUB_STEP_SUMMARY"
