@@ -76,6 +76,7 @@ class FakeLive:
         self.front, self.media, self.stale, self.mangle, self.dead = front, media, stale, mangle, dead
         self.fail_write, self.wrong_bullets = fail_write, wrong_bullets
         self.before_write, self.lost_answer = None, None
+        self.on_read, self.reads = None, {}
         self.writes, self.cleared = [], 0
         self.served = {pid: self.render(pid) for pid in self.pages}
 
@@ -92,6 +93,9 @@ class FakeLive:
             yield from self.walk(el.get("elements", []))
 
     def page(self, pid):
+        self.reads[pid] = self.reads.get(pid, 0) + 1
+        if self.on_read:
+            self.on_read(self, pid, self.reads[pid])
         return copy.deepcopy(self.pages[pid])
 
     def front_page_id(self):
@@ -461,6 +465,60 @@ class Publish(unittest.TestCase):
         s.before_write = joe_edits_home
         self.run_publish(s)
         self.assertIn("Joe's home edit", cl.visible_text(s.served[20]))
+
+    def test_home_unreadable_after_write_no_rollback(self):
+        # the home write landed but it can't be read back: don't undo the changelog on a guess, say it's unknown
+        s = FakeLive([page(), home()])
+        writes_done = {"home": False}
+
+        def home_written(site, pid):
+            if pid == 20:
+                writes_done["home"] = True
+        s.before_write = home_written
+
+        def unreadable_after(site, pid, n):
+            if pid == 20 and writes_done["home"]:
+                raise cl.Fail("GET page 20: connection reset")
+        s.on_read = unreadable_after
+        with self.assertRaisesRegex(cl.Fail, "not known"):
+            self.run_publish(s)
+        self.assertIn("1.1.0, 30 October 2026", cl.current_block(s.pages[10]))   # not rolled back
+
+    def test_rollback_restores_the_block_as_it_was_just_before(self):
+        # block A when publish starts, someone saves block B before the write, the home write fails: B comes back
+        s = FakeLive([page(data=page_data("<p>A</p>")), home()], fail_write=20)
+
+        def b_is_saved(site, pid, n):
+            if pid == 10 and n == 2:
+                d = json.loads(site.pages[10]["meta"]["_elementor_data"])
+                d[0]["elements"][2]["settings"]["editor"] = "<p>B</p>"
+                site.pages[10]["meta"]["_elementor_data"] = json.dumps(d)
+        s.on_read = b_is_saved
+        with self.assertRaisesRegex(cl.Fail, "put back as it was"):
+            self.run_publish(s)
+        self.assertEqual(cl.current_block(s.pages[10]), "<p>B</p>")
+
+    def test_transport_errors_become_fail(self):
+        import http.client
+        import urllib.request
+        site = cl.LiveSite.__new__(cl.LiveSite)
+        site.site, site.auth = "https://s", "x"
+        real = urllib.request.urlopen
+
+        def broken(*a, **k):
+            raise http.client.IncompleteRead(b"partial")
+        urllib.request.urlopen = broken
+        try:
+            for method in ("GET", "POST"):
+                with self.assertRaises(cl.Fail):
+                    site.req(method, "/x", {} if method == "POST" else None)
+        finally:
+            urllib.request.urlopen = real
+
+    def test_served_widget_ignores_divs_in_comments(self):
+        body = ('<div class="elementor-element elementor-element-v1 wla-version elementor-widget">'
+                '<div class="elementor-widget-container"><!-- old wrapper: <div> --><p>1.1.0</p></div></div><p>footer</p>')
+        self.assertEqual(cl.visible_text(cl.served_widget(body, "wla-version")), "1.1.0")
 
     def test_served_widget_stops_at_its_own_end(self):
         body = ('<div class="elementor-element elementor-element-v1 wla-version elementor-widget" data-id="v1">'

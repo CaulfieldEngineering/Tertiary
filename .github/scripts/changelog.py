@@ -43,6 +43,7 @@
 import argparse
 import datetime
 import html
+import http.client
 import json
 import os
 import re
@@ -68,6 +69,10 @@ VERSION_RE = re.compile(r"\b\d+\.\d+\.\d+\b")
 
 class Fail(Exception):
     pass
+
+
+class Unknown(Fail):
+    """The site could not be read back, so what it shows now is not known."""
 
 
 for _stream in (sys.stdout, sys.stderr):   # a Windows console is not UTF-8; never fail on a printed character
@@ -424,7 +429,7 @@ class LiveSite:
                     time.sleep(5)
                     continue
                 return e.code, e.read().decode("utf-8", "replace")
-            except (urllib.error.URLError, TimeoutError) as e:
+            except (OSError, http.client.HTTPException) as e:   # URLError, resets, timeouts, truncated answers
                 if method == "GET" and attempt < 2:
                     time.sleep(5)
                     continue
@@ -532,7 +537,8 @@ def served_widget(body, css_class):
     if len(m) != 1:
         return None
     depth, start = 1, m[0].end()
-    for t in re.finditer(r"<div\b|</div\s*>", body[start:]):
+    scan = re.sub(r"<!--.*?-->", lambda c: " " * len(c.group(0)), body[start:], flags=re.S)   # same offsets
+    for t in re.finditer(r"<div\b|</div\s*>", scan):
         depth += 1 if t.group(0).startswith("<div") else -1
         if depth == 0:
             return body[start:start + t.start()]
@@ -607,7 +613,17 @@ def publish(site, entries, version, page_id, plugin, dry_run=False, release_date
     # saved meanwhile is kept. (WordPress has no "write only if unchanged": a save landing in the same second as the
     # write can still be lost; that gap is one request.) The read-back checks only what the pipeline owns on the page
     # (the block, the version line), so an edit elsewhere is neither undone nor mistaken for a failure.
+    def read_owned(pid, owned):
+        """(page, what the pipeline owns on it now); Unknown if the page can't be read."""
+        try:
+            pg = site.page(pid)
+        except Fail as e:
+            raise Unknown(f"page {pid} could not be read back ({e})")
+        return pg, owned(pg)
+
     def write_owned(pid, build, owned, what):
+        """Read fresh, build on that copy, write, read back. Returns (page read back, page it was built on).
+        Fail: confirmed not written (nothing of ours there). Unknown: could not be read back."""
         fresh = site.page(pid)
         k, value, want = build(fresh)
         err = None
@@ -615,16 +631,26 @@ def publish(site, entries, version, page_id, plugin, dry_run=False, release_date
             site.write_page(pid, k, value)
         except Fail as e:          # the answer was lost or an error came back: the write may still have landed
             err = e
-        back = site.page(pid)
-        now = owned(back)
+        back, now = read_owned(pid, owned)
         if now != want:
-            raise Fail(f"{what} did not take" + (f" ({err})" if err else "") + f"; it now reads: {visible_text(str(now))[:200]}")
-        return back
+            raise Fail(f"{what} did not take" + (f" ({err})" if err else "") + f"; it reads: {visible_text(str(now))[:200]}")
+        return back, fresh
 
-    def build_block(new_block, expect_now=None):
+    def block_state():
+        try:
+            _, now = read_owned(page_id, current_block)
+        except Unknown as e:
+            return f"the changelog page could not be read to check ({e})"
+        return ("the changelog page shows the old entries" if now == before["block"] else
+                f"the changelog page shows {version}" if now == block else
+                "the changelog block reads something else; look at it")
+
+    def build_block(new_block, expect_now=None, remember=None):
         def build(pg):
             if expect_now is not None and current_block(pg) != expect_now:
                 raise Fail("the changelog block was changed by someone else meanwhile, so it was left as it is")
+            if remember is not None:
+                remember["block"] = current_block(pg)   # what to put back: the block as it was just before this write
             k, v = replace_block(pg, new_block)
             return k, v, new_block
         return build
@@ -635,28 +661,33 @@ def publish(site, entries, version, page_id, plugin, dry_run=False, release_date
             raise Fail("the home page's version line disappeared while the release ran")
         return "elementor", v, version_line_texts({"meta": {"_elementor_data": v}}, version_class)
 
-    old_block = current_block(page)
+    before = {"block": current_block(page)}
     try:
         try:
-            back = write_owned(page_id, build_block(block), current_block, "The changelog page")
+            back, _ = write_owned(page_id, build_block(block, remember=before), current_block, "The changelog page")
         except Fail as e:
-            now = current_block(site.page(page_id))
-            state = ("it still shows the old entries" if now == old_block else
-                     "it shows the new entries" if now == block else "its block reads something else; look at it")
-            raise Fail(f"Writing the changelog page failed: {e}. Checked again: {state}. The home page was not touched.")
+            state = block_state()
+            if state != f"the changelog page shows {version}":
+                raise Fail(f"Writing the changelog page failed: {e}. Checked again: {state}. The home page was not touched.")
+            back = site.page(page_id)   # it did land after all
         log(f"✓ Changelog page {page_id} written and read back")
         if home_new is not None:
             try:
-                hb = write_owned(home_id, build_home, lambda pg: version_line_texts(pg, version_class),
-                                 "The home page's version line")
+                hb, _ = write_owned(home_id, build_home, lambda pg: version_line_texts(pg, version_class),
+                                    "The home page's version line")
+            except Unknown as e:
+                raise Fail(f"The home page's version line was written but {e}, so whether it shows {version} is not "
+                           f"known; {block_state()}. Look at both pages, then re-run the job.")
             except Fail as e:
-                # The home page is not on the new version (checked). Put the changelog block back as it was, so the
-                # site never shows the new version in one place and the old one in the other; leave other edits alone.
+                # Confirmed: the home page is not on the new version. Put only the changelog block back (built on a
+                # fresh read, and only if it is still the block just written), so the site never shows the new
+                # version in one place and the old one in the other; other edits on the page stay.
                 try:
-                    write_owned(page_id, build_block(old_block, expect_now=block), current_block, "Putting the block back")
+                    write_owned(page_id, build_block(before["block"], expect_now=block), current_block,
+                                "Putting the changelog block back")
                     undo = "the changelog block was put back as it was (read back)"
                 except Fail as e2:
-                    undo = f"putting the changelog block back failed too ({e2}): the changelog shows {version}, the home page doesn't"
+                    undo = f"the changelog block was not put back ({e2}); now {block_state()}"
                 raise Fail(f"The home page's version line could not be set: {e}. {undo}. Fix the cause and re-run the job.")
             log(f"✓ Home page {home_id} version line set to {version} and read back")
     finally:
