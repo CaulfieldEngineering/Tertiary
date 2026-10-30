@@ -25,6 +25,15 @@ struct PretendServer : LicenseServer
     juce::String lastEmail;
     juce::String lastActivateEmail;      // [Claude 2026-10-29] the email the last activation sent
 
+    // [Claude 2026-10-30] M-01: the real server's email check. When orderEmail is set, every route compares the
+    // email sent with it exactly, capitals included, and answers invalid_email when it differs (as
+    // wonderlandaudio.com did on 2026-10-29). Empty: the canned replies above, as before.
+    juce::String orderEmail;
+    juce::StringArray validateEmails;    // every email validate was sent, in order
+
+    bool emailMatches (const juce::String& email) const { return orderEmail.isEmpty() || email == orderEmail; }
+    static LicenseReply invalidEmail()  { return reply ("invalid_email", "Invalid email address."); }
+
     static LicenseReply reply (const juce::String& code, const juce::String& message = {}, const juce::String& version = {})
     {
         LicenseReply r;
@@ -39,12 +48,17 @@ struct PretendServer : LicenseServer
     {
         ++validateCalls;
         lastEmail = email;
+        validateEmails.add (email);
+        if (! emailMatches (email))
+            return invalidEmail();
         return validateReply;
     }
 
     LicenseReply activate (const juce::String&, const juce::String& email, const juce::String&, const juce::String&) override
     {
         lastActivateEmail = email;
+        if (! emailMatches (email))
+            return invalidEmail();
         return activateReply;
     }
     LicenseReply deactivate (const juce::String&, const juce::String&, const juce::String&, const juce::String&) override { return {}; }

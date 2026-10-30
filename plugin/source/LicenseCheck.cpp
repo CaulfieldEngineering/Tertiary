@@ -108,10 +108,26 @@ bool isNewerVersion(const juce::String& latest, const juce::String& current)
     return false;
 }
 
+// [Claude 2026-10-30] M-01: trimmed only, never lower-cased (it was toLowerCase(), which the server rejects as
+// invalid_email when the order's email has capitals). See LicenseCheck.h.
 //==============================================================================
 juce::String normaliseEmail(const juce::String& email)
 {
-    return email.trim().toLowerCase();
+    return email.trim();
+}
+
+// [Claude 2026-10-30] M-01. See LicenseCheck.h.
+//==============================================================================
+juce::StringArray otherEmailForms(const juce::String& savedEmail)
+{
+    juce::StringArray forms;
+    const auto first = normaliseEmail(savedEmail);
+
+    for (auto form : { savedEmail, first.toLowerCase() })
+        if (form.isNotEmpty() && form != first && ! forms.contains(form))
+            forms.add(form);
+
+    return forms;
 }
 
 // [Claude 2026-10-29] V-01. See LicenseCheck.h.
@@ -146,7 +162,8 @@ Result runStartupCheck(LicenseServer& server, juce::PropertiesFile& settings,
     result.finished = true;
 
     auto key = settings.getValue("licenseKey").trim();
-    auto email = normaliseEmail(settings.getValue("licenseEmail"));
+    auto savedEmail = settings.getValue("licenseEmail");
+    auto email = normaliseEmail(savedEmail);   // [Claude 2026-10-30] M-01: as saved (trimmed), capitals kept
 
     // Demo copy: nothing to check (and the server only gives versions to valid keys)
     if (key.isEmpty() || email.isEmpty())
@@ -163,6 +180,33 @@ Result runStartupCheck(LicenseServer& server, juce::PropertiesFile& settings,
     if (nowMs - lastCheck >= recheckIntervalMs || nowMs < lastCheck)
     {
         auto reply = server.validate(key, email);
+
+        // [Claude 2026-10-30] M-01: before revoking for invalid_email, try the saved email's other forms once each
+        // (as saved, then lower case). A form that works is kept and saved. If a retry can't reach the server,
+        // nothing changes this time, as for any unreachable check.
+        if (reply.reachable && reply.code == "invalid_email")
+        {
+            bool retryUnreachable = false;
+
+            for (auto& form : otherEmailForms(savedEmail))
+            {
+                auto retry = server.validate(key, form);
+
+                if (retry.reachable && retry.code == "key_valid")
+                {
+                    reply = retry;
+                    email = form;
+                    settings.setValue("licenseEmail", form);
+                    break;
+                }
+
+                if (! retry.reachable)
+                    retryUnreachable = true;
+            }
+
+            if (reply.code != "key_valid" && retryUnreachable)
+                reply = {};   // treated as unreachable below
+        }
 
         if (reply.reachable && reply.code == "key_valid")
         {

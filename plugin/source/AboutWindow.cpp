@@ -513,13 +513,14 @@ void AboutWindow::mouseExit(const juce::MouseEvent& event)
 
 // [Claude 2026-10-27] The three server calls below are the same requests as in 1.0.2, now made through
 // licenseServer (LicenseServer.h). Changes: a SafePointer, so a reply that arrives after the window is closed
-// no longer touches a deleted window (that could crash the host); the email is sent in lower case (the server
-// compares it in lower case); the 5 s timeout now applies (it was set on a copy before); and the instance is a
+// no longer touches a deleted window (that could crash the host); the email is sent exactly as typed, only
+// trimmed ([Claude 2026-10-30] M-01: the server compares it exactly, capitals included; 1.1 had lower-cased it, which
+// gave invalid_email for an order email with capitals); the 5 s timeout now applies (it was set on a copy before); and the instance is a
 // real machine ID (LicenseCheck::getMachineInstance) instead of the computer's model name.
 void AboutWindow::attemptSerialKeyValidation()
 {
     auto serialKey = mTextEditorSerialKey.getText().trim();
-    auto email = LicenseCheck::normaliseEmail(mTextEditorEmailAddress.getText());
+    auto email = LicenseCheck::emailFromField(mTextEditorEmailAddress.getText());   // [Claude 2026-10-30] M-01: as typed, the same as activation
 
     if (serialKey.isEmpty())
     {

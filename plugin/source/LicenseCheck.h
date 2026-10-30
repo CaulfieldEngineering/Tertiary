@@ -74,10 +74,17 @@ namespace LicenseCheck
     /* True when latest (e.g. "1.2.0") is a higher version than current (e.g. "1.1.0") */
     bool isNewerVersion(const juce::String& latest, const juce::String& current);
 
-    /* The emails are compared in lower case by the server, so send them that way */
+    /* [Claude 2026-10-30] M-01: the server compares the email exactly, capitals included (tested 2026-10-29 on
+       wonderlandaudio.com: the order's email validates, the same email with other capitals gives invalid_email).
+       So the email is sent as the customer typed it and as it is saved, only trimmed. Never lower-cased. */
     juce::String normaliseEmail(const juce::String& email);
 
-    /* [Claude 2026-10-29] V-01: the email in the About window's field, ready to send (normalised). Once activated the
+    /* [Claude 2026-10-30] M-01: the other forms of a saved email to try once each when the weekly check gets
+       invalid_email: as saved (untrimmed, if that differs), then in lower case (if that differs). The first form
+       tried is normaliseEmail(saved). */
+    juce::StringArray otherEmailForms(const juce::String& savedEmail);
+
+    /* [Claude 2026-10-29] V-01: the email in the About window's field, ready to send (normalised: trimmed only). Once activated the
        field shows "Email: " before it; that is dropped only when it is there. A typed email has no prefix, and taking
        the text after "Email: " gave an empty email, so activation saved an empty one. */
     juce::String emailFromField(const juce::String& fieldText);

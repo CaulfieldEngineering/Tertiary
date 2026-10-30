@@ -103,7 +103,7 @@ struct LicenseTests : juce::UnitTest
             expect (! r.revoked);
             expectEquals (s.get().getValue ("licenseKey"), juce::String ("ABCD-1234"));
             expectEquals (s.get().getValue ("licenseLastValid").getLargeIntValue(), now);
-            expectEquals (server.lastEmail, juce::String ("joe@example.com"));   // sent in lower case
+            expectEquals (server.lastEmail, juce::String ("Joe@Example.com"));   // [Claude 2026-10-30] M-01: sent as saved, capitals kept
         }
 
         beginTest ("Refunded order: back to demo, with the server's reason");
@@ -234,7 +234,7 @@ struct LicenseTests : juce::UnitTest
             const auto email = LicenseCheck::emailFromField ("  Joe@Example.com ");   // typed: no "Email: "
             auto reply = server.activate (key, email, LicenseCheck::getMachineInstance (s.get()), "test");
             expectEquals (reply.code, juce::String ("key_activated"));
-            expectEquals (server.lastActivateEmail, juce::String ("joe@example.com"));
+            expectEquals (server.lastActivateEmail, juce::String ("Joe@Example.com"));   // [Claude 2026-10-30] M-01: as typed, trimmed
             LicenseCheck::saveActivation (s.get(), key, email, now);
 
             s.reload();
@@ -249,11 +249,90 @@ struct LicenseTests : juce::UnitTest
             auto r = LicenseCheck::runStartupCheck (server, s.get(), now + 8 * day, "1.1.0");
             expect (! r.revoked);
             expectEquals (server.validateCalls, 1);
-            expectEquals (server.lastEmail, juce::String ("joe@example.com"));
+            expectEquals (server.lastEmail, juce::String ("Joe@Example.com"));
 
             // Once activated the field shows "Email: ..."; deactivation reads the same email from it
             expectEquals (LicenseCheck::emailFromField ("Email: joe@example.com"), juce::String ("joe@example.com"));
             expectEquals (LicenseCheck::emailFromField (""), juce::String());
+        }
+
+        // [Claude 2026-10-30] M-01 of the 2026-10-30 master list: the server compares the email exactly (an order email
+        // with capitals validates; the same email in lower case gives invalid_email, which revokes). 1.1 lower-cased
+        // the email before sending it, so such a customer couldn't activate, and a 1.0.x customer who had typed the
+        // capitals was sent back to demo by the first weekly check. PretendServer.orderEmail models the exact check.
+        beginTest ("M-01: an order email with capitals: activation and the weekly check send it as typed; still activated");
+        {
+            TempSettings s;
+            PretendServer server;
+            server.orderEmail = "ClaudeSmithsonian+wla1@Gmail.com";
+            server.activateReply = PretendServer::reply ("key_activated");
+            server.validateReply = PretendServer::reply ("key_valid");
+
+            const auto email = LicenseCheck::emailFromField ("  ClaudeSmithsonian+wla1@Gmail.com ");
+            expectEquals (email, server.orderEmail);
+            expectEquals (server.activate ("ABCD-1234", email, LicenseCheck::getMachineInstance (s.get()), "test").code,
+                          juce::String ("key_activated"));
+            LicenseCheck::saveActivation (s.get(), "ABCD-1234", email, now);
+            s.reload();
+
+            auto r = LicenseCheck::runStartupCheck (server, s.get(), now + 8 * day, "1.1.0");
+            expect (! r.revoked, "not revoked");
+            expectEquals (server.validateCalls, 1);
+            expectEquals (server.lastEmail, server.orderEmail);
+            expectEquals (s.get().getValue ("licenseKey"), juce::String ("ABCD-1234"));
+        }
+
+        beginTest ("M-01: a 1.0.x settings file with capitals in the email: checked with the email as saved");
+        {
+            TempSettings s;
+            s.props.reset();
+            s.file.replaceWithText ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<PROPERTIES>\n"
+                                    "  <VALUE name=\"licenseKey\" val=\"OLD-KEY\"/>\n"
+                                    "  <VALUE name=\"licenseEmail\" val=\"Old.Customer@Example.com\"/>\n</PROPERTIES>\n");
+            s.reload();
+            PretendServer server;
+            server.orderEmail = "Old.Customer@Example.com";
+            server.validateReply = PretendServer::reply ("key_valid");
+            auto r = LicenseCheck::runStartupCheck (server, s.get(), now, "1.1.0");
+            expect (! r.revoked, "not revoked");
+            expectEquals (server.validateEmails.joinIntoString (","), juce::String ("Old.Customer@Example.com"));
+            expectEquals (s.get().getValue ("licenseKey"), juce::String ("OLD-KEY"));
+            expectEquals (s.get().getValue ("licenseEmail"), juce::String ("Old.Customer@Example.com"));
+        }
+
+        beginTest ("M-01: invalid_email: tried once as saved, then in lower case; the form that works is kept and saved");
+        {
+            expectEquals (LicenseCheck::otherEmailForms (" Joe@Example.com ").joinIntoString ("|"),
+                          juce::String (" Joe@Example.com |joe@example.com"));
+            expectEquals (LicenseCheck::otherEmailForms ("joe@example.com").size(), 0);
+            expectEquals (LicenseCheck::otherEmailForms ("").size(), 0);
+
+            TempSettings s;
+            s.activated (now - 8 * day, now - 8 * day);      // saved "Joe@Example.com"
+            PretendServer server;
+            server.orderEmail = "joe@example.com";            // the order's email differs from what was saved only in case
+            server.validateReply = PretendServer::reply ("key_valid");
+            auto r = LicenseCheck::runStartupCheck (server, s.get(), now, "1.1.0");
+            expect (! r.revoked, "not revoked");
+            expectEquals (server.validateEmails.joinIntoString (","), juce::String ("Joe@Example.com,joe@example.com"));
+            expectEquals (s.get().getValue ("licenseKey"), juce::String ("ABCD-1234"));
+            s.reload();
+            expectEquals (s.get().getValue ("licenseEmail"), juce::String ("joe@example.com"));
+            expectEquals (s.get().getValue ("licenseLastValid").getLargeIntValue(), now);
+        }
+
+        beginTest ("M-01: invalid_email in every form: revoked, after one retry");
+        {
+            TempSettings s;
+            s.activated (now - 8 * day, now - 8 * day);
+            PretendServer server;
+            server.orderEmail = "someone.else@example.com";
+            server.validateReply = PretendServer::reply ("key_valid");
+            auto r = LicenseCheck::runStartupCheck (server, s.get(), now, "1.1.0");
+            expect (r.revoked);
+            expectEquals (server.validateCalls, 2);
+            expect (s.get().getValue ("licenseKey").isEmpty());
+            expectEquals (s.get().getValue ("licenseEmail"), juce::String ("Joe@Example.com"));   // kept for re-entry
         }
 
         beginTest ("Machine instance: stable, not empty, and not the raw machine ID");
