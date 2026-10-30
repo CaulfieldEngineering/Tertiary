@@ -1299,6 +1299,7 @@ void openCloseMany()
     const float scales[] = { 1.f, 1.25f, 1.5f, 2.f };
     for (int i = 0; i < openCloseCycles; ++i)
     {
+        AutoreleasePool pool;   // as a host's event loop drains one (macOS)
         auto& ed = rig.open (scales[i % 4]);
         if (i % 10 == 0)
         {

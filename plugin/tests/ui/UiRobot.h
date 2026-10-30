@@ -72,6 +72,9 @@
  #include <objc/runtime.h>
  #include <objc/message.h>
  #include <CoreFoundation/CoreFoundation.h>
+ #include <mach/mach.h>
+ extern "C" void* objc_autoreleasePoolPush (void);   // libobjc (what @autoreleasepool compiles to)
+ extern "C" void objc_autoreleasePoolPop (void*);
  #include <unistd.h>
 #else
  #include <malloc.h>
@@ -451,12 +454,24 @@ bool installFakePointer()                         { return false; }
 /* Runs the message loop for a while: async messages, timers, repaints. Written here rather than with JUCE's
    runDispatchLoopUntil, which needs JUCE_MODAL_LOOPS_PERMITTED; the plugin is built without modal loops, and so is
    this program, so pop-ups behave exactly as they do in a host. */
+/* An Objective-C autorelease pool (nothing elsewhere). A host's event loop drains one on every event; without them,
+   anything a Cocoa object keeps alive until it is released stays alive for good, and looks like a leak. */
+struct AutoreleasePool
+{
+   #if JUCE_MAC
+    AutoreleasePool() : pool (objc_autoreleasePoolPush()) {}
+    ~AutoreleasePool() { objc_autoreleasePoolPop (pool); }
+    void* pool;
+   #endif
+};
+
 void pump (int ms = 15)
 {
     const auto end = juce::Time::getMillisecondCounterHiRes() + ms;
     do
     {
        #if JUCE_MAC
+        AutoreleasePool pool;
         CFRunLoopRunInMode (kCFRunLoopDefaultMode, 0.001, true);
        #else
         if (! juce::detail::dispatchNextMessageOnSystemQueue (true))
@@ -853,6 +868,11 @@ juce::String processMemory()
     PROCESS_MEMORY_COUNTERS c {};
     if (GetProcessMemoryInfo (GetCurrentProcess(), &c, sizeof (c)))
         return juce::String ((double) c.WorkingSetSize / 1048576.0, 1) + " MB";
+   #elif JUCE_MAC
+    mach_task_basic_info info {};
+    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info (mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t) &info, &count) == KERN_SUCCESS)
+        return juce::String ((double) info.resident_size / 1048576.0, 1) + " MB";
    #endif
     return "n/a";
 }
@@ -931,8 +951,11 @@ int run (int argc, char* argv[], Suite suite)
         scenarioStartMs = juce::Time::currentTimeMillis();
         const auto t0 = juce::Time::getMillisecondCounterHiRes();
         std::cout << "---- " << s.id << "  [" << s.plan << "]  " << s.title << std::endl;
-        s.run();
-        closeMenus();
+        {
+            AutoreleasePool pool;
+            s.run();
+            closeMenus();
+        }
         std::cout << "     " << s.id << " took " << juce::String ((juce::Time::getMillisecondCounterHiRes() - t0) / 1000.0, 1) << " s" << std::endl;
     }
     scenarioStartMs = 0;
