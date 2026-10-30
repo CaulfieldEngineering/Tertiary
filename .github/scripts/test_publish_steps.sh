@@ -72,7 +72,8 @@ export PATH="$WORKDIR/bin:$PATH" FAKE="$WORK"
 export WORDPRESS_SITE=https://store.invalid WORDPRESS_USERNAME=u WORDPRESS_APPLICATION_PASSWORD=p
 export GITHUB_REPOSITORY=CaulfieldEngineering/Tertiary MAC_URL=https://store.invalid/new.pkg WIN_URL=https://store.invalid/new.exe
 
-start() {   # both redirects on the old installers
+start() {   # both redirects on the old installers (ONLY_MAC=1: the Windows one doesn't exist)
+  [ "${ONLY_MAC:-0}" = 1 ] && { echo '[{"id":1,"url":"/tertiary-download-mac","action_data":{"url":"https://store.invalid/old.pkg"}}]' > "$WORK/state.json"; rm -f "$WORK/posted" "$WORK/read-failed" "$WORK/first-done"; return; }
   echo '[{"id":1,"url":"/tertiary-download-mac","action_data":{"url":"https://store.invalid/old.pkg"}},
          {"id":2,"url":"/tertiary-download-windows","action_data":{"url":"https://store.invalid/old.exe"}}]' > "$WORK/state.json"
   rm -f "$WORK/posted" "$WORK/read-failed" "$WORK/first-done"
@@ -103,6 +104,7 @@ check "Windows says 200, changes nothing: Mac put back" 1 '["old.pkg","old.exe"]
 check "Mac goes through, its read-back fails: put back" 1 '["old.pkg","old.exe"]' "both redirects were put back"    READ_FAIL_SOURCE=/tertiary-download-mac
 check "Windows goes through, read-back fails: both back" 1 '["old.pkg","old.exe"]' "both redirects were put back"   READ_FAIL_SOURCE=/tertiary-download-windows
 check "Windows fails and Mac can't be put back: says so" 1 '["new.pkg","old.exe"]' "putting the redirects back failed" FAIL_SOURCE=/tertiary-download-windows IGNORE_AFTER_FIRST=/tertiary-download-mac
+ONLY_MAC=1 check "a redirect missing: stops, nothing changed"     1 '["old.pkg"]'            "must both exist"
 
 echo "$PASS passed, $FAILED failed"
 [ "$FAILED" = 0 ]

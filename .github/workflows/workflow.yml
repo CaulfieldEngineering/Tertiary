@@ -1458,6 +1458,11 @@ jobs:
         MAC_BEFORE=$(redirect_target "$MAC_SOURCE") || { echo "::error::Could not read the current Mac redirect. Nothing was changed."; exit 1; }
         WIN_BEFORE=$(redirect_target "$WIN_SOURCE") || { echo "::error::Could not read the current Windows redirect. Nothing was changed."; exit 1; }
         echo "Redirects before: Mac ${MAC_BEFORE:-none}, Windows ${WIN_BEFORE:-none}"
+        # A redirect that doesn't exist yet could not be put back, so both must exist (create them once by hand)
+        if [ -z "$MAC_BEFORE" ] || [ -z "$WIN_BEFORE" ]; then
+          echo "::error::The download redirects $MAC_SOURCE and $WIN_SOURCE must both exist before a release (a new one could not be put back if the other failed). Create the missing one in Redirection, then re-run. Nothing was changed."
+          exit 1
+        fi
         put_back() {   # $1 what failed
           local ok=1 now
           for pair in "$MAC_SOURCE|$MAC_BEFORE" "$WIN_SOURCE|$WIN_BEFORE"; do
