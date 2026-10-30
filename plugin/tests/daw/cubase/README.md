@@ -50,6 +50,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File plugin\tests\daw\cubase\tert
 ```
 
 - Cubase must be closed. The script never closes or kills Cubase except with Ctrl+Q on its own run.
+- Cubase needs an audio output that is always there (see "Audio output" below), or the export does nothing.
 - **Goldens are per machine**, so they are not in git. The default place is
   `%USERPROFILE%\.wla-test\goldens\tertiary\cubase\harness.wav`; use `-Golden <folder>` to change it.
 - Each run leaves `Tertiary harness\Runs\<date-time>\` and a line in `Runs\results.log`, both git-ignored.
@@ -70,11 +71,36 @@ pipeline tools:
 The default folder is `%USERPROFILE%\Dropbox\Joe's Music\_Production\_PIPELINE\tools`. Override it with `-Tools <folder>`
 or `$env:WLA_CUBASE_TOOLS`. The script checks that all four helpers are there before it starts.
 
-## Status (2026-10-29)
+## Audio output (the fix that made export work, 2026-10-29)
 
-- Install, launch and open all pass unattended.
-- **Export does not work yet by automation.** The Export Audio Mixdown dialog opens with the right settings, but
-  the synthetic click on **Export Audio** does nothing: no progress window and no file. Everything that was tried is
-  listed in `CUBASE-PLAYBOOK.md` under "Tertiary harness run, and where it stopped". The next step is for Joe to
-  press it once by hand.
-- There is no golden yet, so every run before that ends `NOGOLD` or `STOPPED`.
+Cubase needs a working audio device for its engine to run. Without one, audio tracks do not play and
+**File > Export > Audio Mixdown silently does nothing** (the button looks pressed, no progress window, no file),
+in every project. On the mini PC, Stereo Out used to go through the Generic Low Latency ASIO Driver to the TV's
+HDMI audio ("2 - D40f-J09 (AMD High Definition Audio Device)"), which disappears when the TV is off. Joe,
+2026-10-29: "can we just set up a dummy driver or something? we'll never play cubase out of the tv".
+
+Fix: **VB-Audio Virtual Cable** (free, vb-audio.com, Driver Pack 45) is installed, and Cubase plays into it:
+
+- Generic Low Latency ASIO Driver, Output = **CABLE Input (VB-Audio Virtual Cable)**. The setting is in the registry,
+  `HKCU\Software\ASIO\Generic Low Latency ASIO Driver`, value `Output` = the endpoint ID; it can be changed there
+  with Cubase closed (Studio Setup > Generic Low Latency ASIO Driver does the same by hand).
+- Stereo Out Left/Right = `CABLE Input (VB-Audio Virtua 1/2` (saved in `Tertiary harness.cpr`).
+- Cubase's Missing Ports dialog has **Map Always** set from the TV's two ports to the cable's, so older projects
+  open on the cable too (`%APPDATA%\Steinberg\Cubase 12_64\Port Setup.xml`, list `Mappings`).
+
+The cable is always present, needs nothing plugged in, and nobody hears it. Windows' default playback device was
+not changed. To hear Cubase, pick another output in Studio Setup (the TV still shows there when it is on).
+
+## Status (2026-10-29, night)
+
+- Install, launch, open, export, quit and compare all pass unattended: about 30 s per run.
+- **Golden:** `%USERPROFILE%\.wla-test\goldens\tertiary\cubase\harness.wav`, made 2026-10-29 23:45 from build
+  `84FE898419E6D05A`. Marked "first run, Joe to listen" in `golden-info.txt` beside it. A second run matched it bit
+  for bit (PASS). L peak -4.52 dBFS, RMS -18.20 dBFS; R peak -5.66 dBFS, RMS -20.06 dBFS; 24.773 s.
+- The export makes Cubase mark the project changed, so Ctrl+Q asks to save. The run script answers **Don't Save**,
+  only when the buttons are exactly Save / Don't Save / Cancel and the harness is the only project open.
+- **Export Range:** the list under the Locators tab is always empty; that list is only for the Cycle Markers tab.
+  Locators mode exports bar 1 to 13 as it is. No cycle marker is needed.
+- The export dialog remembers its format across projects. On 2026-10-29 it had been left on AIFF, 16 kHz, 16 bit
+  and was set back to Wave, 48 kHz, 32 bit float. If a run ever fails on format, check the dialog first.
+- The harness track is not record-armed in the saved project.

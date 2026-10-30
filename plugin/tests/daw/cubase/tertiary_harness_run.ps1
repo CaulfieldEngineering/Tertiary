@@ -16,9 +16,11 @@
 # 2. Opens "Tertiary harness.cpr" (the folder "Tertiary harness" next to this script) by launching Cubase with its path.
 # 3. File > Export > Audio Mixdown with the project's saved settings (Stereo Out, locators bar 1 to 13, 48 kHz
 #    32-bit float, name "Tertiary harness", project Mixdown folder), Export Audio.
-#    NOT YET WORKING (2026-10-29): the dialog opens, but the synthetic click on Export Audio does nothing (no
-#    progress window, no file). See CUBASE-PLAYBOOK.md, "Tertiary harness run, and where it stopped".
-# 4. Quits Cubase with Ctrl+Q.
+#    Works since 2026-10-29 night. Before that the click "did nothing" because Cubase's audio engine had no device:
+#    Stereo Out went to the TV's HDMI audio, which disappears when the TV is off. Cubase's output is now VB-Audio
+#    Virtual Cable ("CABLE Input"), which is always there (README.md, "Audio output").
+# 4. Quits Cubase with Ctrl+Q. The export marks the project changed, so Cubase asks to save: the script answers
+#    Don't Save for the harness only (exact buttons and the harness as the only open project), otherwise it stops.
 # 5. Moves the export into Runs\<date-time>\harness.wav and compares it with the golden using the repo's
 #    plugin\tests\regression\compare_renders.py. -MakeGolden stores this run's render as the golden instead (only
 #    after listening to it). Goldens are per machine (this Cubase on this PC), so they live outside the repo, in
@@ -145,8 +147,28 @@ Say ("exported {0:N1} MB" -f ((Get-Item -LiteralPath $Export).Length / 1MB))
 if ((Front) -notmatch '"Cubase Pro Project - Tertiary harness"') { Start-Sleep 1; & powershell -NoProfile -ExecutionPolicy Bypass -File "$T\screen.ps1" focus '^Cubase Pro Project - Tertiary harness' | Out-Null }
 if ((Front) -match '"Cubase Pro Project - Tertiary harness"') { & powershell -NoProfile -ExecutionPolicy Bypass -File "$T\screen.ps1" key '^q' | Out-Null }
 else { Say "WARNING: could not bring the project to the front for Ctrl+Q (front: $(Front))" }
-$quit = $false
-for ($i = 0; $i -lt 60; $i++) { Start-Sleep -Seconds 1; if (-not (Get-Process Cubase12 -ErrorAction SilentlyContinue)) { $quit = $true; break }; $f = Front; if ($f -and $f -notmatch '"Cubase Pro Project - Tertiary harness"' -and $f -notmatch 'SmtgMain') { break } }
+$quit = $false; $answered = $false
+for ($i = 0; $i -lt 60; $i++) {
+  Start-Sleep -Seconds 1
+  if (-not (Get-Process Cubase12 -ErrorAction SilentlyContinue)) { $quit = $true; break }
+  $f = Front
+  if ($f -and $f -notmatch '"Cubase Pro Project - Tertiary harness"' -and $f -notmatch 'SmtgMain') {
+    # The export marks the project changed, so Ctrl+Q asks "Do you want to save the project 'Tertiary harness.cpr'?".
+    # Known-safe answer, for this harness only (HQ agent/README.md, screen-control rules; Joe's brief 2026-10-29):
+    # Don't Save, and only when the prompt's buttons are exactly Save / Don't Save / Cancel and the harness is the
+    # only project open. Anything else: stop, nothing clicked.
+    $txt = & powershell -NoProfile -ExecutionPolicy Bypass -File "$T\cubase_windows.ps1" -Text
+    $btns = @($txt | Select-Object -Skip 1 | ForEach-Object { if ($_ -match '^\s+- \[Button\] (.+)$') { $Matches[1] } else { '|' } }) -join ','
+    $btns = ($btns -split ',\|')[0]
+    $projects = @($txt | Where-Object { $_ -match '"Cubase Pro Project - ' })
+    if (-not $answered -and $f -match '^\*\s+"Cubase Pro"\s+SteinbergWindowClass' -and $btns -eq "Save,Don't Save,Cancel" -and $projects.Count -eq 1 -and $projects[0] -match '"Cubase Pro Project - Tertiary harness"') {
+      Say "save prompt for the harness on quit: Don't Save (the harness .cpr stays as it is in git)"
+      & powershell -NoProfile -ExecutionPolicy Bypass -File "$T\screen.ps1" button "Don't Save" | Out-Null
+      $answered = $true; continue
+    }
+    break
+  }
+}
 $quitNote = ''
 if ($quit) { Say 'Cubase closed' } else { $quitNote = "Cubase did not close; front window: $(Front)"; Say "WARNING: $quitNote (left open, nothing clicked)"; Say ("screenshot: " + (Shot 'quit')) }
 
