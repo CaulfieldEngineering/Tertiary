@@ -17,8 +17,9 @@
         options:  --golden <folder>   reference renders (default plugin/tests/golden)
                   --make-golden       write the reference renders instead of comparing
                   --expect-demo       this machine has no key, so the demo gaps must be there
-                  --only <n>          run one section (1 to 9)
+                  --only <n>          run one section (1 to 10)
                   --write-session <file>   save a session (and its values, .txt) from the loaded plugin
+                  --describe          print the plug-in's description as XML  [Claude 2026-10-30]
         HostTest --write-input <file.wav>               the golden renders' input, for the REAPER test
         HostTest --live-license <key> <email>           [Claude 2026-10-30] the licence routes against the REAL server,
                                                         with a test key; leaves the key with nothing activated
@@ -38,6 +39,8 @@
       8  Golden renders: fixed input and settings, compared with files in the repo
       9  Presets through the host: the list, each one loads and is heard, Default = golden,
          remembered in the session, a 1.0.2 session loads unchanged  [Claude 2026-10-27]
+     10  The window through the host: at every window size and host scale, the plug-in's window is
+         exactly the UI's size, and is put back when the host sizes it otherwise  [Claude 2026-10-30]
 
   ==============================================================================
 */
@@ -46,6 +49,14 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 #include "PretendServer.h"
 #include "PresetManager.h"   // [Claude 2026-10-27] the factory preset list, to check what the host sees
+#if JUCE_WINDOWS
+ // [Claude 2026-10-30] section 10 opens the plug-in's view itself, as a DAW does, and measures its window in
+ // screen pixels. The VST3 interface headers only: the interface IDs are already in JUCE's VST3 hosting code.
+ #define JUCE_VST3HEADERS_INCLUDE_HEADERS_ONLY 1
+ #include <juce_audio_processors/format_types/juce_VST3Headers.h>
+ #undef JUCE_VST3HEADERS_INCLUDE_HEADERS_ONLY
+ #include <windows.h>
+#endif
 
 namespace
 {
@@ -886,6 +897,354 @@ void section9(const juce::File& golden)
     }
 }
 
+//==============================================================================
+// 10. The window through the host  [Claude 2026-10-30]
+//==============================================================================
+/* RC1 bug (Joe, Cubase on his laptop): the window opened nearly full screen, black, with the UI at its normal
+   size in the corner; choosing a size from the menu put it right. Here the built VST3 is opened the way a DAW
+   opens it (createView, the host's scale factor, attached), at each window size and host scale, and the
+   plug-in's own window (its HWND, in screen pixels) must be exactly the UI's size: 750 x 478 x the chosen size
+   x the host's scale. Then the host gives the window a different size, as Cubase did, and the plug-in must put
+   it back. Windows only (the plug-in's window is found by its HWND). */
+#if JUCE_WINDOWS
+struct PluginWindowProbe
+{
+    HWND top = nullptr, plugin = nullptr;
+    juce::String hostClass;
+
+    static juce::String className(HWND h)
+    {
+        wchar_t buf[256] = {};
+        GetClassNameW(h, buf, 255);
+        return juce::String(buf);
+    }
+
+    static BOOL CALLBACK visit(HWND h, LPARAM self)
+    {
+        auto& probe = *reinterpret_cast<PluginWindowProbe*>(self);
+        // the plug-in's JUCE has its own window class (another copy of JUCE, another class name)
+        if (probe.plugin == nullptr && className(h).startsWith("JUCE_") && className(h) != probe.hostClass)
+            probe.plugin = h;
+        return TRUE;
+    }
+
+    explicit PluginWindowProbe(juce::Component& hostWindow)
+    {
+        if (auto* peer = hostWindow.getPeer())
+        {
+            top = (HWND) peer->getNativeHandle();
+            hostClass = className(top);
+            EnumChildWindows(top, visit, (LPARAM) this);
+        }
+    }
+
+    static juce::Rectangle<int> clientSize(HWND h)
+    {
+        RECT r {};
+        GetClientRect(h, &r);
+        return { 0, 0, (int) (r.right - r.left), (int) (r.bottom - r.top) };
+    }
+};
+#endif
+
+void pump(int ms)
+{
+    const auto end = juce::Time::getMillisecondCounter() + (juce::uint32) ms;
+    while (juce::Time::getMillisecondCounter() < end)
+        juce::MessageManager::getInstance()->runDispatchLoopUntil(10);
+}
+
+#if JUCE_WINDOWS
+/* A small host that opens the plug-in's view itself, in the order Cubase does: the frame, the host's scale,
+   getSize, a window of that size, attached. Its frame can answer the plug-in's resize requests made while the
+   view is being attached with another size (the whole screen), as Cubase did on Joe's laptop (RC1: the window
+   nearly full screen, black, the UI at its size in the corner), and answers every later request as asked (Joe:
+   choosing a size from the menu put it right). */
+struct DawLikeHost
+{
+    struct Frame : public Steinberg::IPlugFrame
+    {
+        HWND window = nullptr;
+        Steinberg::ViewRect attachAnswer {};   // empty: answer every request as asked
+        bool attaching = false;
+        bool alwaysWrong = false;   // answer every request with attachAnswer (a host that never agrees)
+        int requests = 0;
+
+        Steinberg::tresult PLUGIN_API resizeView(Steinberg::IPlugView* view, Steinberg::ViewRect* asked) override
+        {
+            if (view == nullptr || asked == nullptr) return Steinberg::kInvalidArgument;
+            ++requests;
+            auto answer = ((attaching || alwaysWrong) && attachAnswer.getWidth() > 0) ? attachAnswer : *asked;
+            SetWindowPos(window, nullptr, 0, 0, answer.getWidth(), answer.getHeight(), SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+            view->onSize(&answer);
+            return Steinberg::kResultTrue;
+        }
+        Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID iid, void** obj) override
+        {
+            if (Steinberg::FUnknownPrivate::iidEqual(iid, Steinberg::IPlugFrame::iid) || Steinberg::FUnknownPrivate::iidEqual(iid, Steinberg::FUnknown::iid))
+            { *obj = this; return Steinberg::kResultOk; }
+            *obj = nullptr;
+            return Steinberg::kNoInterface;
+        }
+        Steinberg::uint32 PLUGIN_API addRef() override  { return 1; }
+        Steinberg::uint32 PLUGIN_API release() override { return 1; }
+    };
+
+    HMODULE module = nullptr;
+    Steinberg::IPluginFactory* factory = nullptr;
+    Steinberg::Vst::IComponent* component = nullptr;
+    Steinberg::Vst::IEditController* controller = nullptr;
+    Steinberg::Vst::IConnectionPoint* componentPoint = nullptr;
+    Steinberg::Vst::IConnectionPoint* controllerPoint = nullptr;
+    Steinberg::IPlugView* view = nullptr;
+    Frame frame;
+    juce::String error;
+
+    explicit DawLikeHost(const juce::File& bundle)
+    {
+        using namespace Steinberg;
+        const auto binary = bundle.getChildFile("Contents").getChildFile("x86_64-win").getChildFile(bundle.getFileName());
+        module = LoadLibraryW(binary.getFullPathName().toWideCharPointer());
+        if (module == nullptr) { error = "can't load " + binary.getFullPathName(); return; }
+        using GetFactory = IPluginFactory* (PLUGIN_API*)();
+        if (auto get = (GetFactory) (void*) GetProcAddress(module, "GetPluginFactory")) factory = get();
+        if (factory == nullptr) { error = "no factory"; return; }
+        for (int32 i = 0; i < factory->countClasses() && component == nullptr; ++i)
+        {
+            PClassInfo info;
+            if (factory->getClassInfo(i, &info) == kResultOk && std::strcmp(info.category, kVstAudioEffectClass) == 0)
+                factory->createInstance(info.cid, Vst::IComponent::iid, (void**) &component);
+        }
+        if (component == nullptr || component->initialize(nullptr) != kResultOk) { error = "no component"; return; }
+        TUID controllerId;
+        component->getControllerClassId(controllerId);
+        factory->createInstance(controllerId, Vst::IEditController::iid, (void**) &controller);
+        if (controller == nullptr || controller->initialize(nullptr) != kResultOk) { error = "no controller"; return; }
+        component->queryInterface(Vst::IConnectionPoint::iid, (void**) &componentPoint);
+        controller->queryInterface(Vst::IConnectionPoint::iid, (void**) &controllerPoint);
+        if (componentPoint == nullptr || controllerPoint == nullptr) { error = "no connection points"; return; }
+        controllerPoint->connect(componentPoint);
+        componentPoint->connect(controllerPoint);
+    }
+
+    /* Opens the view at the host's scale, as Cubase does */
+    void open(float hostScale, Steinberg::ViewRect attachAnswer = {})
+    {
+        using namespace Steinberg;
+        frame.attachAnswer = attachAnswer;
+        frame.requests = 0;
+        view = controller->createView(Vst::ViewType::kEditor);
+        if (view == nullptr) { error = "no view"; return; }
+        view->setFrame(&frame);
+        IPlugViewContentScaleSupport* scale = nullptr;
+        if (view->queryInterface(IPlugViewContentScaleSupport::iid, (void**) &scale) == kResultOk && scale != nullptr)
+        {
+            scale->setContentScaleFactor(hostScale);
+            scale->release();
+        }
+        ViewRect size;
+        view->getSize(&size);
+        frame.window = CreateWindowExW(WS_EX_TOOLWINDOW, L"STATIC", L"DawLikeHost", WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN,
+                                       40, 40, size.getWidth(), size.getHeight(), nullptr, nullptr, nullptr, nullptr);
+        frame.attaching = true;
+        view->attached((void*) frame.window, kPlatformTypeHWND);
+        frame.attaching = false;
+    }
+
+    /* The scale of the screen the host's window opens on (40, 40), as a DAW sends it */
+    static float screenScale()
+    {
+        const POINT p { 40, 40 };
+        UINT x = 96, y = 96;
+        using GetDpiForMonitorFn = HRESULT (WINAPI*)(HMONITOR, int, UINT*, UINT*);
+        if (auto shcore = LoadLibraryW(L"shcore.dll"))
+        {
+            if (auto get = (GetDpiForMonitorFn) (void*) GetProcAddress(shcore, "GetDpiForMonitor"))
+                get(MonitorFromPoint(p, MONITOR_DEFAULTTOPRIMARY), 0, &x, &y);
+            FreeLibrary(shcore);
+        }
+        return (float) x / 96.0f;
+    }
+
+    /* The scale of the screen the host's window is on now */
+    float windowScale() const   { return frame.window != nullptr ? (float) GetDpiForWindow(frame.window) / 96.0f : screenScale(); }
+
+    HWND pluginWindow() const   { return frame.window != nullptr ? GetWindow(frame.window, GW_CHILD) : nullptr; }
+
+    static juce::Rectangle<int> clientSize(HWND h)
+    {
+        RECT r {};
+        if (h != nullptr) GetClientRect(h, &r);
+        return { 0, 0, (int) (r.right - r.left), (int) (r.bottom - r.top) };
+    }
+
+    void close()
+    {
+        if (view != nullptr)
+        {
+            view->removed();
+            view->setFrame(nullptr);
+            view->release();
+            view = nullptr;
+        }
+        if (frame.window != nullptr) { DestroyWindow(frame.window); frame.window = nullptr; }
+    }
+
+    ~DawLikeHost()
+    {
+        close();
+        if (componentPoint != nullptr && controllerPoint != nullptr)
+        {
+            componentPoint->disconnect(controllerPoint);
+            controllerPoint->disconnect(componentPoint);
+        }
+        if (componentPoint != nullptr) componentPoint->release();
+        if (controllerPoint != nullptr) controllerPoint->release();
+        if (controller != nullptr) { controller->terminate(); controller->release(); }
+        if (component != nullptr) { component->terminate(); component->release(); }
+        if (factory != nullptr) factory->release();
+        if (module != nullptr) FreeLibrary(module);
+    }
+};
+#endif
+
+void section10()
+{
+   #if ! JUCE_WINDOWS
+    report("SKIP", "10 window size through the host", "Windows only");
+   #else
+    // The plug-in reads its window size from Tertiary's settings file; put back what was there afterwards
+    // (a fresh read each time: the plug-in writes the file too, when its window closes)
+    struct RestoreSetting   // put back on every way out of this section, after the plug-ins below are gone
+    {
+        bool had = juce::PropertiesFile(LicenseCheck::getSettingsOptions()).containsKey("uiScale");
+        juce::String before = juce::PropertiesFile(LicenseCheck::getSettingsOptions()).getValue("uiScale");
+        ~RestoreSetting()
+        {
+            juce::PropertiesFile props(LicenseCheck::getSettingsOptions());
+            if (had) props.setValue("uiScale", before); else props.removeValue("uiScale");
+            props.saveIfNeeded();
+        }
+    } restoreSetting;
+    auto setRemembered = [](float scale) {
+        juce::PropertiesFile props(LicenseCheck::getSettingsOptions());
+        props.setValue("uiScale", (double) scale);
+        props.saveIfNeeded();
+    };
+
+    const double system = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->scale;
+    report("INFO", "10 this screen's scaling", juce::String(juce::roundToInt(system * 100)) + " %");
+
+    for (float uiScale : { 1.0f, 1.25f, 1.5f, 2.0f })
+        for (float hostScale : { 1.0f, 1.25f, 1.5f })
+        {
+            setRemembered(uiScale);
+            auto p = create(48000, 512);
+            if (p == nullptr) return;
+            const auto label = "10 " + juce::String(juce::roundToInt(uiScale * 100)) + " % window, host scale "
+                               + juce::String(hostScale, 2);
+
+            std::unique_ptr<juce::AudioProcessorEditor> hostWindow(p->createEditorIfNeeded());
+            if (hostWindow == nullptr) { check(false, label, "no editor"); continue; }
+            hostWindow->setScaleFactor(hostScale);   // the host's scale before the window is shown, as a DAW does
+            hostWindow->addToDesktop(0);
+            hostWindow->setTopLeftPosition(40, 40);
+            hostWindow->setVisible(true);
+            pump(900);   // the plug-in checks the screen's scale on a 500 ms timer
+
+            const double total = system * hostScale;
+            const int wantW = juce::roundToInt(juce::roundToInt(750 * uiScale) * total);
+            const int wantH = juce::roundToInt(juce::roundToInt(478 * uiScale) * total);
+            auto fits = [](juce::Rectangle<int> r, int w, int h) { return std::abs(r.getWidth() - w) <= 2 && std::abs(r.getHeight() - h) <= 2; };
+            auto show = [](juce::Rectangle<int> r) { return juce::String(r.getWidth()) + " x " + juce::String(r.getHeight()); };
+
+            PluginWindowProbe probe(*hostWindow);
+            if (probe.plugin == nullptr) { check(false, label, "the plug-in's window was not found"); continue; }
+            const auto opened = PluginWindowProbe::clientSize(probe.plugin);
+            check(fits(opened, wantW, wantH), label + ": opens at the UI's size",
+                  show(opened) + " screen pixels (want " + juce::String(wantW) + " x " + juce::String(wantH) + ")");
+
+            // The host sizes the plug-in's window itself (as a user dragging, or a host restoring a size): it goes back
+            SetWindowPos(probe.plugin, nullptr, 0, 0, wantW * 2, wantH * 2, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+            pump(900);
+            const auto after = PluginWindowProbe::clientSize(probe.plugin);
+            check(fits(after, wantW, wantH), label + ": sized otherwise by the host, it goes back",
+                  show(after) + " screen pixels (want " + juce::String(wantW) + " x " + juce::String(wantH) + ")");
+
+            // The host's scale changes while the window is open (a move to another screen, a new Windows setting)
+            if (juce::approximatelyEqual(hostScale, 1.0f))
+                for (float live : { 1.25f, 1.5f, 1.0f })
+                {
+                    hostWindow->setScaleFactor(live);
+                    pump(900);
+                    const int w = juce::roundToInt(juce::roundToInt(750 * uiScale) * system * live);
+                    const int h = juce::roundToInt(juce::roundToInt(478 * uiScale) * system * live);
+                    const auto now = PluginWindowProbe::clientSize(probe.plugin);
+                    check(fits(now, w, h), label + ": host scale changed to " + juce::String(live, 2) + " while open",
+                          show(now) + " screen pixels (want " + juce::String(w) + " x " + juce::String(h) + ")");
+                }
+
+            hostWindow.reset();
+            p.reset();
+            pump(50);
+        }
+
+    // A host that answers the first resize request with the whole screen (Cubase on Joe's laptop, RC1)
+    {
+        DawLikeHost host(juce::File(description.fileOrIdentifier));
+        // Cubase sends the screen's scale; JUCE's plug-in follows the screen the window is on
+        const float hostScale = DawLikeHost::screenScale();
+        report("INFO", "10 Cubase-like host: Windows scaling", juce::String(juce::roundToInt(hostScale * 100)) + " %");
+        for (float uiScale : { 1.0f, 1.25f, 1.5f, 2.0f })
+            for (bool wrongFirstAnswer : { false, true })
+            {
+                if (host.error.isNotEmpty()) break;
+                setRemembered(uiScale);
+                const auto label = "10 Cubase-like host, " + juce::String(juce::roundToInt(uiScale * 100)) + " % window"
+                                   + (wrongFirstAnswer ? ", answers the whole screen while opening" : "");
+                const juce::Rectangle<int> screen { GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
+                host.open(hostScale, wrongFirstAnswer ? Steinberg::ViewRect { 0, 0, juce::roundToInt(screen.getWidth()), juce::roundToInt(screen.getHeight()) - 72 }
+                                                      : Steinberg::ViewRect {});
+                pump(1200);
+                if (const char* hold = std::getenv("WLA_HOSTTEST_HOLD"))   // time to take a screenshot of the window
+                    pump(juce::String(hold).getIntValue());
+                const float settled = host.windowScale();   // JUCE's plug-in follows the screen its window is on
+                const int wantW = juce::roundToInt(juce::roundToInt(750 * uiScale) * settled);
+                const int wantH = juce::roundToInt(juce::roundToInt(478 * uiScale) * settled);
+                const auto plugin = DawLikeHost::clientSize(host.pluginWindow());
+                const auto window = DawLikeHost::clientSize(host.frame.window);
+                auto show = [](juce::Rectangle<int> r) { return juce::String(r.getWidth()) + " x " + juce::String(r.getHeight()); };
+                check(std::abs(window.getWidth() - wantW) <= 2 && std::abs(window.getHeight() - wantH) <= 2
+                        && std::abs(plugin.getWidth() - wantW) <= 2 && std::abs(plugin.getHeight() - wantH) <= 2,
+                      label + ": the window ends at the UI's size",
+                      "window " + show(window) + ", plug-in " + show(plugin) + " (want " + juce::String(wantW) + " x " + juce::String(wantH)
+                      + "; " + juce::String(host.frame.requests) + " resize requests)");
+                host.close();
+                pump(50);
+            }
+        // A host that never agrees: the plug-in asks a few times, then stops (no endless resizing)
+        if (host.error.isEmpty())
+        {
+            setRemembered(1.25f);
+            const juce::Rectangle<int> screen { GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
+            host.frame.alwaysWrong = true;
+            host.open(hostScale, Steinberg::ViewRect { 0, 0, screen.getWidth(), screen.getHeight() - 72 });
+            pump(3000);
+            const int settledRequests = host.frame.requests;
+            pump(2000);
+            check(settledRequests <= 2 + 3 * 2 && host.frame.requests == settledRequests,
+                  "10 Cubase-like host that never agrees: the plug-in stops asking",
+                  juce::String(settledRequests) + " requests in 3 s, " + juce::String(host.frame.requests - settledRequests) + " more in the next 2 s");
+            host.frame.alwaysWrong = false;
+            host.close();
+            pump(50);
+        }
+        if (host.error.isNotEmpty())
+            check(false, "10 Cubase-like host", host.error);
+    }
+   #endif
+}
+
 /* Writes a session from whichever Tertiary is loaded (run against the 1.0.2 build to make the old-session file) */
 void writeSession(const juce::File& file)
 {
@@ -1012,6 +1371,10 @@ int liveLicenseCheck(const juce::String& key, const juce::String& email)
 //==============================================================================
 int main(int argc, char* argv[])
 {
+   #if JUCE_WINDOWS
+    // [Claude 2026-10-30] per-monitor DPI aware, as Cubase, REAPER and JUCE's own hosts are (section 10 measures windows)
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+   #endif
     juce::ScopedJuceInitialiser_GUI init;
     juce::StringArray args;
     for (int i = 1; i < argc; ++i) args.add(argv[i]);
@@ -1065,6 +1428,13 @@ int main(int argc, char* argv[])
     const juce::File golden = juce::File::getCurrentWorkingDirectory().getChildFile(option("--golden", "plugin/tests/golden"));
     const bool makeGolden = args.contains("--make-golden");
 
+    // [Claude 2026-10-30] the plug-in's description as XML (to open it in JUCE's AudioPluginHost from a .filtergraph)
+    if (args.contains("--describe"))
+    {
+        std::cout << description.createXml()->toString().toStdString() << std::endl;
+        return 0;
+    }
+
     if (args.contains("--write-session"))
     {
         writeSession(juce::File::getCurrentWorkingDirectory().getChildFile(option("--write-session", "session.bin")));
@@ -1088,6 +1458,7 @@ int main(int argc, char* argv[])
         run(6, [&] { section6(args.contains("--expect-demo")); });
         run(7, section7);
         run(9, [&] { section9(golden); });
+        run(10, section10);   // [Claude 2026-10-30]
     }
     run(8, [&] { section8(golden, makeGolden); });
 

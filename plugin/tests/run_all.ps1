@@ -84,7 +84,7 @@ Run "unit tests" "$Art\TertiaryTests_artefacts\Release\TertiaryTests.exe" @() "u
 function ShowFailures([string]$Log) {
     Get-Content (Join-Path $Results $Log) | Where-Object { $_ -match '^FAIL|^\s+why:|^\s+at ' } | Select-Object -First 40 | ForEach-Object { Write-Host "      $_" }
 }
-Run "UI tests (U-01 to U-23)" "$Art\UiTest_artefacts\Release\UiTest.exe" @("--snapshots", "$Results\ui-snapshots") "ui-tests.log"
+Run "UI tests (U-01 to U-24)" "$Art\UiTest_artefacts\Release\UiTest.exe" @("--snapshots", "$Results\ui-snapshots") "ui-tests.log"
 if ($Rows[-1].Result -eq "FAIL") { ShowFailures "ui-tests.log" }
 
 # 4c. [Claude 2026-10-29] The standalone through Windows UI Automation (tests\ui\smoke_standalone.py; needs
