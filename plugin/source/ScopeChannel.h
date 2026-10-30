@@ -18,7 +18,8 @@
 struct ScopeChannel :   juce::Component,
                         juce::AudioProcessorValueTreeState::Listener,
                         juce::ActionListener,
-                        juce::ActionBroadcaster
+                        juce::ActionBroadcaster,
+                        private juce::Timer   // [Claude 2026-10-29] eases the drawn free rate (timerCallback)
 {
     ScopeChannel(juce::AudioProcessorValueTreeState& apvts, LFO& lfo, ScrollPad& sliderScroll);
     ~ScopeChannel();
@@ -56,6 +57,12 @@ private:
     bool isBandFocused{false};
     bool focusHasChanged {false};
     
+    // [Claude 2026-10-29] The free rate as drawn eases toward the knob's (a one-pole step each frame), so a drag
+    // squeezes or stretches the wave smoothly about the centre instead of in 0.1 Hz steps
+    void timerCallback() override;
+    float targetRate{ 0.f };
+    bool rateShown{ false };
+
     bool isBandBypassed{false};
     bool bypassHasChanged{false};
 

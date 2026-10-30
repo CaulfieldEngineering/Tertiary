@@ -206,7 +206,16 @@ void ScopeChannel::actionListenerCallback(const juce::String& message)
     {
         float rate = 0.0f;
         rate = paramValue.getFloatValue();
-        localLFO.setWaveRate(rate);
+        targetRate = rate;
+        // [Claude 2026-10-29] the first value (and any while synced, where the rate is not drawn) is taken at once;
+        // later ones are eased toward by timerCallback
+        if (! rateShown || localLFO.isSyncedToHost())
+        {
+            localLFO.setWaveRate(rate);
+            rateShown = true;
+        }
+        else
+            startTimerHz(60);
         shouldUpdateScope = true;
     }
 
@@ -223,6 +232,7 @@ void ScopeChannel::actionListenerCallback(const juce::String& message)
         bool sync = false;
         sync = paramValue.getIntValue();
         localLFO.setSyncedToHost(sync);
+        if (rateShown) { stopTimer(); localLFO.setWaveRate(targetRate); }   // [Claude 2026-10-29] no easing across a switch
         shouldUpdateScope = true;
     }
 
@@ -274,6 +284,20 @@ void ScopeChannel::actionListenerCallback(const juce::String& message)
 
 
     
+}
+
+// [Claude 2026-10-29] One easing step of the drawn free rate: about 60 ms to settle; stops once it arrives
+void ScopeChannel::timerCallback()
+{
+    const float shown = localLFO.getWaveRate();
+    if (shown == targetRate)
+    {
+        stopTimer();
+        return;
+    }
+    const float next = std::abs(targetRate - shown) < 0.002f ? targetRate : shown + 0.35f * (targetRate - shown);
+    localLFO.setWaveRate(next);
+    repaint();   // paint redraws the path from the rate
 }
 
 /* Paint grid lines */
@@ -472,46 +496,76 @@ void ScopeChannel::generateLFOPathForDrawing(   juce::Path &lfoStrokePath,
     // Width of Area to Render Paint Data
     auto paintAreaWidth = playBackWidth;
 
+    // Scale WaveTable by Multiplier, or by Rate, but not Both
+    const bool sync = lfoSync;
+    const float scalar = sync ? (float) lfoWaveMultiplier : lfoWaveRate * 60.f / lfoHostBPM;
+
+    // Match Width of 1x Multiplier to Width of One Quarter-Note
+    const float increment = scalar * waveTable.size() / (beatSpacing);
+
+    // [Claude 2026-10-29] Free rate (Joe: changing the rate "goes haywire"): the wave's start (t = 0) is the scope's
+    // origin, the centre gridline (point + paintAreaWidth, panned with the scroll bar), with the band's phase there,
+    // so a rate change squeezes or stretches the wave evenly about the centre. Before, its phase was counted from
+    // point, two playback widths off screen to the left, so each small rate change slid the visible wave by many
+    // cycles. Synced waves already meet the origin at their phase (whole cycles from point) and are drawn as before.
+    // The window is the same span of beats as the synced view, at the host tempo, for every band.
+    const float pixelsPerCycle = increment > 0.f ? (float) waveTable.size() / increment : 1.0e6f;
+
     // [Claude 2026-10-29] Four points per pixel, so a square's edges draw upright instead of as a one-pixel slant
-    // (Joe: "is there any way to get these square waves cleaner?").
-    constexpr int pointsPerPixel = 4;
+    // (Joe: "is there any way to get these square waves cleaner?"); more when the cycles are short, so every cycle
+    // gets at least 16 points (no moire), up to a cap.
+    const int pointsPerPixel = juce::jlimit(4, 64, (int) std::ceil(16.f / juce::jmax(0.01f, pixelsPerCycle)));
+
+    // [Claude 2026-10-29] Denser than 3 pixels a cycle a line only scribbles: draw each pixel column's lowest to
+    // highest value as one filled band, which reads as fast oscillation.
+    const bool dense = pixelsPerCycle < 3.f;
+    juce::Array<float> columnMin, columnMax;
+
+    // Get Relative Phase Shift.
+    // [Claude 2026-10-27] No more divide by 2: LFO::setTempo now gives the phase in wavetable samples, so the
+    // scope draws exactly what it drew before, and the audio now matches it.
+    const auto mRelativePhase = lfoRelativePhase / waveTableDownSampleSize;
+
+    // Get Display Phase Shift
+    const float mDisplayPhase = scrollCenter * bounds.getWidth();
+
+    // Display Offset Establishes Wave Starting Point (In-Line with Grid)
+    const float displayOffsetStart = bounds.getX() + bounds.getCentreX() - paintAreaWidth;
+
+    // Incorporate Pan Shift
+    const int point = displayOffsetStart + mDisplayPhase;
+
+    const float tableSize = (float) waveTable.size();
+
     for (int j = 0; j <= 3 * paintAreaWidth * pointsPerPixel; j++)
     {
         const float i = j / (float) pointsPerPixel;
-        bool sync = lfoSync;
+        const float x = point + i;
 
-        // Scale WaveTable by Multiplier, or by Rate, but not Both
-        float scalar{ 1.f };
-
-        if (sync)
-            scalar = lfoWaveMultiplier;
-        else
-            scalar = lfoWaveRate * 60.f / lfoHostBPM;
-
-        // Get Relative Phase Shift.
-        // [Claude 2026-10-27] No more divide by 2: LFO::setTempo now gives the phase in wavetable samples, so the
-        // scope draws exactly what it drew before, and the audio now matches it.
-        auto mRelativePhase = lfoRelativePhase / waveTableDownSampleSize;
-
-        // Get Display Phase Shift
-        float mDisplayPhase = scrollCenter * bounds.getWidth();
-        //float mDisplayPhase = sliderScroll.getScrollCenter() * bounds.getWidth();
-
-        // Match Width of 1x Multiplier to Width of One Quarter-Note
-        auto increment = scalar * waveTable.size() / (beatSpacing);
+        if (x < (float) bounds.getX() || x > (float) bounds.getRight())
+            continue;
 
         // Index sweeps through WaveTable Array
-        float index = fmod(i * increment + mRelativePhase, (float) waveTable.size());
+        float index;
+        if (sync)
+            index = fmod(i * increment + mRelativePhase, tableSize);
+        else
+        {
+            index = fmod((i - (float) paintAreaWidth) * increment + mRelativePhase, tableSize);
+            if (index < 0.f) index += tableSize;
+        }
 
         // Get value in terms of pixels.  Offset by Region's Midpoint
         float y = midY + waveTable[(size_t) index] * (float)bounds.getHeight();
 
-        // Display Offset Establishes Wave Starting Point (In-Line with Grid)
-        float displayOffsetStart = bounds.getX() + bounds.getCentreX() - paintAreaWidth;
-
-        // Incorporate Pan Shift
-        int point = displayOffsetStart + mDisplayPhase;
-        const float x = point + i;
+        if (dense)
+        {
+            const int column = juce::jmin((int) (x - (float) bounds.getX()), bounds.getWidth() - 1);
+            while (columnMin.size() <= column) { columnMin.add(1.0e9f); columnMax.add(-1.0e9f); }
+            columnMin.set(column, juce::jmin(columnMin[column], y));
+            columnMax.set(column, juce::jmax(columnMax[column], y));
+            continue;
+        }
 
         /* Of the calculated points, only render those which will be onscreen */
         if (x == (float) bounds.getX())
@@ -532,6 +586,25 @@ void ScopeChannel::generateLFOPathForDrawing(   juce::Path &lfoStrokePath,
             lfoFillPath.lineTo(bounds.getRight(), y);
             lfoFillPath.lineTo(bounds.getRight(), midY);
         }
+    }
+
+    // The dense band: along the top edge's highest values, back along the lowest; filled, and its outline stroked
+    if (dense && columnMin.size() > 0)
+    {
+        const float x0 = (float) bounds.getX();
+        lfoStrokePath.startNewSubPath(x0, columnMin[0]);
+        for (int c = 0; c < columnMin.size(); ++c)
+        {
+            lfoStrokePath.lineTo(x0 + c, columnMin[c]);
+            lfoStrokePath.lineTo(x0 + c + 1.f, columnMin[c]);
+        }
+        for (int c = columnMax.size(); --c >= 0;)
+        {
+            lfoStrokePath.lineTo(x0 + c + 1.f, columnMax[c]);
+            lfoStrokePath.lineTo(x0 + c, columnMax[c]);
+        }
+        lfoStrokePath.closeSubPath();
+        lfoFillPath = lfoStrokePath;
     }
 }
 
