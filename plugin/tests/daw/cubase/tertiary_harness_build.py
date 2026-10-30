@@ -13,6 +13,10 @@ default to the harness folder next to this script ("Tertiary harness/"), so no a
                                                                          and Tertiary insert, with the automation below
                                                                          (default Misc/learn-3.xml -> Misc/harness-track.xml)
     python tertiary_harness_build.py params                              Tertiary's parameter IDs and Cubase lane tags
+    python tertiary_harness_build.py playaudio                           [2026-10-30] Audio/play-loop.wav, the play
+                                                                         track's music (not in git; numpy and scipy)
+    python tertiary_harness_build.py playarchive [template] [out]        [2026-10-30] Misc/play-track.xml, the muted
+                                                                         "Tertiary – play" track for Joe (see below)
 
 The song (4/4, 480 ticks per quarter, 1920 per bar), bar 1 to bar 13, about 24.8 s:
     bars 1-4    120 BPM
@@ -205,6 +209,78 @@ def write_audio(hosttest=None):
         tile_input(src, out)
 
 
+# [Claude 2026-10-30] The play track, for Joe's own listening (not measured). Joe: "add a second channel of Tertiary
+# which has the musical input on it. That way the automation lanes do not lock me from changing knobs etc. And you
+# can just mute this by default." And: "add something musical at the end of the timeline so I can jump to it easily".
+# A second audio track, "Tertiary – play": a music loop (sample_audio/Organ.wav at 48 kHz, crossfaded at each seam)
+# over the whole timeline, Tertiary on its insert, no automation lanes (imported with Automation off), muted.
+# The marker "Play" at bar 14, just after the measured bars 1 to 13, is set in Cubase (README). Muted, it adds
+# nothing to the export, which stays bit-identical to the golden.
+PLAY_NAME = "Tertiary – play"
+PLAY_WAV = "play-loop.wav"
+PLAY_SECONDS = 180
+PLAY_SOURCE = os.path.join(REPO, "plugin", "sample_audio", "Organ.wav")
+
+
+def write_play_audio(src=PLAY_SOURCE, seconds=PLAY_SECONDS):
+    """Audio/play-loop.wav: the sample at 48 kHz, 32-bit float stereo, looped to `seconds` with 50 ms crossfades."""
+    try:
+        import numpy as np
+        from scipy.signal import resample_poly
+    except ImportError:
+        raise SystemExit("playaudio needs numpy and scipy (pip install numpy scipy)")
+    d = open(src, "rb").read()
+    i, fmt, data = 12, None, None
+    while i + 8 <= len(d):
+        cid, size = d[i:i + 4], struct.unpack("<I", d[i + 4:i + 8])[0]
+        if cid == b"fmt ":
+            fmt = d[i + 8:i + 8 + size]
+        elif cid == b"data":
+            data = d[i + 8:i + 8 + size]
+        i += 8 + size + (size & 1)
+    tag, ch, rate, _, _, bits = struct.unpack("<HHIIHH", fmt[:16])
+    if tag != 1 or bits != 16 or ch != 2:
+        raise SystemExit("%s: expected 16-bit stereo PCM" % src)
+    x = np.frombuffer(data, dtype="<i2").reshape(-1, 2).astype(np.float64) / 32768.0
+    if rate != 48000:
+        from math import gcd
+        g = gcd(48000, rate)
+        x = resample_poly(x, 48000 // g, rate // g, axis=0)
+    fade = int(0.05 * 48000)
+    ramp = np.linspace(0.0, 1.0, fade)[:, None]
+    loop = x[:-fade].copy()
+    loop[:fade] = x[:fade] * ramp + x[-fade:] * (1.0 - ramp)   # the end crossfades into the start: no click at the seam
+    frames = seconds * 48000
+    out = np.tile(loop, (-(-frames // len(loop)), 1))[:frames]
+    out[-fade:] *= (1.0 - ramp)                                  # and the very end fades out
+    body = out.astype("<f4").tobytes()
+    fmt_chunk = struct.pack("<HHIIHH", 3, 2, 48000, 48000 * 8, 8, 32)
+    dst = os.path.join(HARNESS, "Audio", PLAY_WAV)
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    wav = b"fmt " + struct.pack("<I", 16) + fmt_chunk + b"data" + struct.pack("<I", len(body)) + body
+    open(dst, "wb").write(b"RIFF" + struct.pack("<I", 4 + len(wav)) + b"WAVE" + wav)   # data at byte 44, as the archive says
+    print("%s: %d s, 48000 Hz, 2 ch, 32-bit float, from %s (%d Hz), %d loops" % (dst, seconds, src, rate, -(-frames // len(loop))))
+    return frames
+
+
+def write_play_archive(template, out, frames=PLAY_SECONDS * 48000):
+    """The play track: the template's audio track and Tertiary insert, renamed, playing Audio/play-loop.wav from bar 1.
+    Its automation lanes are left in the file but Cubase skips them when Import Options' Automation is off (the
+    default): the track then has none, and every knob can be moved by hand."""
+    t = open(template, encoding="utf-8").read()
+    old_frames = '"3072000"'
+    if t.count(old_frames) < 3:
+        raise SystemExit("template: the harness clip's length (3072000 frames) was not found")
+    t = t.replace(old_frames, '"%d"' % frames)
+    t = t.replace('value="harness-input.wav"', 'value="%s"' % PLAY_WAV)
+    t = t.replace('value="harness-input"', 'value="%s"' % PLAY_NAME)              # track, event, clip, channel names
+    t = re.sub(r'(<string name="Path" value=")[^"]*(" wide="true"/>)',
+               lambda m: m.group(1) + os.path.join(HARNESS, "Audio") + "\\" + m.group(2), t)
+    t = re.sub(r'<obj class="MHitPointEvent".*?</obj>\s*', "", t, flags=re.S)  # the old file's hit points
+    open(out, "w", encoding="utf-8").write(t)
+    print("%s: track \"%s\", %s, %d frames from bar 1; import with Automation off" % (out, PLAY_NAME, PLAY_WAV, frames))
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     arg = lambda i, default: sys.argv[i] if len(sys.argv) > i else default
@@ -217,6 +293,11 @@ if __name__ == "__main__":
     elif cmd == "archive":
         write_archive(arg(2, os.path.join(HARNESS, "Misc", "learn-3.xml")),
                       arg(3, os.path.join(HARNESS, "Misc", "harness-track.xml")))
+    elif cmd == "playaudio":
+        write_play_audio()
+    elif cmd == "playarchive":
+        write_play_archive(arg(2, os.path.join(HARNESS, "Misc", "learn-3.xml")),
+                           arg(3, os.path.join(HARNESS, "Misc", "play-track.xml")))
     elif cmd == "params":
         for p in AUTOMATION:
             print("%12d  lane tag %12d  %s" % (juce_hash(p), juce_hash(p) + LANE_OFFSET, p))

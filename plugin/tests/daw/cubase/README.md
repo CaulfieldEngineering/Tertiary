@@ -24,6 +24,29 @@ It is 4/4, bars 1 to 13, about 24.8 s: 120 BPM, a ramp to 90, 90, then a jump to
 lanes are automated. The details are in the build script's docstring. The song is kept short because an unactivated
 Tertiary bypasses itself after 50 s of processing.
 
+## The play track, for listening (2026-10-30)
+
+Joe: "add a second channel of Tertiary which has the musical input on it. That way the automation lanes do not lock me
+from changing knobs etc. And you can just mute this by default." And: "add something musical at the end of the
+timeline so I can jump to it easily".
+
+- Track 2, **"Tertiary – play"**: `Audio/play-loop.wav` (sample_audio/Organ.wav at 48 kHz, looped for 3 minutes from
+  bar 1, the seams crossfaded), Tertiary in insert 1, **no automation lanes** (Read off), **muted**. Unmute it and move
+  any knob.
+- Marker **"Play"** at bar 14 (0:00:26.5), just after the measured bars 1 to 13, at a steady 140 BPM.
+- Track 1 and the export are unchanged in what they measure. With the muted second track, Cubase's mix differs from the
+  one-track project by at most 1.16e-10 (-198.7 dBFS), the same on every run; the one-track project with the same build
+  is bit-identical to the old golden. So the golden was remade from the two-track project (the old one is in
+  `replaced\` beside it, with its notes).
+- Made by: `python tertiary_harness_build.py playaudio`, then `playarchive` (Misc/play-track.xml). In Cubase, with the
+  harness open: `cubase_import.ps1 archive "<harness>\Misc\play-track.xml"`. In Import Options tick the track and
+  **untick Automation** (Cubase remembers the last setting). Then click the new track's M; type `14.1.1.0` into the
+  Primary Time Display (double-click it), Insert (adds a marker), Project > Markers: double-click the marker's
+  Description and type `Play`; the cursor goes back to `1.1.1.0`; File > Save; Ctrl+Q.
+- The export path is stored in the project. File > Export > Audio Mixdown, Path menu > **Project Mixdown Folder**, so it
+  follows the project's folder; it was left pointing at the daw-harness worktree, and the run then could not find
+  its export.
+
 ## Rebuilding
 
 From this folder:
@@ -34,7 +57,11 @@ python tertiary_harness_build.py audio     # Audio/harness-input.wav from HostTe
                                            # file the .cpr was made with (checked 2026-10-29).
 python tertiary_harness_build.py tempo     # Misc/harness-tempo.smt
 python tertiary_harness_build.py archive   # Misc/learn-3.xml -> Misc/harness-track.xml
+python tertiary_harness_build.py playaudio    # Audio/play-loop.wav (numpy and scipy; not in git)
+python tertiary_harness_build.py playarchive  # Misc/learn-3.xml -> Misc/play-track.xml
 ```
+
+Run `playaudio` too after cloning: without `Audio/play-loop.wav` Cubase asks to resolve a missing file.
 
 To build the .cpr itself from these parts in Cubase, follow the recipe in `CUBASE-PLAYBOOK.md` ("the Tertiary
 harness project, built from files"). Run `audio` once after cloning: the run script stops if the WAV is missing.
