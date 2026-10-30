@@ -106,6 +106,10 @@ namespace audio_plugin {
         juce::AudioParameterFloat* getScopePoint1Param() { return scopePoint1Param; }
         juce::AudioParameterFloat* getScopePoint2Param() { return scopePoint2Param; }
         juce::AudioParameterBool* getShowFftParam() { return showFftParam; }
+
+        // [Claude 2026-10-29] The host tempo from the latest block, for the scope (read on the GUI thread)
+        double getHostBpmForDisplay() const { return hostBpmForDisplay.load(); }
+        std::atomic<double> hostBpmForDisplay{ 120.0 };
         juce::AudioParameterChoice* getFftPickofIdParam() { return fftPickoffParam; }
 
         //#ifdef DEMO_VERSION

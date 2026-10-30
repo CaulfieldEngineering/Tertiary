@@ -871,6 +871,7 @@ namespace audio_plugin {
         playHead->getCurrentPosition(hostInfo);
 
       playPosition = hostInfo.ppqPosition;  // [Claude 2026-10-27] Read after the update, not from the previous block
+      if (hostInfo.bpm > 1.0) hostBpmForDisplay.store(hostInfo.bpm);   // [Claude 2026-10-29] for the scope
 
       /* Clear Input Buffers */
       for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)

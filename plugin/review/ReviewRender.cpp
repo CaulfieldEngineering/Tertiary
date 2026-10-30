@@ -15,6 +15,8 @@
 //   --bits n      output bit depth (default 24; 32 writes float WAV, used for the regression compare)
 //   --demo        run as the demo version (the effect bypasses 10 s in every 60 s) instead of the full version
 //   --rate hz     tell the plugin this sample rate instead of the file's (for sample-rate tests)
+// [Claude 2026-10-29] --bpm-at t:bpm  the host tempo changes to bpm at t seconds (repeatable; the beat position then
+//                counts on smoothly), to check that the scope follows a live tempo change
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -32,6 +34,8 @@ struct Clock : juce::AudioPlayHead
 {
     double bpm = 120, rate = 48000;
     juce::int64 sample = 0;
+    bool tempoChanges = false;   // [Claude 2026-10-29] with --bpm-at: the beat position is counted up block by block
+    double ppq = 0;
     juce::Optional<PositionInfo> getPosition() const override
     {
         PositionInfo p;
@@ -40,8 +44,9 @@ struct Clock : juce::AudioPlayHead
         p.setIsPlaying (true);
         p.setTimeInSamples (sample);
         p.setTimeInSeconds (sample / rate);
-        p.setPpqPosition (sample / rate * bpm / 60.0);
-        p.setPpqPositionOfLastBarStart (std::floor (sample / rate * bpm / 60.0 / 4.0) * 4.0);
+        const double beats = tempoChanges ? ppq : sample / rate * bpm / 60.0;
+        p.setPpqPosition (beats);
+        p.setPpqPositionOfLastBarStart (std::floor (beats / 4.0) * 4.0);
         return p;
     }
 };
@@ -151,6 +156,7 @@ int main (int argc, char* argv[])
     }
 
     std::vector<Ramp> ramps;
+    std::vector<std::pair<double, double>> tempoAt;   // [Claude 2026-10-29] --bpm-at
     for (int i = 0; i < args.size(); ++i)
     {
         if (args[i] == "--set" && i + 1 < args.size())
@@ -158,6 +164,9 @@ int main (int argc, char* argv[])
             const auto kv = args[i + 1];
             setParam (*proc, kv.upToFirstOccurrenceOf ("=", false, false), kv.fromFirstOccurrenceOf ("=", false, false));
         }
+        if (args[i] == "--bpm-at" && i + 1 < args.size())
+            tempoAt.push_back ({ args[i + 1].upToFirstOccurrenceOf (":", false, false).getDoubleValue(),
+                                 args[i + 1].fromFirstOccurrenceOf (":", false, false).getDoubleValue() });
         if (args[i] == "--ramp" && i + 1 < args.size())
         {
             juce::StringArray t;
@@ -229,8 +238,15 @@ int main (int argc, char* argv[])
                 if (pos < side->getNumSamples())
                     io.copyFrom (mainIn + c, 0, *side, juce::jmin (c, side->getNumChannels() - 1), pos, juce::jmin (n, side->getNumSamples() - pos));
         juce::AudioBuffer<float> view (io.getArrayOfWritePointers(), busCh, n);
+        if (! tempoAt.empty())   // [Claude 2026-10-29] --bpm-at
+        {
+            clock.tempoChanges = true;
+            for (auto& ta : tempoAt)
+                if (t >= ta.first) clock.bpm = ta.second;
+        }
         clock.sample = pos;
         proc->processBlock (view, midi);
+        if (clock.tempoChanges) clock.ppq += n / rate * clock.bpm / 60.0;
         for (int c = 0; c < result.getNumChannels(); ++c) result.copyFrom (c, pos, io, juce::jmin (c, outCh - 1), 0, n);
         for (int c = 0; c < juce::jmin (2, outCh); ++c)
             for (int i = 0; i < n; ++i)

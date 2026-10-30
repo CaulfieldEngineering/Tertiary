@@ -27,6 +27,7 @@ ScopeChannel::ScopeChannel(juce::AudioProcessorValueTreeState& apvts, LFO& lfo, 
 
     if (mHostBpm == 0 || mHostBpm == 1)
         mHostBpm = 120;
+    targetBpm = mHostBpm;
 
     localLFO.setDsp(false);
     
@@ -55,6 +56,8 @@ ScopeChannel::ScopeChannel(juce::AudioProcessorValueTreeState& apvts, LFO& lfo, 
     apvts.addParameterListener(params.at(Names::Stack_Bands_Scope), this);
 
     localLFO.updateLFO(mSampleRate, mHostBpm);
+
+    startTimerHz(60);   // [Claude 2026-10-29] follows the host tempo and eases the drawn free rate
 }
 
 /* Destructor */
@@ -214,8 +217,6 @@ void ScopeChannel::actionListenerCallback(const juce::String& message)
             localLFO.setWaveRate(rate);
             rateShown = true;
         }
-        else
-            startTimerHz(60);
         shouldUpdateScope = true;
     }
 
@@ -232,7 +233,7 @@ void ScopeChannel::actionListenerCallback(const juce::String& message)
         bool sync = false;
         sync = paramValue.getIntValue();
         localLFO.setSyncedToHost(sync);
-        if (rateShown) { stopTimer(); localLFO.setWaveRate(targetRate); }   // [Claude 2026-10-29] no easing across a switch
+        if (rateShown) localLFO.setWaveRate(targetRate);   // [Claude 2026-10-29] no easing across a switch
         shouldUpdateScope = true;
     }
 
@@ -286,18 +287,35 @@ void ScopeChannel::actionListenerCallback(const juce::String& message)
     
 }
 
-// [Claude 2026-10-29] One easing step of the drawn free rate: about 60 ms to settle; stops once it arrives
+// [Claude 2026-10-29] Each frame: the drawn free rate and the host tempo each take one easing step toward their
+// targets (one-pole, about 60 ms), so a rate drag or a tempo change squeezes or stretches a free band's wave smoothly
+// about the centre (Joe: follow live tempo changes). The tempo is the processor's, from its latest block. Synced
+// waves are measured in beats, so the tempo does not change them and they are not redrawn for it.
 void ScopeChannel::timerCallback()
 {
-    const float shown = localLFO.getWaveRate();
-    if (shown == targetRate)
+    if (auto* proc = dynamic_cast<audio_plugin::AudioPluginAudioProcessor*>(&apvts.processor))
     {
-        stopTimer();
-        return;
+        const double bpm = proc->getHostBpmForDisplay();
+        if (bpm > 1.0) targetBpm = bpm;
     }
-    const float next = std::abs(targetRate - shown) < 0.002f ? targetRate : shown + 0.35f * (targetRate - shown);
-    localLFO.setWaveRate(next);
-    repaint();   // paint redraws the path from the rate
+
+    const auto ease = [](double shown, double target, double snap)
+    { return std::abs(target - shown) < snap ? target : shown + 0.35 * (target - shown); };
+
+    bool changed = false;
+    if (rateShown && localLFO.getWaveRate() != targetRate)
+    {
+        localLFO.setWaveRate((float) ease(localLFO.getWaveRate(), targetRate, 0.002));
+        changed = true;
+    }
+    if (mHostBpm != targetBpm)
+    {
+        mHostBpm = ease(mHostBpm, targetBpm, 0.01);
+        localLFO.updateTempo(mSampleRate, mHostBpm);
+        changed = true;
+    }
+    if (changed && ! localLFO.isSyncedToHost())
+        repaint();   // paint redraws the path from the rate and tempo
 }
 
 /* Paint grid lines */

@@ -19,7 +19,7 @@ struct ScopeChannel :   juce::Component,
                         juce::AudioProcessorValueTreeState::Listener,
                         juce::ActionListener,
                         juce::ActionBroadcaster,
-                        private juce::Timer   // [Claude 2026-10-29] eases the drawn free rate (timerCallback)
+                        private juce::Timer   // [Claude 2026-10-29] follows the tempo and eases the drawn free rate (timerCallback)
 {
     ScopeChannel(juce::AudioProcessorValueTreeState& apvts, LFO& lfo, ScrollPad& sliderScroll);
     ~ScopeChannel();
@@ -62,6 +62,7 @@ private:
     void timerCallback() override;
     float targetRate{ 0.f };
     bool rateShown{ false };
+    double targetBpm{ 120.0 };   // [Claude 2026-10-29] the host tempo; mHostBpm is the one drawn, eased toward it
 
     bool isBandBypassed{false};
     bool bypassHasChanged{false};
