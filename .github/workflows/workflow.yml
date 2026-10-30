@@ -526,11 +526,18 @@ jobs:
 
         echo "Signing standalone application..."
         # ====================================
+        # [Claude 2026-10-30] V-08: the standalone (only) is signed with the audio-input entitlement. With the hardened
+        # runtime, macOS gives an app silence from the audio interface without it. The VST3 and AU above stay as they
+        # were: the DAW holds that permission for them. The Mac checks (plugin/tests/ci/mac_checks.sh, every
+        # work-branch push) sign a copy the same way with an ad-hoc identity and check the result.
         APP_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone/${REPOSITORY_NAME}.app"
+        APP_ENTITLEMENTS="${GITHUB_WORKSPACE}/package_config/mac/standalone.entitlements"
+        plutil -lint "$APP_ENTITLEMENTS"
         codesign --force \
           --sign "Developer ID Application" \
           --verbose \
           --deep --strict --options=runtime --timestamp \
+          --entitlements "$APP_ENTITLEMENTS" \
           "$APP_PATH"
 
         echo "Verifying standalone application signature..."
@@ -538,6 +545,11 @@ jobs:
         codesign --verify --deep --verbose=2 "$APP_PATH"
         # Only verify code signature, skip notarization check
         codesign --display --verbose=2 "$APP_PATH"
+        APP_ENT=$(codesign --display --entitlements - --xml "$APP_PATH" 2>/dev/null)
+        grep -q "com.apple.security.device.audio-input" <<< "$APP_ENT" \
+          || { echo "::error::$APP_PATH was signed without the audio-input entitlement"; exit 1; }
+        /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "$APP_PATH/Contents/Info.plist" \
+          || { echo "::error::$APP_PATH has no microphone permission text (NSMicrophoneUsageDescription)"; exit 1; }
 
         # Clean up
         # ====================================
@@ -1108,6 +1120,14 @@ jobs:
           INFO=$(codesign -dv --verbose=2 "$FOUND" 2>&1)
           grep -q "Authority=Developer ID Application" <<< "$INFO" || { echo "::error::$FOUND is not signed with Developer ID Application"; exit 1; }
           grep -q "runtime" <<< "$INFO" || { echo "::error::$FOUND is not signed with the hardened runtime"; exit 1; }
+          # [Claude 2026-10-30] V-08: the standalone keeps its audio-input entitlement and microphone text
+          if [ "$ext" = "app" ]; then
+            APP_ENT=$(codesign --display --entitlements - --xml "$FOUND" 2>/dev/null)
+            grep -q "com.apple.security.device.audio-input" <<< "$APP_ENT" \
+              || { echo "::error::$FOUND has no audio-input entitlement (macOS would give it no audio input)"; exit 1; }
+            /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "$FOUND/Contents/Info.plist" >/dev/null \
+              || { echo "::error::$FOUND has no microphone permission text (NSMicrophoneUsageDescription)"; exit 1; }
+          fi
           echo "✓ $(basename "$FOUND")"
         done
 

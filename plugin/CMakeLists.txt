@@ -44,6 +44,12 @@ juce_add_plugin( ${PROJECT_NAME}
     COPY_PLUGIN_AFTER_BUILD ${WLA_COPY_PLUGIN_AFTER_BUILD}  # [Claude 2026-10-27] was TRUE; still on by default
     ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/images/icon/tertiary-icon-1024.png"   # [Claude 2026-10-29] the app icon (Joe chose C1)
     ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/images/icon/tertiary-icon-256.png"
+    # [Claude 2026-10-30] V-08: the microphone text macOS shows when the standalone first opens an audio input. It
+    # only goes into the Mac bundles' Info.plist (NSMicrophoneUsageDescription); Windows builds don't use it. Without
+    # it, and without the audio-input entitlement the standalone is signed with (package_config/mac/
+    # standalone.entitlements, see workflow.yml), macOS gives the Mac standalone silence. The VST3 and AU use the DAW's.
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "${wPLUGIN_NAME} uses your audio input to process it through the tremolo."
 )
 
 # Explicitly set runtime library for the plugin target (belt and suspenders approach)

@@ -10,7 +10,8 @@
 #
 #   mac-build    Apple Silicon (macos-15): builds the universal VST3, AU, ReviewRender, the unit tests and the UI
 #                tests, checks both chip types and macOS 11, runs the unit tests, the UI tests, auval (T1-13),
-#                pluginval on the VST3 and the AU, a short render
+#                pluginval on the VST3 and the AU, a short render. [Claude 2026-10-30] Also builds the standalone .app
+#                and checks its microphone text and its signing with the audio-input entitlement (V-08)
 #   mac-intel    Intel (macos-15-intel; macos-13 was retired by GitHub in late 2025): no build, tests the
 #                same universal files on Intel: unit tests, UI tests, auval (T1-13), pluginval, render
 #   windows      builds the VST3 and the standalone, runs the unit tests, the UI tests, the standalone smoke test
@@ -89,7 +90,7 @@ jobs:
           -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Build
-      run: cmake --build build --target Tertiary_VST3 Tertiary_AU ReviewRender TertiaryTests HostTest UiTest
+      run: cmake --build build --target Tertiary_VST3 Tertiary_AU Tertiary_Standalone ReviewRender TertiaryTests HostTest UiTest   # [Claude 2026-10-30] + the standalone, for its V-08 checks
 
     - name: Collect the built files
       run: |
@@ -97,6 +98,7 @@ jobs:
         mkdir -p out
         cp -R "$A/Tertiary_artefacts/Release/VST3/Tertiary.vst3" out/
         cp -R "$A/Tertiary_artefacts/Release/AU/Tertiary.component" out/
+        cp -R "$A/Tertiary_artefacts/Release/Standalone/Tertiary.app" out/
         cp "$A/ReviewRender_artefacts/Release/ReviewRender" out/
         cp "$A/TertiaryTests_artefacts/Release/TertiaryTests" out/
         cp "$A/HostTest_artefacts/Release/HostTest" out/
@@ -139,7 +141,7 @@ jobs:
       run: |
         curl -sL -o "$RUNNER_TEMP/pv.zip" "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_TAG/pluginval_macOS.zip"
         unzip -q -o "$RUNNER_TEMP/pv.zip" -d "$RUNNER_TEMP/pv"
-        chmod +x out/ReviewRender out/TertiaryTests out/HostTest out/UiTest
+        chmod +x out/ReviewRender out/TertiaryTests out/HostTest out/UiTest out/Tertiary.app/Contents/MacOS/Tertiary
 
     - name: Check, test and render
       run: bash plugin/tests/ci/mac_checks.sh out "$RUNNER_TEMP/pv/pluginval.app/Contents/MacOS/pluginval" mac-x86_64
