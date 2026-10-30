@@ -40,6 +40,8 @@
  #include <windows.h>
  #include <psapi.h>
  #pragma comment (lib, "psapi.lib")
+ #include <timeapi.h>
+ #pragma comment (lib, "winmm.lib")
 #elif JUCE_MAC
  #include <mach/mach.h>
  #include <sys/resource.h>
@@ -259,12 +261,41 @@ struct AudioThread
     std::vector<double> blockUs;   // read only after join
     std::thread thread;
 
+   #if JUCE_WINDOWS
+    HANDLE timer = nullptr;
+   #endif
+    void waitUntil (Clock::time_point deadline)
+    {
+        const auto early = deadline - std::chrono::microseconds (300);
+       #if JUCE_WINDOWS
+        const auto left = std::chrono::duration_cast<std::chrono::nanoseconds> (early - Clock::now()).count();
+        if (timer != nullptr && left > 0)
+        {
+            LARGE_INTEGER due;
+            due.QuadPart = -(LONGLONG) (left / 100);   // relative, in 100 ns units
+            if (SetWaitableTimerEx (timer, &due, 0, nullptr, nullptr, nullptr, 0))
+                WaitForSingleObject (timer, INFINITE);
+        }
+       #else
+        std::this_thread::sleep_until (early);
+       #endif
+        while (Clock::now() < deadline) std::this_thread::yield();
+    }
+
     void start()
     {
         thread = std::thread ([this]
         {
            #if JUCE_WINDOWS
             SetThreadPriority (GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+            // [Claude 2026-10-30] Windows sleeps in 15.6 ms steps by default, longer than a block: the first run
+            // "missed" thousands of periods with the thread a quarter busy. 1 ms timer steps, then a spin to the deadline.
+            // That alone was not enough: Windows 11 ignores timeBeginPeriod for a process with no visible window, and
+            // with NO plugin loaded the thread still missed half its periods. A high-resolution waitable timer is not
+            // affected; it sleeps to 0.3 ms before the deadline and a spin covers the rest (a DAW's audio thread is
+            // woken by the audio driver instead).
+            timeBeginPeriod (1);
+            timer = CreateWaitableTimerExW (nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
            #endif
             juce::AudioBuffer<float> buf (2, block);
             juce::MidiBuffer midi;
@@ -290,8 +321,12 @@ struct AudioThread
                     missedPeriods += (juce::int64) ((t1 - next) / period);
                     next = t1;
                 }
-                std::this_thread::sleep_until (next);
+                waitUntil (next);
             }
+           #if JUCE_WINDOWS
+            if (timer != nullptr) CloseHandle (timer);
+            timeEndPeriod (1);
+           #endif
         });
     }
     void finish() { stop = true; if (thread.joinable()) thread.join(); }
@@ -420,6 +455,14 @@ static int runInstances (int count, int block, double seconds)
               << "  all instances per block: mean " << juce::String (mean, 1) << " us (" << juce::String (100.0 * mean / blockUs, 1)
               << "% of the block), p99 " << juce::String (p99, 1) << " us (" << juce::String (100.0 * p99 / blockUs, 1)
               << "%), max " << juce::String (mx, 1) << " us (" << juce::String (100.0 * mx / blockUs, 1) << "%)\n"
+              << "  blocks over the deadline, by when: " << [&]
+                 {
+                     // [Claude 2026-10-30] a one-off at the start (first-use setup) reads differently from a recurring one
+                     juce::String when; int shown = 0;
+                     for (size_t i = 0; i < audio.blockUs.size() && shown < 12; ++i)
+                         if (audio.blockUs[i] > blockUs) { when << juce::String ((double) i * block / rate, 2) << " s (" << juce::String (audio.blockUs[i] / 1000.0, 1) << " ms)  "; ++shown; }
+                     return when.isEmpty() ? juce::String ("none") : when;
+                 }() << "\n"
               << "  memory: " << juce::String (mbLoaded - mb0, 1) << " MB for " << count << " instances ("
               << juce::String ((mbLoaded - mb0) / count, 2) << " MB each)\n";
     auto* o = new juce::DynamicObject();
