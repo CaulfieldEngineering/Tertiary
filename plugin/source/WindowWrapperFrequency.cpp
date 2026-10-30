@@ -110,6 +110,11 @@ void WindowWrapperFrequency::paintFFT(juce::Graphics& g, juce::Rectangle<float> 
             bounds.getHeight(),
             0.0f);
 
+        // [Claude 2026-10-29] The 2 px lift grows with the level, so silence sits exactly on the floor. A fixed lift
+        // left a 2 px grey sliver along the floor under the bands whenever the spectrum was quiet (Joe: "still some
+        // little ghost artifact at the floor of the crossover"); louder levels are lifted as before.
+        startY -= 2.0f * juce::jlimit(0.0f, 1.0f, audioProcessor.scopeData[i - 1]);
+
         fftDrawingPoints.set(i - 1, startY);
     }
 
@@ -140,9 +145,9 @@ void WindowWrapperFrequency::paintFFT(juce::Graphics& g, juce::Rectangle<float> 
                 2.f,
                 bounds.getWidth() - 2);
 
-            juce::Point<float> point0 = { bounds.getX() + x0, fftDrawingPoints[i - curve] - 2 };
-            juce::Point<float> point1 = { bounds.getX() + x1, fftDrawingPoints[i] - 2 };
-            juce::Point<float> point2 = { bounds.getX() + x2, fftDrawingPoints[i + curve] - 2 };
+            juce::Point<float> point0 = { bounds.getX() + x0, fftDrawingPoints[i - curve] };
+            juce::Point<float> point1 = { bounds.getX() + x1, fftDrawingPoints[i] };
+            juce::Point<float> point2 = { bounds.getX() + x2, fftDrawingPoints[i + curve] };
 
             float tempMax = juce::jmin(point0.getY(), point1.getY(), point2.getY());
 

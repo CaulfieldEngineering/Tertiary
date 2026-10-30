@@ -482,10 +482,16 @@ void AboutWindow::LinkButton::paintButton(juce::Graphics& g, bool highlighted, b
 
 void AboutWindow::mouseUp(const juce::MouseEvent& event)
 {
+    // [Claude 2026-10-29] This window listens to its own mouse events (addMouseListener(this, true)), so JUCE calls
+    // mouseUp twice for one click, once directly and once as a listener; it toggled twice and nothing changed (Joe:
+    // "Ctrl+Shift+click doesn't show the build"). One toggle per click now. Cmd+Shift on a Mac does it too.
+    if (event.eventTime == mLastBuildIdClick)
+        return;
     const auto e = event.getEventRelativeTo(this);
     const bool onVersion = e.y >= 40 && e.y <= 64 && e.x >= getWidth() / 2;
-    if (onVersion && e.mods.isCtrlDown() && e.mods.isShiftDown())
+    if (onVersion && (e.mods.isCtrlDown() || e.mods.isCommandDown()) && e.mods.isShiftDown())
     {
+        mLastBuildIdClick = event.eventTime;
         mShowBuildId = ! mShowBuildId;
         repaint();
     }

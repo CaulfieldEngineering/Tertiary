@@ -9,6 +9,8 @@ ScopeChannel::ScopeChannel(juce::AudioProcessorValueTreeState& apvts, LFO& lfo, 
         sliderScroll(scrollPad)
 {
     // Initializes the display's color-scheme based on band type
+    // [Claude 2026-10-29] after reading the bypass (below it, a band bypassed at load kept its colour)
+    updateBandBypass();
     setBandColors();
     
     using namespace Params;             // Create a Local Reference to Parameter Mapping
@@ -52,9 +54,6 @@ ScopeChannel::ScopeChannel(juce::AudioProcessorValueTreeState& apvts, LFO& lfo, 
     apvts.addParameterListener(params.at(Names::Show_High_Scope), this);
     apvts.addParameterListener(params.at(Names::Stack_Bands_Scope), this);
 
-    // Initially check whether any bands are bypassed
-    updateBandBypass();
-
     localLFO.updateLFO(mSampleRate, mHostBpm);
 }
 
@@ -80,7 +79,9 @@ void ScopeChannel::setBandColors()
 {
     //WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
 
-    auto bounds = getLocalBounds().toFloat();
+    // [Claude 2026-10-29] Always an empty rectangle: this ran only in the constructor, where the bounds are empty, and
+    // the waveform's look is that gradient. Now it also runs on a bypass change, so it must not pick up real bounds.
+    const juce::Rectangle<float> bounds;
     //using namespace AllColors::OscilloscopeColors;
     using namespace ColorScheme::BandColors;
     using namespace Gradients::Oscilloscope;
@@ -88,19 +89,19 @@ void ScopeChannel::setBandColors()
     if (lfo.getLfoID() == 0)
 {
         fillGradient = makeWaveformGradient(bounds, "LOW", isBandBypassed);
-        strokeColor = makeOutlineColor(getLowBandBaseColor());
+        strokeColor = makeOutlineColor(getLowBandBaseColor(), isBandBypassed);
     }
     
     if (lfo.getLfoID() == 1)
     {
         fillGradient = makeWaveformGradient(bounds, "MID", isBandBypassed);
-        strokeColor = makeOutlineColor(getMidBandBaseColor());
+        strokeColor = makeOutlineColor(getMidBandBaseColor(), isBandBypassed);
     }
     
     if (lfo.getLfoID() == 2)
     {
         fillGradient = makeWaveformGradient(bounds, "HIGH", isBandBypassed);
-        strokeColor = makeOutlineColor(getHighBandBaseColor());
+        strokeColor = makeOutlineColor(getHighBandBaseColor(), isBandBypassed);
     }
 }
 
@@ -223,6 +224,15 @@ void ScopeChannel::actionListenerCallback(const juce::String& message)
         sync = paramValue.getIntValue();
         localLFO.setSyncedToHost(sync);
         shouldUpdateScope = true;
+    }
+
+    // [Claude 2026-10-29] Bypass greys the band's waveform the way it greys the band in the crossover: same message,
+    // same bypass grey (Joe: when a band is bypassed its LFO display should go grey like the crossover does)
+    if (paramName == "BYPASS")
+    {
+        isBandBypassed = paramValue.getIntValue() != 0;
+        setBandColors();
+        repaint();
     }
 
     if (paramName == "SCROLLBAR")
@@ -379,7 +389,7 @@ void ScopeChannel::paintWaveform(juce::Graphics& g)
     g.fillPath(lfoFill);
 
     /* Stroke */
-    g.setColour(isBandBypassed ? makeOutlineColor(getBypassBaseColor()): strokeColor);
+    g.setColour(strokeColor);   // [Claude 2026-10-29] grey when bypassed: setBandColors uses the crossover's makeOutlineColor
     g.setOpacity(isBandFocused ? 1.f : 0.75f);
     g.strokePath(lfoPath, isBandFocused?    juce::PathStrokeType(1.f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded) :
                                             juce::PathStrokeType(0.85f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded));
