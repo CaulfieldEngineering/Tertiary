@@ -949,7 +949,7 @@ void relockAfterJump()
     auto lowPointInBeat = [&] (const Envelope& e, double ppqAtStart)
     {
         size_t best = 0;
-        for (size_t i = 0; i < juce::jmin<size_t> (e.level.size(), (size_t) (e.rate * 0.5)); ++i)
+        for (size_t i = 0; i < std::min<size_t> (e.level.size(), (size_t) (e.rate * 0.5)); ++i)
             if (e.level[i] < e.level[best]) best = i;
         const double beat = ppqAtStart + best / e.rate * rig.clock.bpm / 60.0;
         return beat - std::floor (beat);
