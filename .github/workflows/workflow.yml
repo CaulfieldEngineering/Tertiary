@@ -1282,6 +1282,9 @@ jobs:
     concurrency:
       group: release-publish
       cancel-in-progress: false
+      # Not added: "queue: max" (GitHub's docs list it; actionlint 1.7.12 rejects it, and an invalid key would stop every
+      # tag build). Without it, two tags waiting at once keep only the later one waiting; if that is the older tag, the
+      # newest-tag check below stops it and the newer tag's run is re-run (a re-run never deletes its tag).
     permissions:
       contents: read
     env:
@@ -1450,17 +1453,28 @@ jobs:
 
         MAC_SOURCE="/${REPO_NAME_LOWER}-download-mac"
         WIN_SOURCE="/${REPO_NAME_LOWER}-download-windows"
+        # [Claude 2026-10-30] Both are read first. On ANY failure (a POST, or a read-back after a POST that may have
+        # gone through) both are put back to what they were and read back, and the message says what is live.
         MAC_BEFORE=$(redirect_target "$MAC_SOURCE") || { echo "::error::Could not read the current Mac redirect. Nothing was changed."; exit 1; }
-        echo "Mac redirect before: ${MAC_BEFORE:-none}"
-        update_redirect "$MAC_SOURCE" "$MAC_URL" || exit 1
-        if ! update_redirect "$WIN_SOURCE" "$WIN_URL"; then
-          if [ -n "$MAC_BEFORE" ] && update_redirect "$MAC_SOURCE" "$MAC_BEFORE"; then
-            echo "::error::The Windows redirect failed, so the Mac redirect was put back to $MAC_BEFORE. Both downloads are on the old version."
+        WIN_BEFORE=$(redirect_target "$WIN_SOURCE") || { echo "::error::Could not read the current Windows redirect. Nothing was changed."; exit 1; }
+        echo "Redirects before: Mac ${MAC_BEFORE:-none}, Windows ${WIN_BEFORE:-none}"
+        put_back() {   # $1 what failed
+          local ok=1 now
+          for pair in "$MAC_SOURCE|$MAC_BEFORE" "$WIN_SOURCE|$WIN_BEFORE"; do
+            local src=${pair%%|*} before=${pair#*|}
+            now=$(redirect_target "$src") || now="(unreadable)"
+            [ "$now" = "$before" ] && continue
+            if [ -z "$before" ] || ! update_redirect "$src" "$before"; then ok=0; fi
+          done
+          if [ "$ok" = 1 ]; then
+            echo "::error::$1, so both redirects were put back (read back): Mac ${MAC_BEFORE:-none}, Windows ${WIN_BEFORE:-none}. Both downloads are on the old version."
           else
-            echo "::error::The Windows redirect failed AND the Mac redirect could not be put back: Mac downloads the new version, Windows the old. Fix the redirects by hand."
+            echo "::error::$1, AND putting the redirects back failed. Now: Mac '$(redirect_target "$MAC_SOURCE" || echo unreadable)', Windows '$(redirect_target "$WIN_SOURCE" || echo unreadable)'. Fix the redirects by hand."
           fi
           exit 1
-        fi
+        }
+        update_redirect "$MAC_SOURCE" "$MAC_URL" || put_back "The Mac redirect failed"
+        update_redirect "$WIN_SOURCE" "$WIN_URL" || put_back "The Windows redirect failed"
         echo "Redirect URLs updated successfully."
 
 
