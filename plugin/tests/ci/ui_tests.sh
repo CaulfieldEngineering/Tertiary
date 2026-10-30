@@ -13,8 +13,16 @@ EXE="$1"; RESULTS="$2"; NAME="$3"; shift 3
 mkdir -p "$RESULTS"
 LOG="$RESULTS/ui-tests-$NAME.log"
 
+# a time limit for the whole run: timeout (Linux, Git Bash), gtimeout (Homebrew), or perl's alarm (macOS has no timeout)
+limit() {
+    if command -v timeout >/dev/null 2>&1; then timeout "$@"
+    elif command -v gtimeout >/dev/null 2>&1; then gtimeout "$@"
+    else perl -e '$t = shift; $SIG{ALRM} = sub { kill "KILL", $pid; exit 124 }; $pid = fork; if ($pid == 0) { exec @ARGV } alarm $t; waitpid $pid, 0; exit ($? >> 8)' "$@"
+    fi
+}
+
 status=0
-timeout 1200 "$EXE" --snapshots "$RESULTS/ui-snapshots-$NAME" "$@" > "$LOG" 2>&1 || status=$?
+limit 1200 "$EXE" --snapshots "$RESULTS/ui-snapshots-$NAME" "$@" > "$LOG" 2>&1 || status=$?
 cat "$LOG"
 [ "$status" -eq 124 ] && echo "FAIL the UI tests were still running after 20 minutes and were stopped" | tee -a "$LOG"
 
