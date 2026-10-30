@@ -723,6 +723,16 @@ namespace audio_plugin {
       rmsLevelOutputRight.setCurrentAndTargetValue(-100.f);
     }
 
+    /* [Claude 2026-10-29] V-06: a position wrapped into 0 to the table size. fmod keeps the sign, so a negative host
+       beat position (the host starting before bar 1: a pre-roll or count-in) gave a negative position, and the table
+       read at a negative index gives 0: the band was silent until the position crossed 0. */
+    static double wrapToTable(double position, double size) {
+      if (size <= 0)
+        return 0;
+      const double wrapped = position - size * std::floor(position / size);
+      return wrapped < size ? wrapped : 0;
+    }
+
     /* Called upon any change in multiplier value.  Forces all LFO read-back
        positions to be synchronized with each other (when no host BPM), or forces
        all LFO read-back positions to be synchronized with the host grid */
@@ -736,7 +746,7 @@ namespace audio_plugin {
         float newPhase =
             playPositionScaled * lfo.getWaveMultiplier() * lfo.getWaveTableSize();
         // [Claude 2026-10-29] faded, not set: a hard jump of the gain clicked
-        lfo.jumpTo(fmod(newPhase, lfo.getWaveTableSize()), jumpFadeSamples());
+        lfo.jumpTo((float) wrapToTable(newPhase, lfo.getWaveTableSize()), jumpFadeSamples());   // [Claude 2026-10-29] V-06: wrapped, was fmod
       } else if (!hostInfo.isPlaying && lfo.isSyncedToHost()) {
         /* When no host BPM, force LFO position to sync to each other */
         if (lowLFO.isSyncedToHost())
@@ -761,23 +771,24 @@ namespace audio_plugin {
       if (size <= 0)
         return;
       const double cycles = hostInfo.ppqPosition * lfo.getWaveMultiplier();
-      const double expected = (cycles - std::floor(cycles)) * size;
-      double diff = expected - lfo.getPosition();
+      const double expected = wrapToTable((cycles - std::floor(cycles)) * size, size);   // [Claude 2026-10-29] V-06
+      double diff = expected - wrapToTable(lfo.getPosition(), size);                     // [Claude 2026-10-29] V-06
       diff -= size * std::round(diff / size);   // the shorter way round
       if (std::abs(diff) > 0.01 * size)
-        lfo.jumpTo((float) std::fmod(expected, size), jumpFadeSamples());
+        lfo.jumpTo((float) expected, jumpFadeSamples());
     }
 
     /* [Claude 2026-10-29] The LFO's gain this sample (its position plus the band's phase offset); during a jump fade,
        blended from the old position's gain, and the old position kept running */
     float AudioPluginAudioProcessor::lfoGain(LFO& lfo, float waveTableSize) {
-      int index = fmod((lfo.getPosition() + lfo.getRelativePhaseInSamples()), waveTableSize);
+      // [Claude 2026-10-29] V-06: wrapped into the table (fmod of a negative position gave a negative index: silence)
+      int index = (int) wrapToTable(lfo.getPosition() + lfo.getRelativePhaseInSamples(), waveTableSize);
       float gain = lfo.getWaveTableScaled()[index];
       if (lfo.fadeLeft > 0) {
-        int oldIndex = fmod((lfo.fadeFromPosition + lfo.getRelativePhaseInSamples()), waveTableSize);
+        int oldIndex = (int) wrapToTable(lfo.fadeFromPosition + lfo.getRelativePhaseInSamples(), waveTableSize);
         const float a = (float) lfo.fadeLeft / (float) lfo.fadeLength;
         gain += (lfo.getWaveTableScaled()[oldIndex] - gain) * a;
-        lfo.fadeFromPosition = fmod(lfo.fadeFromPosition + lfo.getIncrement(), waveTableSize);
+        lfo.fadeFromPosition = (float) wrapToTable(lfo.fadeFromPosition + lfo.getIncrement(), waveTableSize);
         --lfo.fadeLeft;
       }
       return gain;

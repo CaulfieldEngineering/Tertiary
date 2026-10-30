@@ -9,6 +9,7 @@
 #   jump       at 20 s the host jumps to beat 0.5 (half a cycle off the running count)
 #   loop       a 5.5-beat loop from beat 8 to beat 13.5, three passes (each pass lands half a cycle off)
 #   stopstart  the host stops at 4 s and plays on from the same beat at 5.3 s (the LFO free-runs meanwhile)
+#   preroll    [Claude 2026-10-29] the host starts at beat -1.75 (before bar 1), V-06 of the 2026-10-29 review
 # After each event, once one block and the 10 ms fade have passed, the output must match a steady render at the same
 # host beat position (within 0.001), so the LFO is back on the grid. And no click: the largest sample-to-sample change
 # stays within what the 10 ms fade allows (a full-depth swing over 10 ms), far below a hard jump.
@@ -95,6 +96,13 @@ def main():
     stops = [(4.0, 5.3)]
     y = render(exe, dc, os.path.join(work, "stopstart.wav"), ["--stop", "4:5.3"])
     ok &= check("stopstart", y, ref, ppq_timeline(stops=stops), [5.3])
+
+    # [Claude 2026-10-29] V-06: the host starts before bar 1 (a pre-roll or count-in), so the beat position is negative
+    # for the first 0.875 s. The band must play on the grid from the start, not go silent until the position crosses 0.
+    # Checked from 0.1 s (after the crossover filters and the 50 ms gain fade-ins settle) to 0.6 s, all before beat 0.
+    preroll = [(0.0, -1.75)]
+    y = render(exe, dc, os.path.join(work, "preroll.wav"), ["--jump-at", "0:-1.75"])
+    ok &= check("preroll", y, ref, ppq_timeline(jumps=preroll), [0.1 - FADE - BLOCK / RATE])
 
     sys.exit(0 if ok else 1)
 
