@@ -41,6 +41,8 @@
          remembered in the session, a 1.0.2 session loads unchanged  [Claude 2026-10-27]
      10  The window through the host: at every window size and host scale, the plug-in's window is
          exactly the UI's size, and is put back when the host sizes it otherwise  [Claude 2026-10-30]
+     11  Two instances are independent: automating, presets, a session and 70 s of audio on one
+         leave the other alone (Joe, RC1b in Cubase)  [Claude 2026-10-30]
 
   ==============================================================================
 */
@@ -1366,6 +1368,145 @@ int liveLicenseCheck(const juce::String& key, const juce::String& email)
     return failures == 0 ? 0 : 1;
 }
 
+//==============================================================================
+// 11. Two instances are independent  [Claude 2026-10-30]
+//==============================================================================
+/* Joe, RC1b in Cubase: "It looks like automation is happening on my 2nd instance of Tertiary ... all of the
+   automation is assigned to the test track." Two copies in one host, both windows open, as on two tracks: A is
+   automated, changed by program changes (presets), given a session, and run past the demo's 50 s; B must not move
+   at any time. A listener on B catches a change even if it is put back later. */
+struct ChangeSpy : juce::AudioProcessorParameter::Listener
+{
+    juce::StringArray changed;
+    juce::CriticalSection lock;
+    void parameterValueChanged(int index, float value) override
+    {
+        const juce::ScopedLock sl(lock);
+        changed.addIfNotAlreadyThere(juce::String(index) + "=" + juce::String(value, 4));
+    }
+    void parameterGestureChanged(int, bool) override {}
+    int count() { const juce::ScopedLock sl(lock); return changed.size(); }
+    juce::String first() { const juce::ScopedLock sl(lock); return changed.isEmpty() ? juce::String() : changed[0]; }
+};
+
+std::vector<float> values(juce::AudioPluginInstance& p)
+{
+    std::vector<float> v;
+    for (auto* prm : p.getParameters()) v.push_back(prm->getValue());
+    return v;
+}
+
+juce::String differences(juce::AudioPluginInstance& p, const std::vector<float>& before)
+{
+    juce::StringArray out;
+    const auto now = values(p);
+    for (size_t i = 0; i < now.size() && i < before.size(); ++i)
+        if (std::abs(now[i] - before[i]) > 1.0e-6f)
+            out.add(p.getParameters()[(int) i]->getName(64) + " " + juce::String(before[i], 4) + " -> " + juce::String(now[i], 4));
+    return out.isEmpty() ? juce::String("none") : out.joinIntoString(", ");
+}
+
+void section11()
+{
+    const double rate = 48000;
+    const int block = 512;
+    auto a = create(rate, block);
+    auto b = create(rate, block);
+    if (a == nullptr || b == nullptr) return;
+
+    // B: something other than the defaults, set by hand (as Joe did), then left alone
+    setNorm(*b, "Depth Low Band", 0.25f);
+    setNorm(*b, "Rate Low Band", rateNorm(3.0f));
+    setNorm(*b, "Sync to Host Low Band", 0.0f);
+    setNorm(*b, "Low-Mid Crossover Freq", 0.5f);
+
+    std::unique_ptr<juce::AudioProcessorEditor> editorA(a->createEditorIfNeeded()), editorB(b->createEditorIfNeeded());
+    for (auto* e : { editorA.get(), editorB.get() })
+        if (e != nullptr) { e->addToDesktop(0); e->setTopLeftPosition(40, 40); e->setVisible(true); }
+    check(editorA != nullptr && editorB != nullptr, "11 both windows open");
+
+    juce::AudioBuffer<float> io(2, block);
+    juce::MidiBuffer midi;
+    juce::Random rnd(11);
+    auto runBlocks = [&](int n, std::function<void(int)> beforeA) {
+        for (int k = 0; k < n; ++k)
+        {
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < block; ++i) io.setSample(c, i, 0.1f * (rnd.nextFloat() * 2.f - 1.f));
+            if (beforeA) beforeA(k);
+            a->processBlock(io, midi);
+            b->processBlock(io, midi);
+            if (k % 8 == 0) juce::MessageManager::getInstance()->runDispatchLoopUntil(1);
+        }
+    };
+    runBlocks(32, {});
+    pump(300);
+
+    const auto start = values(*b);
+    ChangeSpy spy;
+    for (auto* prm : b->getParameters()) prm->addListener(&spy);
+
+    // 1. A automated: every automatable parameter, a new value each block, for 12 s of audio
+    auto& paramsA = a->getParameters();
+    runBlocks((int) (12 * rate / block), [&](int) {
+        for (int j = 0; j < 4; ++j)
+            if (auto* prm = paramsA[rnd.nextInt(paramsA.size())]; prm->isAutomatable())
+                prm->setValueNotifyingHost(rnd.nextFloat());
+    });
+    if (std::getenv("WLA_HOSTTEST_11_SELFTEST") != nullptr)   // proves the check can fail: B is moved on purpose
+        setNorm(*b, "Depth Low Band", 0.9f);
+    pump(500);
+    check(differences(*b, start) == "none" && spy.count() == 0, "11 automating A leaves B alone",
+          "B changed: " + differences(*b, start) + (spy.count() ? ", listener saw " + spy.first() : juce::String()));
+
+    // 2. A's program list (presets), each one, as a host's program change does
+    for (int i = 0; i < a->getNumPrograms(); ++i)
+    {
+        a->setCurrentProgram(i);
+        runBlocks(8, {});
+    }
+    pump(500);
+    check(differences(*b, start) == "none" && spy.count() == 0, "11 loading every preset on A leaves B alone",
+          juce::String(a->getNumPrograms()) + " presets; B changed: " + differences(*b, start));
+
+    // 3. A given a session (as a project load or undo does)
+    {
+        auto c = create(rate, block);
+        for (auto* prm : c->getParameters()) if (prm->isAutomatable()) prm->setValueNotifyingHost(rnd.nextFloat());
+        juce::MemoryBlock state;
+        c->getStateInformation(state);
+        a->setStateInformation(state.getData(), (int) state.getSize());
+        runBlocks(16, {});
+        pump(500);
+    }
+    check(differences(*b, start) == "none" && spy.count() == 0, "11 a session loaded into A leaves B alone",
+          "B changed: " + differences(*b, start));
+
+    // 4. Over time: 70 s of audio on both (past the demo's 50 s on and into its gap), windows open throughout
+    runBlocks((int) (70 * rate / block), [&](int k) {
+        if (k % 64 == 0)
+            if (auto* prm = paramsA[rnd.nextInt(paramsA.size())]; prm->isAutomatable())
+                prm->setValueNotifyingHost(rnd.nextFloat());
+    });
+    pump(1500);
+    check(differences(*b, start) == "none" && spy.count() == 0, "11 over 70 s (demo on and off) B stays as set",
+          "B changed: " + differences(*b, start) + (spy.count() ? ", listener saw " + spy.first() : juce::String()));
+
+    // 5. And the other way: B changed by hand still sticks while A is automated
+    setNorm(*b, "Depth Low Band", 0.6f);
+    runBlocks(64, {});
+    const auto afterHand = values(*b);
+    runBlocks((int) (4 * rate / block), [&](int) {
+        if (auto* prm = paramsA[rnd.nextInt(paramsA.size())]; prm->isAutomatable()) prm->setValueNotifyingHost(rnd.nextFloat());
+    });
+    pump(500);
+    check(differences(*b, afterHand) == "none", "11 a change made by hand on B sticks", "B changed: " + differences(*b, afterHand));
+
+    for (auto* prm : b->getParameters()) prm->removeListener(&spy);
+    editorA.reset();
+    editorB.reset();
+}
+
 } // namespace
 
 //==============================================================================
@@ -1459,6 +1600,7 @@ int main(int argc, char* argv[])
         run(7, section7);
         run(9, [&] { section9(golden); });
         run(10, section10);   // [Claude 2026-10-30]
+        run(11, section11);   // [Claude 2026-10-30] two instances are independent
     }
     run(8, [&] { section8(golden, makeGolden); });
 
