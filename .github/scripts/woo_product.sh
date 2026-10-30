@@ -12,12 +12,16 @@
 #              WOO_PRODUCT_ID (wWOO_PRODUCT_ID in config.cmake), WARN_ONLY=1 to report problems as warnings.
 #
 # Meta keys, from the Serial Numbers plugin source (wc-serial-numbers, includes/Admin/Products.php and
-# includes/RestAPI.php, where version_check returns get_post_meta(product, '_software_version')):
+# includes/RestAPI.php, where version_check returns get_post_meta(product, '_software_version')), checked
+# against the live product 45 on 2026-10-30:
 #   _is_serial_number = yes        serial keys are on for this product
-#   _serial_key_source             custom_source (keys added by hand) or generator_rule (Pro)
+#   _serial_key_source             auto_generated (Pro: "Auto generated key", what Tertiary uses since
+#                                  2026-10-30, with _serial_number_key_prefix WLA- and _activation_limit 5),
+#                                  generator_rule (Pro: needs _generator_id), custom_source (keys added by hand)
+#   _generator_id                  the generator a generator_rule product uses (0 or empty = none chosen)
 #   _software_version              the Software version field
-# The generator a "generator_rule" product uses is stored by the Pro plugin, whose source isn't public:
-# the check looks for meta keys containing "generator", logs them, and fails if none holds a value.
+# A product with no key source, or one this script doesn't know, fails: buyers might get no key.
+# Tests: .github/scripts/test_woo_product.sh (a fake curl, no network).
 # ==========================================================================================
 set -euo pipefail
 
@@ -81,19 +85,24 @@ case "${1:-}" in
 
     SOURCE=$(meta "$P" _serial_key_source)
     case "$SOURCE" in
-      generator_rule)
-        GEN=$(jq -r '[.meta_data[]? | select(.key | test("generator"; "i")) | .value
-                       | select(. != null and . != "" and . != "0" and . != 0 and . != [] and . != {})] | length' <<< "$P")
-        if [ "$GEN" = "0" ]; then
-          fail "Product $WOO_PRODUCT_ID is set to 'Generator rule' but no generator is chosen (no meta key containing 'generator' has a value), so purchases get no key. Pick the generator on the product, then re-run."
-        fi
-        echo "✓ Key source: generator rule, with a generator set"
+      auto_generated)
+        echo "✓ Key source: auto generated key (prefix '$(meta "$P" _serial_number_key_prefix)', activation limit '$(meta "$P" _activation_limit)')"
         ;;
-      custom_source|"")
+      generator_rule)
+        GEN=$(meta "$P" _generator_id)
+        if [ -z "$GEN" ] || [ "$GEN" = "0" ]; then
+          fail "Product $WOO_PRODUCT_ID is set to 'Generator rule' but no generator is chosen (_generator_id is '${GEN}'), so purchases get no key. Pick the generator on the product, or switch it to 'Auto generated key', then re-run."
+        fi
+        echo "✓ Key source: generator rule, generator $GEN"
+        ;;
+      custom_source)
         echo "✓ Key source: keys added by hand (custom_source). The stock of unused keys is not checked here."
         ;;
+      "")
+        fail "Product $WOO_PRODUCT_ID has no key source (_serial_key_source is empty or missing), so purchases may get no key. Set it to 'Auto generated key' in the product's Serial Numbers tab, then re-run."
+        ;;
       *)
-        echo "✓ Key source: $SOURCE"
+        fail "Product $WOO_PRODUCT_ID has a key source this check doesn't know ('$SOURCE'). Check the product delivers keys, then add the source to woo_product.sh."
         ;;
     esac
     ;;

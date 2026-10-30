@@ -228,6 +228,10 @@ jobs:
     # [Claude 2026-10-29] Joe found the product on "Generator rule" with no generator: purchases got no key.
     # Checked here, before any build, and again in publish right before anything is uploaded.
     # ==========================================================================================
+    - name: Test the Store Product Checks (fake store, no network)
+      shell: bash
+      run: bash .github/scripts/test_woo_product.sh
+
     - name: Check the WooCommerce Product Has a Working Key Source
       shell: bash
       env:
