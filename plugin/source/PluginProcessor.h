@@ -207,6 +207,7 @@ namespace audio_plugin {
         /* BPM and Host Info */
         // =========================================================================
         juce::AudioPlayHead::CurrentPositionInfo hostInfo;  // To get BPM
+        bool hostPpqValid = false;   // [Claude 2026-10-30] R-15: the host gave a beat position this block (audio thread only)
         double lastSampleRate;                              // To get Sample Rate
         juce::AudioPlayHead* playHead;                      // i To get BPM
 

@@ -501,6 +501,21 @@ struct TestPlayHead : juce::AudioPlayHead
     }
 };
 
+/* [Claude 2026-10-30] R-15: a host that says "playing" but gives no beat position, or whose position query fails
+   (Codex review of the release candidate; V-19 in the 2026-10-29 review) */
+struct NoPpqPlayHead : juce::AudioPlayHead
+{
+    bool fail = false;   // true: getPosition() gives nothing at all
+    juce::Optional<PositionInfo> getPosition() const override
+    {
+        if (fail) return {};
+        PositionInfo p;
+        p.setBpm (120);
+        p.setIsPlaying (true);   // playing, no PPQ: JUCE's getCurrentPosition() would fill it in as 0
+        return p;
+    }
+};
+
 static void setParam (juce::AudioProcessor& p, const juce::String& id, float value)
 {
     for (auto* prm : p.getParameters())
@@ -640,6 +655,29 @@ struct ProcessorTests : juce::UnitTest
             logMessage ("1/4 note at 120 bpm: " + juce::String (period120) + ", at 60 bpm: " + juce::String (period60) + " samples");
             expectWithinAbsoluteError (period120, 24000.0, 240.0);
             expectWithinAbsoluteError (period60, 48000.0, 480.0);
+            p.setPlayHead (nullptr);
+        }
+
+        // [Claude 2026-10-30] R-15: playing without a beat position must not re-lock to "beat 0" every block (it did:
+        // the synced LFO jumped back each block or two, so the band barely moved). It runs at the host's tempo instead.
+        beginTest ("R-15: host playing with no beat position: the synced LFO keeps running at the host tempo");
+        {
+            audio_plugin::AudioPluginAudioProcessor p;
+            NoPpqPlayHead head;
+            p.setPlayHead (&head);
+            setUpForPeriod (p, true);
+            p.setRateAndBufferSizeDetails (48000, 128);
+            p.prepareToPlay (48000, 128);
+            auto out = runDC (p, 48000 * 3, 128);
+            const auto period = measurePeriod (out, 4800);
+            logMessage ("1/4 note at 120 bpm, no PPQ: " + juce::String (period) + " samples (expect 24000)");
+            expectWithinAbsoluteError (period, 24000.0, 240.0);
+
+            head.fail = true;   // the position query now fails while the last answer said "playing"
+            out = runDC (p, 48000 * 3, 128);
+            const auto periodFailed = measurePeriod (out, 4800);
+            logMessage ("then the position query fails: " + juce::String (periodFailed) + " samples (expect 24000)");
+            expectWithinAbsoluteError (periodFailed, 24000.0, 240.0);
             p.setPlayHead (nullptr);
         }
 

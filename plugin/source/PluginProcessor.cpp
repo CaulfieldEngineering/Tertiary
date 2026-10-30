@@ -777,7 +777,7 @@ namespace audio_plugin {
        phase offset is added later, as before. Not playing, or no host (the standalone): it free-runs as before. */
     //==============================================================================
     void AudioPluginAudioProcessor::relockToHost(LFO& lfo) {
-      if (!hostInfo.isPlaying || !lfo.isSyncedToHost())
+      if (!hostInfo.isPlaying || !hostPpqValid || !lfo.isSyncedToHost())   // [Claude 2026-10-30] R-15: no beat position, no re-lock
         return;
       const double size = lfo.getWaveTableSize();
       if (size <= 0)
@@ -926,8 +926,14 @@ namespace audio_plugin {
       /* Set Up Host Playhead Data */
       playHead = this->getPlayHead();
 
+      // [Claude 2026-10-30] R-15: getCurrentPosition() fills a missing beat position in as 0, and keeps the last answer
+      // when the host gives none, so the re-lock only trusts a beat position the host really gave this block
+      hostPpqValid = false;
       if (playHead != nullptr)
-        playHead->getCurrentPosition(hostInfo);
+        if (const auto position = playHead->getPosition()) {
+          hostPpqValid = position->getPpqPosition().hasValue();
+          playHead->getCurrentPosition(hostInfo);
+        }
 
       playPosition = hostInfo.ppqPosition;  // [Claude 2026-10-27] Read after the update, not from the previous block
       if (hostInfo.bpm > 1.0) hostBpmForDisplay.store(hostInfo.bpm);   // [Claude 2026-10-29] for the scope
