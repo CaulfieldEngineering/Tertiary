@@ -232,6 +232,12 @@ jobs:
       shell: bash
       run: bash .github/scripts/test_woo_product.sh
 
+    - name: Test the Download Redirect Step (fake Redirection API, no network)
+      shell: bash
+      run: |
+        python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --quiet pyyaml
+        bash .github/scripts/test_publish_steps.sh
+
     - name: Check the WooCommerce Product Has a Working Key Source
       shell: bash
       env:
@@ -1271,6 +1277,11 @@ jobs:
     needs: [preflight, build]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    # [Claude 2026-10-30] Codex RC review: two tags publishing at once could leave the older one live. One publish at a
+    # time (a second waits, never cancelled part-way), and the tag is checked again just before anything goes live.
+    concurrency:
+      group: release-publish
+      cancel-in-progress: false
     permissions:
       contents: read
     env:
@@ -1318,6 +1329,20 @@ jobs:
         done
         echo "MAC_FILE=${GITHUB_WORKSPACE}/dist/${MAC[0]}" >> "$GITHUB_ENV"
         echo "WIN_FILE=${GITHUB_WORKSPACE}/dist/${WIN[0]}" >> "$GITHUB_ENV"
+
+
+    - name: Still the Newest Release Tag (before anything is uploaded)
+      shell: bash
+      run: |
+        set -euo pipefail
+        THIS="${GITHUB_REF#refs/tags/v}"
+        TAGS=$(git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/v##') || { echo "::error::Could not list the tags on GitHub. Nothing was published."; exit 1; }
+        NEWEST=$(printf '%s\n' "$TAGS" "$THIS" | sort -V | tail -n 1)
+        if [ "$NEWEST" != "$THIS" ]; then
+          echo "::error::v$NEWEST was tagged after this run started, so v$THIS is no longer the newest release. Nothing was published."
+          exit 1
+        fi
+        echo "✓ v$THIS is still the newest release tag"
 
 
     - name: Check the WooCommerce Product Has a Working Key Source (before anything is uploaded)
@@ -1394,25 +1419,48 @@ jobs:
         REPO_NAME="${GITHUB_REPOSITORY#*/}"
         REPO_NAME_LOWER=$(echo "$REPO_NAME" | tr '[:upper:]' '[:lower:]')
 
-        update_redirect() {   # $1 source path, $2 target URL
-          local source_url=$1 target_url=$2 existing redirect_id body response endpoint
+        # [Claude 2026-10-30] Codex RC review: the HTTP status is checked and each redirect is read back; if the
+        # Windows one fails after the Mac one changed, the Mac one is put back, so both platforms stay on one version.
+        redirect_target() {   # $1 source path: the redirect's current target ("" if none); fails if it can't be read
+          local list
+          list=$(curl -fsS -u "$AUTH" "${WORDPRESS_SITE}/wp-json/redirection/v1/redirect?search=$1") || return 1
+          jq -er --arg u "$1" '[.items[] | select(.url == $u) | .action_data.url][0] // ""' <<< "$list"
+        }
+        update_redirect() {   # $1 source path, $2 target URL; returns 1 on any failure
+          local source_url=$1 target_url=$2 existing redirect_id body response endpoint code now
           echo "Redirect ${source_url} -> ${target_url}"
-          existing=$(curl -fsS -u "$AUTH" "${WORDPRESS_SITE}/wp-json/redirection/v1/redirect?search=${source_url}")
+          existing=$(curl -fsS -u "$AUTH" "${WORDPRESS_SITE}/wp-json/redirection/v1/redirect?search=${source_url}") || return 1
           redirect_id=$(jq -r --arg u "$source_url" '.items[] | select(.url == $u) | .id' <<< "$existing" | head -n 1)
-          body=$(jq -n --arg u "$source_url" --arg t "$target_url" --argjson g "$DEFAULT_GROUP" \
-            '{url: $u, action_data: {url: $t, code: 301}, match_type: "url", action_type: "url", regex: false, status: "enabled", group_id: $g}')
+          body=$(jq -n --arg u "$source_url" --arg t "$target_url" --argjson g "$DEFAULT_GROUP"             '{url: $u, action_data: {url: $t, code: 301}, match_type: "url", action_type: "url", regex: false, status: "enabled", group_id: $g}')
           endpoint="${WORDPRESS_SITE}/wp-json/redirection/v1/redirect"
           [ -n "$redirect_id" ] && endpoint="${endpoint}/${redirect_id}"
-          response=$(curl -sS -X POST "$endpoint" -u "$AUTH" -H "Content-Type: application/json" -d "$body")
-          if ! jq -e . >/dev/null 2>&1 <<< "$response" || jq -e 'type == "object" and has("code")' >/dev/null <<< "$response"; then
-            echo "::error::Redirection API error for ${source_url}: $response"
-            exit 1
+          response=$(mktemp)
+          code=$(curl -sS -o "$response" -w '%{http_code}' -X POST "$endpoint" -u "$AUTH" -H "Content-Type: application/json" -d "$body") || code=000
+          if [ "${code:0:1}" != "2" ] || ! jq -e 'type == "object" and (has("code") | not)' >/dev/null 2>&1 < "$response"; then
+            echo "::error::Redirection API error for ${source_url} (HTTP $code): $(head -c 500 "$response")"
+            return 1
           fi
-          echo "✓ ${source_url}"
+          now=$(redirect_target "$source_url") || { echo "::error::Could not read ${source_url} back"; return 1; }
+          if [ "$now" != "$target_url" ]; then
+            echo "::error::${source_url} reads back as '${now}', not '${target_url}'"
+            return 1
+          fi
+          echo "✓ ${source_url} (read back)"
         }
 
-        update_redirect "/${REPO_NAME_LOWER}-download-mac" "$MAC_URL"
-        update_redirect "/${REPO_NAME_LOWER}-download-windows" "$WIN_URL"
+        MAC_SOURCE="/${REPO_NAME_LOWER}-download-mac"
+        WIN_SOURCE="/${REPO_NAME_LOWER}-download-windows"
+        MAC_BEFORE=$(redirect_target "$MAC_SOURCE") || { echo "::error::Could not read the current Mac redirect. Nothing was changed."; exit 1; }
+        echo "Mac redirect before: ${MAC_BEFORE:-none}"
+        update_redirect "$MAC_SOURCE" "$MAC_URL" || exit 1
+        if ! update_redirect "$WIN_SOURCE" "$WIN_URL"; then
+          if [ -n "$MAC_BEFORE" ] && update_redirect "$MAC_SOURCE" "$MAC_BEFORE"; then
+            echo "::error::The Windows redirect failed, so the Mac redirect was put back to $MAC_BEFORE. Both downloads are on the old version."
+          else
+            echo "::error::The Windows redirect failed AND the Mac redirect could not be put back: Mac downloads the new version, Windows the old. Fix the redirects by hand."
+          fi
+          exit 1
+        fi
         echo "Redirect URLs updated successfully."
 
 
@@ -1443,7 +1491,8 @@ jobs:
   # [Claude 2026-10-29] Was a step in each build job. It now keeps the tag when:
   #   - the tag check never reached a verdict (GitHub could not be reached): that is not a bad tag;
   #   - publishing failed part-way: files may already be live, and the tag records what was released;
-  #   - the tag now points at another commit (it was moved by hand meanwhile).
+  #   - the tag now points at another commit (it was moved by hand meanwhile);
+  #   - [Claude 2026-10-30] this is a re-run (an earlier attempt may have published it).
   # Any error in here also keeps the tag.
   # ==========================================================================================
   cleanup-failed-tag:
@@ -1459,9 +1508,18 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TAG_CHECK: ${{ needs.preflight.outputs.tag_check }}
         PUBLISH_RESULT: ${{ needs.publish.result }}
+        RUN_ATTEMPT: ${{ github.run_attempt }}
       run: |
         set -euo pipefail
         TAG_NAME="${GITHUB_REF#refs/tags/}"
+
+        # [Claude 2026-10-30] Codex RC review: re-running a tag that already published (a newer tag then fails the
+        # version-order check, or a build fails by chance) skipped publish and deleted a live release's tag. Only the
+        # first attempt of a tag's run may delete it.
+        if [ "${RUN_ATTEMPT:-1}" != "1" ]; then
+          echo "::warning::This is attempt $RUN_ATTEMPT of $TAG_NAME's run, and an earlier attempt may have published it, so $TAG_NAME is KEPT."
+          exit 0
+        fi
 
         if [ "$TAG_CHECK" != "done" ]; then
           echo "::warning::The tag check did not reach a verdict (for example GitHub could not be reached), so $TAG_NAME is KEPT. Re-run the workflow."
