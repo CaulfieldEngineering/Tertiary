@@ -25,6 +25,7 @@ juce::PropertiesFile::Options getSettingsOptions()
     options.filenameSuffix = "settings";
     options.osxLibrarySubFolder = "Application Support";
     options.storageFormat = juce::PropertiesFile::StorageFormat::storeAsXML;
+    TestHooks::redirectSettings(options);   // [Claude 2026-10-29] UI tests: a temp folder (TestHooks.h); unchanged otherwise
     return options;
 }
 

@@ -19,6 +19,8 @@ struct WindowWrapperFrequency : juce::Component,
                                 juce::Timer,
                                 juce::AudioProcessorValueTreeState::Listener
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
     //WindowWrapperFrequency(TertiaryAudioProcessor& p, juce::AudioProcessorValueTreeState& apv, GlobalControls& gc);
     WindowWrapperFrequency(audio_plugin::AudioPluginAudioProcessor& p, juce::AudioProcessorValueTreeState& apv);
     ~WindowWrapperFrequency();

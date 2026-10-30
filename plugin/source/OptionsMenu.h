@@ -32,6 +32,8 @@ struct OptionsMenu :    juce::Component,
                         juce::Timer,
                         juce::Button::Listener
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
     
 public:
     OptionsMenu();

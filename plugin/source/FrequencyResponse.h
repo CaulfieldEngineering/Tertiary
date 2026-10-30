@@ -24,6 +24,8 @@ struct FrequencyResponse :	juce::Component,
 							juce::Slider::Listener,
 							juce::ActionListener
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
 
 	FrequencyResponse(audio_plugin::AudioPluginAudioProcessor& p, juce::AudioProcessorValueTreeState& apv);
 	~FrequencyResponse();

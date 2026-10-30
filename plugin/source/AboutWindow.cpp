@@ -10,7 +10,11 @@
 
 
 #include "AboutWindow.h"
+#if __has_include("build_id.h")
 #include "build_id.h"   // [Claude 2026-10-29] WLA_BUILD_ID
+#else
+#define WLA_BUILD_ID "unknown"   // [Claude 2026-10-29] builds without the build_id step (the web demo)
+#endif
 #include <cstdlib>
 #include "PluginEditor.h"
 
@@ -271,6 +275,7 @@ void AboutWindow::setUpSerialKeyEditor()
     options.applicationName = "Tertiary";
     options.filenameSuffix = "settings";
     options.osxLibrarySubFolder = "Application Support";
+    TestHooks::redirectSettings(options);   // [Claude 2026-10-29] UI tests: a temp folder (TestHooks.h); unchanged otherwise
     juce::PropertiesFile props(options);
 
 
@@ -315,6 +320,7 @@ void AboutWindow::setUpEmailEditor()
     options.applicationName = "Tertiary";
     options.filenameSuffix = "settings";
     options.osxLibrarySubFolder = "Application Support";
+    TestHooks::redirectSettings(options);   // [Claude 2026-10-29] UI tests: a temp folder (TestHooks.h); unchanged otherwise
     juce::PropertiesFile props(options);
 
 
@@ -678,6 +684,7 @@ void AboutWindow::updateLocalKeyData(bool isActivating, const juce::String& key,
     options.filenameSuffix = "settings";
     options.osxLibrarySubFolder = "Application Support"; // macOS-specific
     options.storageFormat = juce::PropertiesFile::StorageFormat::storeAsXML; // Easier to read
+    TestHooks::redirectSettings(options);   // [Claude 2026-10-29] UI tests: a temp folder (TestHooks.h); unchanged otherwise
 
     juce::PropertiesFile props(options);
 

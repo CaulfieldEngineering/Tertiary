@@ -217,6 +217,25 @@ Two fixes the new tests found:
 
 Tests: unit tests (presets: the list and parameter names, Default = defaults, every preset loads, modified marker, host programs, user save/load/rename/delete in a temp folder, session recall and 1.0.x sessions, opening the window changes nothing). HostTest section 9 through the built plugin: the host sees the 14 presets in order; each loads by program number and changes the sound; Default = the golden default render; the session remembers the preset (bit-identical render); a session saved by the real 1.0.2 VST3 (`plugin/tests/golden/session-1.0.2-VST3.*`) loads with all 49 values unchanged. Regression renders: 35/35 bit-identical to the previous build. pluginval strictness 10: SUCCESS.
 
+## 9. UI tests (Joe, 2026-10-29: "I want to check as much as possible automated prior")
+
+The real processor and editor in a window off the screen, used the way a person uses them: mouse moves, drags, double-clicks and Ctrl+Shift-clicks fed to the window as the operating system would, key presses, the menus. After each step it checks the parameters, the controls, what the scope and crossover draw, and the sound (a short render, measuring the LFO's speed, depth and level). 23 scenarios (U-01 to U-23), each naming the test-plan IDs it covers; about a minute.
+
+| File | What |
+|---|---|
+| `plugin/tests/ui/UiRobot.h` (new, generic) | The framework: mouse, keys, menus, checks, crash and hang reports with function names and lines, a leak counter and freed-memory poisoning. No Tertiary code: meant for NewPluginTemplate too |
+| `plugin/tests/UiTest.cpp` (new) | Tertiary's scenarios. `UiTest --list` shows them; `--only R-06` runs one; `--snapshots <folder>` saves pictures |
+| `plugin/tests/ui/smoke_standalone.py` (new, generic) | The standalone through Windows UI Automation (pywinauto): Sync, a slider, the About window, quit. Never left running; the app's settings file is put back afterwards |
+| `plugin/tests/ci/ui_tests.sh` (new, generic) | Runs the UI tests in CI; failing checks go on the run's summary page |
+| `plugin/source/TestHooks.h` (new) | Only the UiTest build changes behaviour (`WLA_UI_TEST_BUILD`): settings and presets in a temp folder, links and "open folder" recorded instead of opened. Every other build compiles to what it did before |
+| `plugin/source/*.h` (one line each) | `friend struct UiTestAccess;` so the tests can read private state (what the scope draws, the build-id flag) |
+| `plugin/source/BandControls.cpp` `setMode` | Accessible names on the band controls ("Low Depth", "Mid Sync"...), for screen readers and the smoke test. Nothing drawn or done changes |
+| `plugin/CMakeLists.txt` | The `UiTest` target (with `-DWLA_TESTS=ON`); `-DWLA_UI_TEST_ASAN=ON` builds it with the address sanitiser |
+| `plugin/tests/run_all.ps1` | Runs the UI tests and the smoke test; `-Asan` also runs them under the sanitiser |
+| `.github/workflows/test.yml`, `plugin/tests/ci/mac_checks.sh` | The UI tests on Windows and both Macs, the smoke test on Windows, auval's codes read from config.cmake with a plain T1-13 message; runs on every work branch (not staging or production) |
+
+Undo: revert the commit. The plugin's own code changes are the one-line friends, the accessible names, and the `TestHooks` calls (identical behaviour outside the UiTest build).
+
 ## Suggestions I did not change
 
 1. ~~Relative phase is twice what the knob says, in the audio.~~ Fixed after Joe's yes: section 2b.
@@ -231,3 +250,4 @@ Tests: unit tests (presets: the list and parameter names, Default = defaults, ev
 10. **Unused code**: `WLDebugger` (all calls commented out; `cleanupInstance()` sets the pointer to null before deleting it, so it leaks), `LockFreeQueue.h` (not included anywhere), `Params.cpp` (empty).
 11. **Small, harmless**: `FrequencyResponse::makeAttachments` makes `lowMidAttachment` twice; `getPlayPosition()` returns an `std::atomic` by value; the meters read `LinearSmoothedValue` across threads (fine in practice).
 12. **Deploy workflow**: the Mac "Sign" steps skip silently if secrets are missing, so an unsigned installer can be uploaded. A tag build could fail instead.
+13. **JUCE 8.0.8 use-after-free in its Windows accessibility code** (found by the UI tests under the address sanitiser, 2026-10-29): `AccessibilityNativeHandle::get_ProviderOptions` uses its element without checking it is still valid, so a screen reader or another UI Automation client asking about a pop-up menu that has just closed reads freed memory. Rare, and in JUCE, not Tertiary; a newer JUCE may have fixed it. `run_all.ps1 -Asan` lists these reports without failing on them.

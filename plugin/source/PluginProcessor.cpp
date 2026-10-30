@@ -161,6 +161,7 @@ namespace audio_plugin {
 		options.applicationName = "Tertiary";
 		options.filenameSuffix = "settings";
 		options.osxLibrarySubFolder = "Application Support";
+		TestHooks::redirectSettings(options);   // [Claude 2026-10-29] UI tests: a temp folder (TestHooks.h); unchanged otherwise
 
 		propertiesFile = std::make_unique<juce::PropertiesFile>(options);
 

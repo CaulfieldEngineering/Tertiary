@@ -212,4 +212,36 @@ if (WLA_TESTS)
     if (MSVC)
         set_property(TARGET HostTest PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif()
+
+    # [Claude 2026-10-29] UiTest: the real processor and editor in an off-screen window, driven by mouse and keyboard
+    # events, checked after every step (parameters, components, the scope, the audio). See tests/UiTest.cpp. Also only
+    # with -DWLA_TESTS=ON. WLA_UI_TEST_BUILD points the settings and presets at a temp folder and records links instead
+    # of opening them (source/TestHooks.h); no other target defines it.
+    # -DWLA_UI_TEST_ASAN=ON builds it with the address sanitiser (for the open/close check, U-22).
+    option(WLA_UI_TEST_ASAN "Build UiTest with the address sanitiser" OFF)
+    juce_add_console_app(UiTest PRODUCT_NAME "UiTest")
+    target_sources(UiTest PRIVATE ${PLUGIN_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/tests/UiTest.cpp)
+    target_compile_definitions(UiTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0
+        JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=0 JUCE_WIN_PER_MONITOR_DPI_AWARE=1 WLA_UI_TEST_BUILD=1
+        UIROBOT_ASAN=$<BOOL:${WLA_UI_TEST_ASAN}>
+        JucePlugin_Name="${wPLUGIN_NAME}" JucePlugin_VersionString="${wPROJECT_VERSION}" JucePlugin_IsSynth=0
+        JucePlugin_WantsMidiInput=0 JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0)
+    target_include_directories(UiTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source ${CMAKE_CURRENT_BINARY_DIR}/generated)
+    add_dependencies(UiTest wla_build_id)
+    target_link_libraries(UiTest PRIVATE ${PROJECT_NAME}BinaryData juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
+    if (MSVC)
+        set_property(TARGET UiTest PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+        # symbols, so a crash or a hang prints the functions it was in
+        target_compile_options(UiTest PRIVATE /Zi)
+        target_link_options(UiTest PRIVATE /DEBUG)
+    endif()
+    if (WLA_UI_TEST_ASAN)
+        if (MSVC)
+            target_compile_options(UiTest PRIVATE /fsanitize=address /Zi)
+            target_link_options(UiTest PRIVATE /INCREMENTAL:NO /DEBUG)
+        else()
+            target_compile_options(UiTest PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+            target_link_options(UiTest PRIVATE -fsanitize=address)
+        endif()
+    endif()
 endif()

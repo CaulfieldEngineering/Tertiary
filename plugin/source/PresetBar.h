@@ -24,6 +24,8 @@
 struct PresetBar : juce::Component,
                    juce::Timer
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
     PresetBar(audio_plugin::AudioPluginAudioProcessor& p);
     ~PresetBar() override;
 

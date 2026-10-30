@@ -23,6 +23,8 @@ struct BandControl :    juce::Component,
                         /*juce::MouseListener,*/
                         
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
     BandControl(juce::AudioProcessorValueTreeState& apv);
     ~BandControl();
     

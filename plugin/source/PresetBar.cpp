@@ -169,7 +169,7 @@ void PresetBar::showMenu()
             else if (result == menuOpenFolder)
             {
                 self.presets.getUserFolder().createDirectory();
-                self.presets.getUserFolder().startAsProcess();
+                TestHooks::openFolder(self.presets.getUserFolder());   // [Claude 2026-10-29] UI tests: recorded, not opened
             }
             else
             {

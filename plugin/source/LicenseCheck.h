@@ -38,6 +38,7 @@
 #include <juce_events/juce_events.h>
 #include <juce_data_structures/juce_data_structures.h>
 #include "LicenseServer.h"
+#include "TestHooks.h"   // [Claude 2026-10-29] UI tests: settings in a temp folder, UiTestAccess
 
 namespace audio_plugin { class AudioPluginAudioProcessor; }
 
