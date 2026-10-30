@@ -136,7 +136,11 @@ def main():
             names = a.menu_item.split("|")
             end = time.time() + 5
             while item is None and time.time() < end:
-                for top in Desktop(backend="uia").windows(process=proc.pid):
+                # [Claude 2026-10-30] Our own windows by Win32 first, then UI Automation on those only. A UIA listing of
+                # the whole desktop asks every app, and one hung app (a frozen Cubase) made it take 20 s, longer than
+                # this 5 s wait: the menu was there but never looked at. The Win32 listing takes no time.
+                for w32 in Desktop(backend="win32").windows(process=proc.pid):
+                    top = Desktop(backend="uia").window(handle=w32.handle).wrapper_object()
                     for d in top.descendants(control_type="MenuItem"):
                         if d.element_info.name in names:
                             item = d
