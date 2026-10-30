@@ -79,6 +79,7 @@ class FakeLive:
         self.on_read, self.reads = None, {}
         self.writes, self.cleared = [], 0
         self.served = {pid: self.render(pid) for pid in self.pages}
+        self.first_served, self.stale_plain = dict(self.served), False
 
     def render(self, pid):
         # as Elementor renders it: one div per element, its CSS classes after its own, WordPress's curly apostrophes
@@ -122,8 +123,10 @@ class FakeLive:
         if self.wrong_bullets:   # headings right, a bullet wrong: must not pass
             self.served[10] = self.served[10].replace("Runs on", "Ran on")
 
-    def public(self, url):
+    def public(self, url, bust=True):
         pid = 20 if url == self.site + "/" else next(p for p in self.pages if self.pages[p]["link"] == url)
+        if not bust and self.stale_plain:   # the page cache keeps serving the page as it was first seen
+            return 200, self.first_served[pid]
         return 200, self.served[pid]
 
     def reachable(self, url):
@@ -578,6 +581,12 @@ class Publish(unittest.TestCase):
         self.assertEqual(cl.visible_text(cl.served_widget(body, "wla-version")), "1.1.0")
         only_comment = '<!-- <div class="elementor-element elementor-element-old wla-version elementor-widget"><p>1.1.0</p></div> -->'
         self.assertIsNone(cl.served_widget(only_comment, "wla-version"))
+
+    def test_stale_page_cache_at_ordinary_address_fails(self):
+        s = FakeLive([page(), home()])
+        s.stale_plain = True
+        with self.assertRaisesRegex(cl.Fail, "ordinary address"):
+            self.run_publish(s)
 
     def test_served_widget_ignores_divs_in_comments(self):
         body = ('<div class="elementor-element elementor-element-v1 wla-version elementor-widget">'

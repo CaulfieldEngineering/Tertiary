@@ -470,7 +470,11 @@ class LiveSite:
         if code // 100 != 2:
             raise Fail(f"Clearing Elementor's cache answered HTTP {code}: {txt[:300]}")
 
-    def public(self, url):
+    def public(self, url, bust=True):
+        """What a visitor gets. bust=True adds a unique query string, so no page cache can answer; bust=False asks
+        for the ordinary address, as a visitor does (the site's page cache may answer that)."""
+        if not bust:
+            return self.req("GET", None, auth=False, raw_url=url)
         sep = "&" if "?" in url else "?"
         return self.req("GET", None, auth=False, raw_url=f"{url}{sep}nc={int(time.time() * 1000)}")
 
@@ -702,32 +706,34 @@ def publish(site, entries, version, page_id, plugin, dry_run=False, release_date
         except Fail as e:
             log(f"::warning::Clearing Elementor's cache failed ({e}); Elementor > Tools > Clear Files & Data.")
 
-    # Live: what a visitor gets (a unique query string, so no page cache answers). The block as served must read
-    # exactly like the block that was written, with the same links; the version line likewise.
+    # Live: what a visitor gets. First with a unique query string (no page cache can answer: this is what the site
+    # now renders), then the ordinary address a visitor uses, which the site's page cache (about 5 minutes) may still
+    # answer with the old page for a while. The block must read exactly like the block written, with the same links;
+    # the version line likewise.
+    def live(url, extract, want, what, tries):
+        seen = None
+        for bust in (True, False):
+            for attempt in range(tries if not bust else 6):
+                code, body = site.public(url, bust=bust)
+                seen = extract(body) if code == 200 else None
+                if seen is not None and want(seen):
+                    break
+                time.sleep(10)
+            else:
+                where = "even with the page cache bypassed" if bust else "at its ordinary address (the page cache)"
+                raise Fail(f"{what} {url} (HTTP {code}) does not show what was written {where}"
+                           + (f": it reads '{visible_text(seen)[:300]}'" if seen else "")
+                           + (". The data is stored; Elementor > Tools > Clear Files & Data, then look again." if bust
+                              else ". The data is stored and renders right; the cache should catch up within minutes."))
+
     want_text, want_links = visible_text(block), links(block)
-    got = None
-    for attempt in range(6):
-        code, body = site.public(back["link"])
-        got = served_block(body) if code == 200 else None
-        if got is not None and visible_text(got) == want_text and links(got) == want_links:
-            break
-        time.sleep(10)
-    else:
-        raise Fail(f"The live changelog page {back['link']} (HTTP {code}) does not show what was written"
-                   + (f": it reads '{visible_text(got)[:300]}...'" if got else " (no changelog block found in it)")
-                   + ". The data is stored; Elementor > Tools > Clear Files & Data, then look again.")
+    live(back["link"], served_block, lambda g: visible_text(g) == want_text and links(g) == want_links,
+         "The live changelog page", 36)
     log(f"✓ Live changelog page shows exactly the new block ({version} first, every older entry)")
     if home_new is not None:
         want = visible_text(version_line_texts(hb, version_class)[0])
-        for attempt in range(6):
-            code, body = site.public(site.site + "/")   # the front page (its own link redirects to /)
-            w = served_widget(body, version_class) if code == 200 else None
-            if w is not None and visible_text(w) == want:
-                break
-            time.sleep(10)
-        else:
-            raise Fail(f"The live home page (HTTP {code}) does not show '{want}' in its version line"
-                       + (f" (it reads '{visible_text(w)}')" if w is not None else "") + ".")
+        live(site.site + "/", lambda body: served_widget(body, version_class), lambda w: visible_text(w) == want,
+             "The live home page", 36)   # the front page (its own link redirects to /)
         log(f"✓ Live home page reads '{want}'")
 
 
