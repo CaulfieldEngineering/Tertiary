@@ -15,3 +15,8 @@ set(wNEEDS_MIDI_INPUT           FALSE)
 set(wNEEDS_MIDI_OUTPUT          FALSE)
 set(wPLUGIN_CODE                "EXPL")
 set(wPLUGIN_CATEGORY            Modulation)
+
+# [Claude 2026-10-29] The WooCommerce product on the store (Serial Numbers plugin). On a v* tag the pipeline
+# checks it has a working key source before publishing, and sets its "Software version" to the tag's version
+# once the new installers are live (that is what the plugin's version check reports). Tertiary is 45.
+set(wWOO_PRODUCT_ID             "45")
