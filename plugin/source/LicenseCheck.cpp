@@ -114,6 +114,29 @@ juce::String normaliseEmail(const juce::String& email)
     return email.trim().toLowerCase();
 }
 
+// [Claude 2026-10-29] V-01. See LicenseCheck.h.
+//==============================================================================
+juce::String emailFromField(const juce::String& fieldText)
+{
+    auto text = fieldText.trim();
+    if (text.startsWith("Email: "))
+        text = text.substring(7);
+    return normaliseEmail(text);
+}
+
+// [Claude 2026-10-29] V-01. See LicenseCheck.h.
+//==============================================================================
+void saveActivation(juce::PropertiesFile& settings, const juce::String& key, const juce::String& email, juce::int64 nowMs)
+{
+    auto now = juce::String(nowMs);
+    settings.setValue("licenseKey", key.trim());
+    settings.setValue("licenseEmail", email);
+    settings.setValue("licenseInstance", getMachineInstance(settings));
+    settings.setValue("licenseLastCheck", now);
+    settings.setValue("licenseLastValid", now);
+    settings.saveIfNeeded();
+}
+
 /* The weekly re-check and the daily version check. See LicenseCheck.h. */
 //==============================================================================
 Result runStartupCheck(LicenseServer& server, juce::PropertiesFile& settings,

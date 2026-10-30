@@ -77,6 +77,15 @@ namespace LicenseCheck
     /* The emails are compared in lower case by the server, so send them that way */
     juce::String normaliseEmail(const juce::String& email);
 
+    /* [Claude 2026-10-29] V-01: the email in the About window's field, ready to send (normalised). Once activated the
+       field shows "Email: " before it; that is dropped only when it is there. A typed email has no prefix, and taking
+       the text after "Email: " gave an empty email, so activation saved an empty one. */
+    juce::String emailFromField(const juce::String& fieldText);
+
+    /* [Claude 2026-10-29] V-01: after a successful activation, saves the key and the email the activation request
+       used, the machine instance, and the check dates (what AboutWindow::updateLocalKeyData did) */
+    void saveActivation(juce::PropertiesFile& settings, const juce::String& key, const juce::String& email, juce::int64 nowMs);
+
     /* The whole check. Blocks while it talks to the server; call it from a background thread. */
     Result runStartupCheck(LicenseServer& server, juce::PropertiesFile& settings,
                            juce::int64 nowMs, const juce::String& currentVersion);

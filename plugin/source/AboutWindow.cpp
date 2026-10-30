@@ -564,7 +564,7 @@ void AboutWindow::attemptSerialKeyValidation()
 void AboutWindow::attemptSerialKeyActivation()
 {
     auto serialKey = mTextEditorSerialKey.getText().trim();
-    auto email = LicenseCheck::normaliseEmail(mTextEditorEmailAddress.getText());
+    auto email = LicenseCheck::emailFromField(mTextEditorEmailAddress.getText());   // [Claude 2026-10-29] V-01
 
     juce::PropertiesFile props(LicenseCheck::getSettingsOptions());
     juce::String instance = LicenseCheck::getMachineInstance(props);
@@ -579,7 +579,7 @@ void AboutWindow::attemptSerialKeyActivation()
     {
         auto reply = server->activate(serialKey, email, instance, platform);
 
-        juce::MessageManager::callAsync([safeThis, reply]()
+        juce::MessageManager::callAsync([safeThis, reply, serialKey, email]()   // [Claude 2026-10-29] V-01: the key and email sent
         {
             if (safeThis == nullptr)
                 return;
@@ -594,7 +594,7 @@ void AboutWindow::attemptSerialKeyActivation()
                 else
                     safeThis->mLabelStatus.setText("Activation successful!", juce::dontSendNotification);
 
-                safeThis->updateAppOnActivationChange(true);
+                safeThis->updateAppOnActivationChange(true, serialKey, email);   // [Claude 2026-10-29] V-01: saves what was sent
             }
             else
             {
@@ -608,7 +608,7 @@ void AboutWindow::attemptSerialKeyActivation()
 void AboutWindow::attemptSerialKeyDeactivation()
 {
 	auto serialKey = mActivatedKey.trim();  // [Claude 2026-10-29] the field shows the key masked; the real one is kept here
-	auto email = LicenseCheck::normaliseEmail(mTextEditorEmailAddress.getText().fromFirstOccurrenceOf("Email: ", false, true));
+	auto email = LicenseCheck::emailFromField(mTextEditorEmailAddress.getText());   // [Claude 2026-10-29] V-01
 
     // The instance it was activated with: the machine ID, or for a 1.0.x activation the device description
     juce::PropertiesFile props(LicenseCheck::getSettingsOptions());
@@ -650,12 +650,12 @@ void AboutWindow::attemptSerialKeyDeactivation()
 
 
 
-void AboutWindow::updateAppOnActivationChange(bool isActivating)
+void AboutWindow::updateAppOnActivationChange(bool isActivating, const juce::String& key, const juce::String& email)
 {
 
 // Store Local Key
 	if (isActivating)
-         updateLocalKeyData(true);
+         updateLocalKeyData(true, key, email);
 	else
 	     updateLocalKeyData(false);
 
@@ -677,7 +677,7 @@ void AboutWindow::updateAppOnActivationChange(bool isActivating)
 }
 
 
-void AboutWindow::updateLocalKeyData(bool isActivating)
+void AboutWindow::updateLocalKeyData(bool isActivating, const juce::String& key, const juce::String& activatedEmail)
 {
     juce::PropertiesFile::Options options;
     options.applicationName = "Tertiary"; // or whatever your plugin name is
@@ -687,7 +687,17 @@ void AboutWindow::updateLocalKeyData(bool isActivating)
 
     juce::PropertiesFile props(options);
 
-	juce::String email = mTextEditorEmailAddress.getText().fromFirstOccurrenceOf("Email: ", false, true).trim();  // [Claude 2026-10-27] drop the "Email: " shown when activated
+	// [Claude 2026-10-29] V-01: an activation saves the key and the email its request used (LicenseCheck::saveActivation).
+	// It took the email from the field after "Email: ", which the field only shows once activated, so it saved an
+	// empty email and the next load was back in demo mode.
+	if (isActivating)
+	{
+		LicenseCheck::saveActivation(props, key, activatedEmail, juce::Time::currentTimeMillis());
+		DBG("Stored license data at: " + props.getFile().getFullPathName());
+		return;
+	}
+
+	juce::String email = LicenseCheck::emailFromField(mTextEditorEmailAddress.getText());  // [Claude 2026-10-29] V-01: "Email: " dropped only if there
 
 	juce::String serialKey = "";
 

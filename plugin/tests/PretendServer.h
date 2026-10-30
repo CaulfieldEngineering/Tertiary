@@ -20,8 +20,10 @@
 struct PretendServer : LicenseServer
 {
     LicenseReply validateReply, versionReply;
+    LicenseReply activateReply;          // [Claude 2026-10-29] V-01: the activation test
     int validateCalls = 0, versionCalls = 0;
     juce::String lastEmail;
+    juce::String lastActivateEmail;      // [Claude 2026-10-29] the email the last activation sent
 
     static LicenseReply reply (const juce::String& code, const juce::String& message = {}, const juce::String& version = {})
     {
@@ -40,7 +42,11 @@ struct PretendServer : LicenseServer
         return validateReply;
     }
 
-    LicenseReply activate (const juce::String&, const juce::String&, const juce::String&, const juce::String&) override   { return {}; }
+    LicenseReply activate (const juce::String&, const juce::String& email, const juce::String&, const juce::String&) override
+    {
+        lastActivateEmail = email;
+        return activateReply;
+    }
     LicenseReply deactivate (const juce::String&, const juce::String&, const juce::String&, const juce::String&) override { return {}; }
 
     LicenseReply versionCheck (const juce::String&, const juce::String&) override

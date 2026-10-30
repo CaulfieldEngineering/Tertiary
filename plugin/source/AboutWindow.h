@@ -80,8 +80,8 @@ private:
 	void attemptSerialKeyDeactivation();
 
 
-	void updateAppOnActivationChange(bool isActivating);
-	void updateLocalKeyData(bool isActivating);
+	void updateAppOnActivationChange(bool isActivating, const juce::String& key = {}, const juce::String& email = {});   // [Claude 2026-10-29] V-01: the key and email the activation used
+	void updateLocalKeyData(bool isActivating, const juce::String& key = {}, const juce::String& email = {});
 
     float targetTitleWidth{ 350.f };
     float targetTitleHeight{ 60.f };

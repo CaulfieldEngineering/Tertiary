@@ -220,6 +220,42 @@ struct LicenseTests : juce::UnitTest
             expectEquals (server.validateCalls, 0);
         }
 
+        // [Claude 2026-10-29] V-01 of the 2026-10-29 review: activation saved an empty email (it took the text after
+        // "Email: ", which the field only shows once activated), so after a reload the copy was back in demo mode.
+        // These are the steps AboutWindow takes: the email from the field as the customer typed it, the activation
+        // request, the save; then a reload as the next session does.
+        beginTest ("Activate, reload: still activated, with the email the activation sent");
+        {
+            TempSettings s;
+            PretendServer server;
+            server.activateReply = PretendServer::reply ("key_activated");
+
+            const juce::String key = juce::String (" ABCD-1234 ").trim();
+            const auto email = LicenseCheck::emailFromField ("  Joe@Example.com ");   // typed: no "Email: "
+            auto reply = server.activate (key, email, LicenseCheck::getMachineInstance (s.get()), "test");
+            expectEquals (reply.code, juce::String ("key_activated"));
+            expectEquals (server.lastActivateEmail, juce::String ("joe@example.com"));
+            LicenseCheck::saveActivation (s.get(), key, email, now);
+
+            s.reload();
+            expectEquals (s.get().getValue ("licenseKey"), juce::String ("ABCD-1234"));
+            expectEquals (s.get().getValue ("licenseEmail"), server.lastActivateEmail);
+            // The processor's rule on load (checkActivationStatusOnStartup): activated when key and email are saved
+            expect (s.get().getValue ("licenseKey").isNotEmpty() && s.get().getValue ("licenseEmail").isNotEmpty(),
+                    "still activated after a reload");
+
+            // A week later the re-check sends the same email and keeps it activated
+            server.validateReply = PretendServer::reply ("key_valid");
+            auto r = LicenseCheck::runStartupCheck (server, s.get(), now + 8 * day, "1.1.0");
+            expect (! r.revoked);
+            expectEquals (server.validateCalls, 1);
+            expectEquals (server.lastEmail, juce::String ("joe@example.com"));
+
+            // Once activated the field shows "Email: ..."; deactivation reads the same email from it
+            expectEquals (LicenseCheck::emailFromField ("Email: joe@example.com"), juce::String ("joe@example.com"));
+            expectEquals (LicenseCheck::emailFromField (""), juce::String());
+        }
+
         beginTest ("Machine instance: stable, not empty, and not the raw machine ID");
         {
             TempSettings s;
