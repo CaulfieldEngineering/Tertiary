@@ -887,8 +887,15 @@ struct ProcessorTests : juce::UnitTest
                 const auto start = juce::Time::getHighResolutionTicks();
                 while (juce::Time::highResolutionTicksToSeconds (juce::Time::getHighResolutionTicks() - start) < 100.0e-6) {}
                 setParam (p, "Depth Low Band", target);          // most likely lands during that rebuild
-                juce::Thread::sleep (20);                        // many blocks later
-                if (std::abs (p.lowLFO.getWaveDepth() - target) > 0.01f)
+                // [Claude 2026-10-30] A lost change is never applied; a slow one is applied late. This waited a fixed
+                // 20 ms, and on GitHub's Intel Mac (slow, shared) 2 of 100 were simply not applied yet: up to 1 s now.
+                bool applied = false;
+                for (int waited = 0; waited < 1000 && ! applied; waited += 5)
+                {
+                    juce::Thread::sleep (5);
+                    applied = std::abs (p.lowLFO.getWaveDepth() - target) <= 0.01f;
+                }
+                if (! applied)
                     ++lost;
             }
             stop = true;
