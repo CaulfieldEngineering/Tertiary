@@ -42,6 +42,22 @@ struct PretendServer : LicenseServer
     int cacheHits = 0;
     std::map<juce::String, std::pair<juce::int64, LicenseReply>> cache;
 
+    // [Claude 2026-10-30] M-03: the real server's activations. When modelActivations is on, validate answers
+    // key_valid listing the active instances, activate adds one, deactivate removes it. An instance activated
+    // before answers instance_already_activated and is not recorded, even after a deactivate (stickyInstances,
+    // as wonderlandaudio.com did on 2026-10-29); with stickyInstances off a deactivate frees it.
+    bool modelActivations = false;
+    bool stickyInstances = true;
+    juce::StringArray activeInstances, usedInstances;
+    juce::StringArray calls;   // "activate TRT-..", "deactivate TRT-..", "validate", in order
+
+    LicenseReply modelReply (const juce::String& code)
+    {
+        auto r = reply (code);
+        r.activations = activeInstances;
+        return r;
+    }
+
     template <typename Fresh>
     LicenseReply throughCache (const juce::URL& url, Fresh&& fresh)
     {
@@ -79,20 +95,46 @@ struct PretendServer : LicenseServer
             ++validateCalls;
             lastEmail = email;
             validateEmails.add (email);
+            calls.add ("validate");
             if (! emailMatches (email))
                 return invalidEmail();
+            if (modelActivations)
+                return modelReply ("key_valid");
             return validateReply;
         });
     }
 
-    LicenseReply activate (const juce::String&, const juce::String& email, const juce::String&, const juce::String&) override
+    LicenseReply activate (const juce::String& key, const juce::String& email, const juce::String& instance, const juce::String& platform) override
     {
-        lastActivateEmail = email;
-        if (! emailMatches (email))
-            return invalidEmail();
-        return activateReply;
+        return throughCache (WonderlandLicenseServer::requestUrl ("activate", key, email, instance, platform), [&]
+        {
+            lastActivateEmail = email;
+            calls.add ("activate " + instance);
+            if (! emailMatches (email))
+                return invalidEmail();
+            if (! modelActivations)
+                return activateReply;
+            if (usedInstances.contains (instance))
+                return reply ("instance_already_activated", "Instance is already activated.");
+            usedInstances.add (instance);
+            activeInstances.add (instance);
+            return modelReply ("key_activated");
+        });
     }
-    LicenseReply deactivate (const juce::String&, const juce::String&, const juce::String&, const juce::String&) override { return {}; }
+
+    LicenseReply deactivate (const juce::String& key, const juce::String& email, const juce::String& instance, const juce::String& platform) override
+    {
+        return throughCache (WonderlandLicenseServer::requestUrl ("deactivate", key, email, instance, platform), [&]
+        {
+            calls.add ("deactivate " + instance);
+            if (! modelActivations)
+                return LicenseReply();
+            activeInstances.removeString (instance);
+            if (! stickyInstances)
+                usedInstances.removeString (instance);
+            return modelReply ("key_deactivated");
+        });
+    }
 
     LicenseReply versionCheck (const juce::String&, const juce::String&) override
     {

@@ -142,15 +142,76 @@ juce::String emailFromField(const juce::String& fieldText)
 
 // [Claude 2026-10-29] V-01. See LicenseCheck.h.
 //==============================================================================
-void saveActivation(juce::PropertiesFile& settings, const juce::String& key, const juce::String& email, juce::int64 nowMs)
+void saveActivation(juce::PropertiesFile& settings, const juce::String& key, const juce::String& email, juce::int64 nowMs,
+                    const juce::String& instance)
 {
     auto now = juce::String(nowMs);
     settings.setValue("licenseKey", key.trim());
     settings.setValue("licenseEmail", email);
-    settings.setValue("licenseInstance", getMachineInstance(settings));
+    settings.setValue("licenseInstance", instance.isNotEmpty() ? instance : getMachineInstance(settings));   // [Claude 2026-10-30] M-03
     settings.setValue("licenseLastCheck", now);
     settings.setValue("licenseLastValid", now);
     settings.saveIfNeeded();
+}
+
+// [Claude 2026-10-30] M-03. See LicenseCheck.h.
+//==============================================================================
+ActivationOutcome activateThisComputer(LicenseServer& server, const juce::String& key, const juce::String& email,
+                                       const juce::String& instance, const juce::String& platform)
+{
+    ActivationOutcome outcome;
+    outcome.instance = instance;
+
+    auto failed = [&outcome](const LicenseReply& reply)
+    {
+        outcome.code = reply.code;
+        outcome.status = ! reply.reachable ? juce::String("Activation connection failed.")
+                                           : "Activation error: " + reply.message;
+        return outcome;
+    };
+    auto succeeded = [&outcome](const juce::String& code, const juce::String& activatedInstance, const juce::String& status)
+    {
+        outcome.activated = true;
+        outcome.code = code;
+        outcome.instance = activatedInstance;
+        outcome.status = status;
+        return outcome;
+    };
+
+    auto reply = server.activate(key, email, instance, platform);
+
+    if (reply.reachable && reply.code == "key_activated")
+        return succeeded(reply.code, instance, "Activation successful!");
+
+    if (! reply.reachable || reply.code != "instance_already_activated")
+        return failed(reply);
+
+    // 1. Is this computer really on the key?
+    auto check = server.validate(key, email);
+    if (! check.reachable || check.code != "key_valid")
+        return failed(check);
+
+    if (check.activations.contains(instance))
+        return succeeded(reply.code, instance, "Already activated on this computer.");
+
+    // 2. Not listed: deactivate that instance, then activate again
+    server.deactivate(key, email, instance, platform);
+    reply = server.activate(key, email, instance, platform);
+
+    if (reply.reachable && reply.code == "key_activated")
+        return succeeded(reply.code, instance, "Activation successful!");
+
+    if (! reply.reachable || reply.code != "instance_already_activated")
+        return failed(reply);
+
+    // 3. The server keeps refusing this instance: a new one for this computer
+    auto fresh = instance + "-" + juce::String::toHexString(juce::Random::getSystemRandom().nextInt(0x10000)).paddedLeft('0', 4).toUpperCase();
+    reply = server.activate(key, email, fresh, platform);
+
+    if (reply.reachable && reply.code == "key_activated")
+        return succeeded(reply.code, fresh, "Activation successful!");
+
+    return failed(reply);
 }
 
 /* The weekly re-check and the daily version check. See LicenseCheck.h. */

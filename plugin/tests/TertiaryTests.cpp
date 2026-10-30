@@ -382,6 +382,95 @@ struct LicenseTests : juce::UnitTest
             expectEquals (server.cacheHits, 0);
         }
 
+        // [Claude 2026-10-30] M-03 of the 2026-10-30 master list: re-activating an instance after deactivating it gives
+        // instance_already_activated and records nothing, and the About window said "Reactivation successful!".
+        // PretendServer.modelActivations models the server's activations (stickyInstances: as the live server does).
+        beginTest ("M-03: activation, first time: key_activated, the instance listed");
+        {
+            PretendServer server;
+            server.modelActivations = true;
+            auto o = LicenseCheck::activateThisComputer (server, "ABCD-1234", "Joe@Example.com", "TRT-1", "Windows");
+            expect (o.activated);
+            expectEquals (o.instance, juce::String ("TRT-1"));
+            expectEquals (o.status, juce::String ("Activation successful!"));
+            expectEquals (server.calls.joinIntoString (","), juce::String ("activate TRT-1"));
+        }
+
+        beginTest ("M-03: already active on this computer (listed by validate): success, nothing deactivated");
+        {
+            PretendServer server;
+            server.modelActivations = true;
+            server.activate ("ABCD-1234", "Joe@Example.com", "TRT-1", "Windows");
+            server.calls.clear();
+            auto o = LicenseCheck::activateThisComputer (server, "ABCD-1234", "Joe@Example.com", "TRT-1", "Windows");
+            expect (o.activated);
+            expectEquals (o.instance, juce::String ("TRT-1"));
+            expectEquals (o.status, juce::String ("Already activated on this computer."));
+            expectEquals (server.calls.joinIntoString (","), juce::String ("activate TRT-1,validate"));
+            expect (server.activeInstances.contains ("TRT-1"));
+        }
+
+        beginTest ("M-03: deactivated earlier, server frees it on deactivate: deactivate, activate again, really active");
+        {
+            PretendServer server;
+            server.modelActivations = true;
+            server.stickyInstances = false;
+            server.usedInstances.add ("TRT-1");   // activated and deactivated before, but the server still holds it
+            auto o = LicenseCheck::activateThisComputer (server, "ABCD-1234", "Joe@Example.com", "TRT-1", "Windows");
+            expect (o.activated);
+            expectEquals (o.instance, juce::String ("TRT-1"));
+            expectEquals (o.status, juce::String ("Activation successful!"));
+            expectEquals (server.calls.joinIntoString (","),
+                          juce::String ("activate TRT-1,validate,deactivate TRT-1,activate TRT-1"));
+            expectEquals (server.activeInstances.joinIntoString (","), juce::String ("TRT-1"));
+        }
+
+        beginTest ("M-03: deactivated earlier, server keeps refusing it (the live server): a new instance, really active, saved");
+        {
+            PretendServer server;
+            server.modelActivations = true;   // stickyInstances, as wonderlandaudio.com
+            server.activate ("ABCD-1234", "Joe@Example.com", "TRT-1", "Windows");
+            server.deactivate ("ABCD-1234", "Joe@Example.com", "TRT-1", "Windows");
+            expectEquals (server.activate ("ABCD-1234", "Joe@Example.com", "TRT-1", "Windows").code,
+                          juce::String ("instance_already_activated"));
+            server.calls.clear();
+
+            auto o = LicenseCheck::activateThisComputer (server, "ABCD-1234", "Joe@Example.com", "TRT-1", "Windows");
+            expect (o.activated);
+            expect (o.instance.startsWith ("TRT-1-") && o.instance.length() == 10, o.instance);
+            expectEquals (o.status, juce::String ("Activation successful!"));
+            expectEquals (server.calls.joinIntoString (","),
+                          juce::String ("activate TRT-1,validate,deactivate TRT-1,activate TRT-1,activate " + o.instance));
+            expectEquals (server.activeInstances.joinIntoString (","), o.instance);   // the server really has it
+
+            TempSettings s;   // and deactivation will use the instance that was activated
+            LicenseCheck::saveActivation (s.get(), "ABCD-1234", "Joe@Example.com", now, o.instance);
+            s.reload();
+            expectEquals (LicenseCheck::getActivatedInstance (s.get()), o.instance);
+        }
+
+        beginTest ("M-03: instance_already_activated and nothing works: an error, never success");
+        {
+            PretendServer server;   // canned: activate always refuses, validate lists nothing
+            server.activateReply = PretendServer::reply ("instance_already_activated", "Instance is already activated.");
+            server.validateReply = PretendServer::reply ("key_valid");
+            auto o = LicenseCheck::activateThisComputer (server, "ABCD-1234", "Joe@Example.com", "TRT-1", "Windows");
+            expect (! o.activated, "not activated");
+            expect (o.status.startsWith ("Activation error:") && ! o.status.contains ("successful"), o.status);
+
+            PretendServer offline;   // validate unreachable after instance_already_activated
+            offline.activateReply = server.activateReply;
+            o = LicenseCheck::activateThisComputer (offline, "ABCD-1234", "Joe@Example.com", "TRT-1", "Windows");
+            expect (! o.activated);
+            expectEquals (o.status, juce::String ("Activation connection failed."));
+
+            PretendServer refused;   // any other answer: the server's words
+            refused.activateReply = PretendServer::reply ("invalid_order", "Please complete your order to activate the serial key.");
+            o = LicenseCheck::activateThisComputer (refused, "ABCD-1234", "Joe@Example.com", "TRT-1", "Windows");
+            expect (! o.activated);
+            expectEquals (o.status, juce::String ("Activation error: Please complete your order to activate the serial key."));
+        }
+
         beginTest ("Machine instance: stable, not empty, and not the raw machine ID");
         {
             TempSettings s;

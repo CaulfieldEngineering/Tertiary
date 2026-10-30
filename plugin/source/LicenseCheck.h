@@ -91,7 +91,29 @@ namespace LicenseCheck
 
     /* [Claude 2026-10-29] V-01: after a successful activation, saves the key and the email the activation request
        used, the machine instance, and the check dates (what AboutWindow::updateLocalKeyData did) */
-    void saveActivation(juce::PropertiesFile& settings, const juce::String& key, const juce::String& email, juce::int64 nowMs);
+    void saveActivation(juce::PropertiesFile& settings, const juce::String& key, const juce::String& email, juce::int64 nowMs,
+                        const juce::String& instance = {});   // [Claude 2026-10-30] M-03: the instance activated (empty: this computer's)
+
+    /* [Claude 2026-10-30] M-03: what activating this computer came to, for the About window */
+    struct ActivationOutcome
+    {
+        bool activated { false };   // The server has this computer activated: save the key and go out of demo
+        juce::String instance;      // The instance that is activated (save it, deactivation uses it)
+        juce::String code;          // The server's last answer
+        juce::String status;        // Plain words for the status line
+    };
+
+    /* [Claude 2026-10-30] M-03: activates this computer, and says only what really happened.
+       The server answers instance_already_activated, and records nothing, when the instance was activated before,
+       even after it was deactivated (tested on wonderlandaudio.com 2026-10-29). 1.1 showed "Reactivation
+       successful!" for it. Now on that answer:
+         1. validate: if the instance is in the reply's activations, it is active: success.
+         2. if not, deactivate that instance and activate again.
+         3. if the server still refuses the instance (it does, on the live server), activate with a new instance
+            for this computer (the machine instance plus a random suffix), and save that one.
+       Anything else is reported as an error with the server's words. Blocks; call it from a background thread. */
+    ActivationOutcome activateThisComputer(LicenseServer& server, const juce::String& key, const juce::String& email,
+                                           const juce::String& instance, const juce::String& platform);
 
     /* The whole check. Blocks while it talks to the server; call it from a background thread. */
     Result runStartupCheck(LicenseServer& server, juce::PropertiesFile& settings,

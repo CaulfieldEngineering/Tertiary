@@ -20,6 +20,8 @@
                   --only <n>          run one section (1 to 9)
                   --write-session <file>   save a session (and its values, .txt) from the loaded plugin
         HostTest --write-input <file.wav>               the golden renders' input, for the REAPER test
+        HostTest --live-license <key> <email>           [Claude 2026-10-30] the licence routes against the REAL server,
+                                                        with a test key; leaves the key with nothing activated
 
     Exit code 0 when nothing FAILed.
 
@@ -910,6 +912,101 @@ void writeSession(const juce::File& file)
     report("INFO", "wrote session", file.getFullPathName());
 }
 
+//==============================================================================
+// [Claude 2026-10-30] M-01 to M-03: the live licence check. The only part of HostTest that talks to the real server,
+// and only when asked: HostTest --live-license <key> <order email>. It drives the plugin's own code
+// (WonderlandLicenseServer, LicenseCheck::activateThisComputer, LicenseCheck::runStartupCheck) with a test key:
+// validate, the email with other capitals, activate, activate again, the weekly check, deactivate, reactivate.
+// Every instance it activates is deactivated at the end, and the key is checked to have no activations left.
+// Use a test key only (the 2026-10-29 test orders), never a customer's.
+//==============================================================================
+int liveLicenseCheck(const juce::String& key, const juce::String& email)
+{
+    WonderlandLicenseServer server;
+    const juce::String platform = "HostTest";
+    const juce::String instance = "TRT-LIVECHECK-" + juce::String(juce::Time::currentTimeMillis());
+    juce::StringArray activated;   // to deactivate at the end
+    auto check = [](bool ok, const juce::String& name, const juce::String& detail) { report(ok ? "PASS" : "FAIL", name, detail); };
+    auto listed = [&](const juce::String& who) { return server.validate(key, email).activations.contains(who); };
+
+    auto start = server.validate(key, email);
+    check(start.code == "key_valid", "live: validate, the order email", start.code + ", " + juce::String(start.activations.size()) + " activations");
+
+    // M-01: the server compares the email exactly. The plugin sends it as typed.
+    auto mixed = email.substring(0, 1).toUpperCase() + email.substring(1);
+    if (mixed == email)
+        mixed = email.toLowerCase();
+    auto wrongCase = server.validate(key, mixed);
+    check(wrongCase.code == "invalid_email", "live: validate, other capitals (" + mixed + ")", wrongCase.code);
+    check(LicenseCheck::emailFromField("  " + email + " ") == email, "live: the field's email is sent as typed", LicenseCheck::emailFromField(email));
+
+    // M-03: first activation
+    auto first = LicenseCheck::activateThisComputer(server, key, email, instance, platform);
+    if (first.activated) activated.addIfNotAlreadyThere(first.instance);
+    check(first.activated && first.code == "key_activated" && first.instance == instance, "live: activate", first.code + ": " + first.status);
+    check(listed(instance), "live: validate right after lists it (M-02, no cached reply)", instance);
+
+    // M-03: activate again while active: confirmed by validate, not claimed
+    auto again = LicenseCheck::activateThisComputer(server, key, email, instance, platform);
+    check(again.activated && again.code == "instance_already_activated" && again.instance == instance
+          && again.status == "Already activated on this computer.", "live: activate again while active", again.code + ": " + again.status);
+
+    // M-01: the weekly check with the email saved as typed, and with other capitals saved (the retry)
+    {
+        TempSettings s;
+        LicenseCheck::saveActivation(s.get(), key, email, juce::Time::currentTimeMillis() - 8LL * 24 * 60 * 60 * 1000, instance);
+        auto r = LicenseCheck::runStartupCheck(server, s.get(), juce::Time::currentTimeMillis(), "1.1.0");
+        check(! r.revoked && s.get().getValue("licenseKey") == key, "live: weekly check, email as saved", r.revoked ? r.message : "still activated");
+    }
+    if (email == email.toLowerCase())
+    {
+        TempSettings s;
+        LicenseCheck::saveActivation(s.get(), key, mixed, juce::Time::currentTimeMillis() - 8LL * 24 * 60 * 60 * 1000, instance);
+        auto r = LicenseCheck::runStartupCheck(server, s.get(), juce::Time::currentTimeMillis(), "1.1.0");
+        check(! r.revoked && s.get().getValue("licenseEmail") == email, "live: weekly check, saved with other capitals",
+              r.revoked ? r.message : "kept, saved as " + s.get().getValue("licenseEmail"));
+    }
+
+    // Deactivate, then reactivate the same computer
+    auto off = server.deactivate(key, email, instance, platform);
+    if (off.code == "key_deactivated") activated.removeString(instance);
+    check(off.code == "key_deactivated" && ! off.activations.contains(instance), "live: deactivate", off.code);
+    check(! listed(instance), "live: validate right after: not listed (M-02)", instance);
+
+    auto raw = server.activate(key, email, instance, platform);
+    report("INFO", "live: the server on reactivating the same instance", raw.code + " (" + juce::String(raw.activations.size()) + " listed)");
+    if (raw.code == "key_activated")
+    {
+        activated.addIfNotAlreadyThere(instance);
+        server.deactivate(key, email, instance, platform);
+        activated.removeString(instance);
+    }
+
+    auto back = LicenseCheck::activateThisComputer(server, key, email, instance, platform);
+    if (back.activated) activated.addIfNotAlreadyThere(back.instance);
+    const bool reallyActive = back.activated && listed(back.instance);
+    check(reallyActive && ! back.status.contains("Reactivation"), "live: reactivate (M-03): really active, the truth shown",
+          back.code + ", instance " + back.instance + ": " + back.status);
+
+    // Leave the key as it was: nothing activated
+    for (auto& who : juce::StringArray(activated))
+    {
+        auto r = server.deactivate(key, email, who, platform);
+        if (r.code == "key_deactivated") activated.removeString(who);
+        report("INFO", "live: clean up, deactivate " + who, r.code);
+    }
+    auto end = server.validate(key, email);
+    juce::StringArray ours;
+    for (auto& who : end.activations)
+        if (who.startsWith("TRT-LIVECHECK-"))
+            ours.add(who);
+    check(end.code == "key_valid" && ours.isEmpty(), "live: at the end, none of ours activated",
+          juce::String(end.activations.size()) + " activations listed" + (end.activations.isEmpty() ? "" : ": " + end.activations.joinIntoString(", ")));
+
+    std::cout << std::endl << passes << " passed, " << failures << " failed" << std::endl;
+    return failures == 0 ? 0 : 1;
+}
+
 } // namespace
 
 //==============================================================================
@@ -930,6 +1027,18 @@ int main(int argc, char* argv[])
         writer->writeFromAudioSampleBuffer(input, 0, input.getNumSamples());
         std::cout << "wrote " << file.getFullPathName() << std::endl;
         return 0;
+    }
+
+    // [Claude 2026-10-30] The live licence check (the real server, a test key): see liveLicenseCheck
+    if (args.contains("--live-license"))
+    {
+        const int i = args.indexOf("--live-license");
+        if (i + 2 >= args.size())
+        {
+            std::cout << "usage: HostTest --live-license <test key> <its order email>" << std::endl;
+            return 2;
+        }
+        return liveLicenseCheck(args[i + 1], args[i + 2]);
     }
 
     if (! args.contains("--vst3") && ! args.contains("--au"))

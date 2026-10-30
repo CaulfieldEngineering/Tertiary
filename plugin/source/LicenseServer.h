@@ -26,6 +26,7 @@ struct LicenseReply
     juce::String code;      // e.g. "key_valid", "key_activated", "invalid_order"
     juce::String message;   // The server's own words, shown to the user on errors
     juce::String version;   // Only filled by versionCheck(): the latest version on the site
+    juce::StringArray activations;   // [Claude 2026-10-30] M-03: the instances in the reply's "activations" list (validate, activate)
 };
 
 /* The four routes the plugin uses. All of them block, so call them from a background thread. */

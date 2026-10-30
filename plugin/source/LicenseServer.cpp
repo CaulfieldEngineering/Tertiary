@@ -121,6 +121,12 @@ LicenseReply WonderlandLicenseServer::call(const juce::URL& url)
         reply.code = object->getProperty("code").toString();
         reply.message = object->getProperty("message").toString();
         reply.version = object->getProperty("version").toString();
+
+        // [Claude 2026-10-30] M-03: "activations": [ { "id": 27, "instance": "TRT-...", "platform": "Windows", ... } ]
+        if (auto* list = object->getProperty("activations").getArray())
+            for (auto& activation : *list)
+                if (auto* entry = activation.getDynamicObject())
+                    reply.activations.add(entry->getProperty("instance").toString());
         reply.reachable = reply.code.isNotEmpty();
     }
 

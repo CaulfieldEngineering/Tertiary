@@ -576,32 +576,23 @@ void AboutWindow::attemptSerialKeyActivation()
     juce::Component::SafePointer<AboutWindow> safeThis(this);
     auto server = licenseServer;
 
+    // [Claude 2026-10-30] M-03: LicenseCheck::activateThisComputer says what really happened. "Reactivation successful!"
+    // was shown for instance_already_activated, when the server had recorded nothing.
     juce::Thread::launch([safeThis, server, serialKey, email, instance, platform]()
     {
-        auto reply = server->activate(serialKey, email, instance, platform);
+        auto outcome = LicenseCheck::activateThisComputer(*server, serialKey, email, instance, platform);
 
-        juce::MessageManager::callAsync([safeThis, reply, serialKey, email]()   // [Claude 2026-10-29] V-01: the key and email sent
+        juce::MessageManager::callAsync([safeThis, outcome, serialKey, email]()   // [Claude 2026-10-29] V-01: the key and email sent
         {
             if (safeThis == nullptr)
                 return;
 
-            if (!reply.reachable)
-                safeThis->mLabelStatus.setText("Activation connection failed.", juce::dontSendNotification);
+            safeThis->mLabelStatus.setText(outcome.status, juce::dontSendNotification);
 
-            else if (reply.code == "key_activated" || reply.code == "instance_already_activated")
-            {
-                if (reply.code == "instance_already_activated")
-                    safeThis->mLabelStatus.setText("Instance was already activated.  Reactivation successful!", juce::dontSendNotification);
-                else
-                    safeThis->mLabelStatus.setText("Activation successful!", juce::dontSendNotification);
-
-                safeThis->updateAppOnActivationChange(true, serialKey, email);   // [Claude 2026-10-29] V-01: saves what was sent
-            }
+            if (outcome.activated)
+                safeThis->updateAppOnActivationChange(true, serialKey, email, outcome.instance);   // [Claude 2026-10-29] V-01: saves what was sent
             else
-            {
-                safeThis->mLabelStatus.setText("Activation error: " + reply.message, juce::dontSendNotification);
-                DBG("API Error: " + reply.code + " - " + reply.message);
-            }
+                DBG("API Error: " + outcome.code + " - " + outcome.status);
         });
     });
 }
@@ -651,12 +642,13 @@ void AboutWindow::attemptSerialKeyDeactivation()
 
 
 
-void AboutWindow::updateAppOnActivationChange(bool isActivating, const juce::String& key, const juce::String& email)
+void AboutWindow::updateAppOnActivationChange(bool isActivating, const juce::String& key, const juce::String& email,
+                                              const juce::String& instance)
 {
 
 // Store Local Key
 	if (isActivating)
-         updateLocalKeyData(true, key, email);
+         updateLocalKeyData(true, key, email, instance);
 	else
 	     updateLocalKeyData(false);
 
@@ -678,7 +670,8 @@ void AboutWindow::updateAppOnActivationChange(bool isActivating, const juce::Str
 }
 
 
-void AboutWindow::updateLocalKeyData(bool isActivating, const juce::String& key, const juce::String& activatedEmail)
+void AboutWindow::updateLocalKeyData(bool isActivating, const juce::String& key, const juce::String& activatedEmail,
+                                     const juce::String& instance)
 {
     juce::PropertiesFile::Options options;
     options.applicationName = "Tertiary"; // or whatever your plugin name is
@@ -693,7 +686,7 @@ void AboutWindow::updateLocalKeyData(bool isActivating, const juce::String& key,
 	// empty email and the next load was back in demo mode.
 	if (isActivating)
 	{
-		LicenseCheck::saveActivation(props, key, activatedEmail, juce::Time::currentTimeMillis());
+		LicenseCheck::saveActivation(props, key, activatedEmail, juce::Time::currentTimeMillis(), instance);   // [Claude 2026-10-30] M-03: the instance activated
 		DBG("Stored license data at: " + props.getFile().getFullPathName());
 		return;
 	}
