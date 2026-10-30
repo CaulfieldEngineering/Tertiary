@@ -58,12 +58,34 @@ SignedStep "installer signature" {
     ($s.Status -eq "Valid"), "$($s.Status): $($s.SignerCertificate.Subject)"
 }
 
+# 1b. [Claude 2026-10-30] R-17: a Tertiary.vst3 bundle FOLDER already where the installer puts the single-file VST3
+#     (Joe's laptop, from a manual copy: the install stopped with "MoveFile failed; code 183"). Made here, so the
+#     install below must replace it.
+Step "R-17 setup: a Tertiary.vst3 bundle folder already there" {
+    New-Item -ItemType Directory -Force (Join-Path $Vst3 "Contents\x86_64-win") | Out-Null
+    Set-Content -Path (Join-Path $Vst3 "Contents\x86_64-win\Tertiary.vst3") -Value "an old bundle copied by hand"
+    (Test-Path $Vst3 -PathType Container), "folder $Vst3"
+}
+
 # 2. Silent install, as a customer would (all components, default folders)
 Step "silent install" { Run $Installer @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=`"$PWD\results\install.log`"") "install-run" 300 }
 
 # 3. Files where DAWs look
 Step "VST3 in Common Files\VST3" { (Test-Path $Vst3), $Vst3 }
+Step "R-17: the VST3 is the single file; the old bundle folder is gone" {
+    (Test-Path $Vst3 -PathType Leaf), $(if (Test-Path $Vst3 -PathType Container) { "still a folder" } elseif (Test-Path $Vst3) { "a file, $((Get-Item $Vst3).Length) bytes" } else { "missing" })
+}
 Step "standalone in Program Files" { (Test-Path $App), $App }
+
+# 3b. [Claude 2026-10-30] Installing again over that install (an upgrade over a previous file install) still works
+Step "install again over the previous install (upgrade)" {
+    $before = (Get-Item $Vst3).LastWriteTimeUtc
+    Start-Sleep -Seconds 2
+    $ok, $detail = Run $Installer @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=`"$PWD\results\install-again.log`"") "install-again-run" 300
+    if (-not $ok) { return $false, $detail }
+    $isFile = Test-Path $Vst3 -PathType Leaf
+    ($isFile -and (Test-Path $App)), "$detail; VST3 a file: $isFile, written $(if ((Get-Item $Vst3).LastWriteTimeUtc -ne $before) { 'again' } else { 'with the same time stamp (same build)' })"
+}
 
 # 4. The installed binaries are signed too (the pipeline signs the installer; this shows whether the
 #    plugin and app inside are signed as well)

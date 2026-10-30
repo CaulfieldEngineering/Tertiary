@@ -123,6 +123,33 @@ begin
   Result := VST3DirPage.Values[0];
 end;
 
+// [Claude 2026-10-30] R-17: Joe's laptop had a Tertiary.vst3 bundle FOLDER in Common Files\VST3 (a manual copy), and
+// the install stopped with "MoveFile failed; code 183" because the installer writes the single-file VST3 under the
+// same name. Just before files are copied, any existing Tertiary.vst3 there, file or folder, is removed (only when
+// the VST3 is being installed). Done here rather than in [InstallDelete] so an empty folder value can never turn into
+// "\Tertiary.vst3" at the root of the drive.
+procedure CurStepChanged(CurStep: TSetupStep);
+// =============================================================================================
+var
+  Target: String;
+begin
+  if (CurStep = ssInstall) and WizardIsComponentSelected('vst3') and (Trim(VST3DirPage.Values[0]) <> '') then
+  begin
+    Target := AddBackslash(VST3DirPage.Values[0]) + '{#MyAppVst3Name}';
+    if DirExists(Target) then
+    begin
+      Log('Removing an existing VST3 bundle folder: ' + Target);
+      if not DelTree(Target, True, True, True) then
+        Log('Could not remove ' + Target + ' (in use?); the copy below will report it');
+    end
+    else if FileExists(Target) then
+    begin
+      Log('Removing the previous VST3 file: ' + Target);
+      DeleteFile(Target);
+    end;
+  end;
+end;
+
 function NextButtonClick(CurPageID: Integer): Boolean;
 // =============================================================================================
 begin
