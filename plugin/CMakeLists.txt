@@ -244,4 +244,16 @@ if (WLA_TESTS)
             target_link_options(UiTest PRIVATE -fsanitize=address)
         endif()
     endif()
+
+    # [Claude 2026-10-30] PerfTest: the performance rows T2-01 to T2-03 (DSP cost, CPU and memory with the window open,
+    # closed and idle, 30 instances). A plain host with no plugin sources: it loads a BUILT Tertiary.vst3, so the same
+    # program measures 1.0.2 and the release candidate. See tests/PerfTest.cpp. Also only with -DWLA_TESTS=ON.
+    juce_add_console_app(PerfTest PRODUCT_NAME "PerfTest")
+    target_sources(PerfTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/PerfTest.cpp)
+    target_compile_definitions(PerfTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0
+        JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1 JUCE_PLUGINHOST_VST3=1 JUCE_PLUGINHOST_AU=$<BOOL:${APPLE}>)
+    target_link_libraries(PerfTest PRIVATE juce::juce_audio_utils juce::juce_recommended_config_flags)
+    if (MSVC)
+        set_property(TARGET PerfTest PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
 endif()
