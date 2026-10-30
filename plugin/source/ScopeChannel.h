@@ -21,6 +21,8 @@ struct ScopeChannel :   juce::Component,
                         juce::ActionBroadcaster,
                         private juce::Timer   // [Claude 2026-10-29] follows the tempo and eases the drawn free rate (timerCallback)
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
     ScopeChannel(juce::AudioProcessorValueTreeState& apvts, LFO& lfo, ScrollPad& sliderScroll);
     ~ScopeChannel();
 

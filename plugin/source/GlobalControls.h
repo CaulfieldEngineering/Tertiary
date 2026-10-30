@@ -22,6 +22,8 @@ struct GlobalControls : juce::Component,
                         juce::ActionBroadcaster,
 	                    juce::Timer
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
 	GlobalControls(audio_plugin::AudioPluginAudioProcessor& p);
 
 	void paint(juce::Graphics& g) override;

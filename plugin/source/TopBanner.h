@@ -13,6 +13,8 @@
 
 struct TopBanner : juce::Component
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
 public:
     TopBanner();
     ~TopBanner();

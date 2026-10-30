@@ -26,6 +26,8 @@ namespace audio_plugin {
 
 struct AboutWindow : juce::Component, juce::Button::Listener
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
 public:
 	AboutWindow(audio_plugin::AudioPluginAudioProcessor& p, audio_plugin::AudioPluginAudioProcessorEditor& e);
     ~AboutWindow();
@@ -106,6 +108,9 @@ private:
     struct LinkButton : juce::HyperlinkButton
     {
         void paintButton(juce::Graphics& g, bool highlighted, bool down) override;
+       #if WLA_UI_TEST_BUILD
+        void clicked() override { TestHooks::openUrl(getURL()); }   // [Claude 2026-10-29] UI tests: recorded, not opened
+       #endif
     };
     LinkButton mButtonWebsiteLink;
 

@@ -11,6 +11,7 @@
 */
 
 #include "PresetManager.h"
+#include "TestHooks.h"   // [Claude 2026-10-29] UI tests: the temp preset folder
 
 namespace
 {
@@ -30,6 +31,9 @@ PresetManager::PresetManager(juce::AudioProcessorValueTreeState& state, juce::Fi
 /* Documents/Wonderland Audio/Tertiary/Presets, on Windows and Mac */
 juce::File PresetManager::getDefaultUserFolder()
 {
+   #if WLA_UI_TEST_BUILD   // [Claude 2026-10-29] UI tests: a temp folder, never the real presets (TestHooks.h)
+    return TestHooks::testFolder().getChildFile("Presets");
+   #endif
     return juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
                .getChildFile("Wonderland Audio").getChildFile("Tertiary").getChildFile("Presets");
 }

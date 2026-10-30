@@ -22,6 +22,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                      public juce::Timer,
                                      public juce::Button::Listener,
                                      public juce::ChangeListener {   // [Claude 2026-10-27] hears the license check
+    friend struct ::UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
     public:
         AudioPluginAudioProcessorEditor(AudioPluginAudioProcessor&);
         ~AudioPluginAudioProcessorEditor() override;

@@ -2,15 +2,24 @@
 # ==========================================================================================
 # [Claude 2026-10-27] New file, for Tertiary 1.1. Tests on real Macs without owning one.
 #
-# Runs on pushes to release-* and claude/* branches, and by hand (Actions tab, "Run workflow").
+# Runs on a push to any work branch (everything except staging and production, which have their own pipeline in
+# workflow.yml, and claude/installer-test*, which run installer-test.yml), and by hand (Actions tab, "Run workflow").
+# [Claude 2026-10-29] Was release-* and claude/* only, so pushes to ui-house-style and ui-tests ran nothing.
 # It never signs, never uploads to a server and needs no secrets. The deploy pipeline is
 # workflow.yml (staging and v* tags) and is not touched by this file.
 #
-#   mac-build    Apple Silicon (macos-15): builds the universal VST3, AU, ReviewRender and the unit tests,
-#                checks both chip types and macOS 11, runs the unit tests, auval, pluginval, a short render
+#   mac-build    Apple Silicon (macos-15): builds the universal VST3, AU, ReviewRender, the unit tests and the UI
+#                tests, checks both chip types and macOS 11, runs the unit tests, the UI tests, auval (T1-13),
+#                pluginval on the VST3 and the AU, a short render
 #   mac-intel    Intel (macos-15-intel; macos-13 was retired by GitHub in late 2025): no build, tests the
-#                same universal files on Intel: unit tests, auval, pluginval, render
-#   windows      builds the VST3, runs the unit tests, pluginval and the render
+#                same universal files on Intel: unit tests, UI tests, auval (T1-13), pluginval, render
+#   windows      builds the VST3 and the standalone, runs the unit tests, the UI tests, the standalone smoke test
+#                (UI Automation), pluginval and the render
+#
+# [Claude 2026-10-29] The UI tests (UiTest) open the real editor in a window off the screen and drive it with mouse
+# and keyboard events. The hosted runners have a desktop session (Windows) and a window server (macOS), so no virtual
+# display is needed. A failure prints each failing check with its scenario and test-plan IDs, and the failing lines
+# also go in the run's summary page.
 #   compare      compares the renders of all three: they should sound the same
 #   web          compiles the Wonderlab web demo like workflow.yml does, but deploys nothing
 #                (skipped if the CE_GITHUB_PAT secret, used to read the Wonderlab repo, isn't available)
@@ -23,8 +32,9 @@ name: Tests (no deploy)
 on:
   push:
     branches:
-      - 'release-*'
-      - 'claude/*'
+      - '**'
+      - '!staging'                  # workflow.yml (the deploy pipeline)
+      - '!production'
       - '!claude/installer-test*'   # those run installer-test.yml instead
     paths-ignore:
       - '**.md'
@@ -79,7 +89,7 @@ jobs:
           -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Build
-      run: cmake --build build --target Tertiary_VST3 Tertiary_AU ReviewRender TertiaryTests HostTest
+      run: cmake --build build --target Tertiary_VST3 Tertiary_AU ReviewRender TertiaryTests HostTest UiTest
 
     - name: Collect the built files
       run: |
@@ -90,6 +100,7 @@ jobs:
         cp "$A/ReviewRender_artefacts/Release/ReviewRender" out/
         cp "$A/TertiaryTests_artefacts/Release/TertiaryTests" out/
         cp "$A/HostTest_artefacts/Release/HostTest" out/
+        cp "$A/UiTest_artefacts/Release/UiTest" out/
 
     - name: Upload the built files (for the Intel job)
       uses: actions/upload-artifact@v4
@@ -128,7 +139,7 @@ jobs:
       run: |
         curl -sL -o "$RUNNER_TEMP/pv.zip" "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_TAG/pluginval_macOS.zip"
         unzip -q -o "$RUNNER_TEMP/pv.zip" -d "$RUNNER_TEMP/pv"
-        chmod +x out/ReviewRender out/TertiaryTests out/HostTest
+        chmod +x out/ReviewRender out/TertiaryTests out/HostTest out/UiTest
 
     - name: Check, test and render
       run: bash plugin/tests/ci/mac_checks.sh out "$RUNNER_TEMP/pv/pluginval.app/Contents/MacOS/pluginval" mac-x86_64
@@ -163,9 +174,35 @@ jobs:
       run: |
         T=$(cygpath -m "$RUNNER_TEMP")
         cmake -S . -B build -A x64 -DWLA_REVIEW_RENDER=ON -DWLA_TESTS=ON -DCPM_JUCE_SOURCE="$T/juce"
-        cmake --build build --config Release --target Tertiary_VST3 ReviewRender TertiaryTests HostTest -- -m
+        cmake --build build --config Release --target Tertiary_VST3 Tertiary_Standalone ReviewRender TertiaryTests HostTest UiTest -- -m
+
+    # [Claude 2026-10-29] The UI tests (T2-02, T2-04 to T2-13, R-01 to R-08; see plugin/tests/UiTest.cpp)
+    - name: UI tests
+      shell: bash
+      run: |
+        set -o pipefail
+        mkdir -p results
+        bash plugin/tests/ci/ui_tests.sh build/plugin/UiTest_artefacts/Release/UiTest.exe results windows
+
+    # [Claude 2026-10-29] The standalone through Windows UI Automation; never left running (timeouts, killed on failure)
+    - name: Standalone smoke test (UI Automation)
+      if: always()
+      shell: bash
+      run: |
+        mkdir -p results
+        python -m pip install --quiet pywinauto
+        status=0
+        timeout 300 python plugin/tests/ui/smoke_standalone.py "$(pwd)/build/plugin/Tertiary_artefacts/Release/Standalone/Tertiary.exe" \
+          --toggle "Low Sync" --appears "Low Rate" --slider "Low Depth" --menu-at 727,25.75 --layout 750x478 \
+          --menu-item "About Tertiary...|Activate Tertiary..." --dialog-button "Activate|Deactivate this computer" --close-button X \
+          --protect '%APPDATA%\Tertiary\Tertiary.settings' > results/smoke.log 2>&1 || status=$?
+        cat results/smoke.log
+        { echo "### Standalone smoke test (windows)"; grep -E '^(PASS|FAIL)' results/smoke.log | sed 's/^/    /'; } >> "$GITHUB_STEP_SUMMARY"
+        taskkill //F //IM Tertiary.exe 2>/dev/null || true   # never left running
+        exit $status
 
     - name: Test and render
+      if: always()
       shell: bash
       run: |
         set -o pipefail

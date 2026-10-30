@@ -271,6 +271,7 @@ void AboutWindow::setUpSerialKeyEditor()
     options.applicationName = "Tertiary";
     options.filenameSuffix = "settings";
     options.osxLibrarySubFolder = "Application Support";
+    TestHooks::redirectSettings(options);   // [Claude 2026-10-29] UI tests: a temp folder (TestHooks.h); unchanged otherwise
     juce::PropertiesFile props(options);
 
 
@@ -315,6 +316,7 @@ void AboutWindow::setUpEmailEditor()
     options.applicationName = "Tertiary";
     options.filenameSuffix = "settings";
     options.osxLibrarySubFolder = "Application Support";
+    TestHooks::redirectSettings(options);   // [Claude 2026-10-29] UI tests: a temp folder (TestHooks.h); unchanged otherwise
     juce::PropertiesFile props(options);
 
 
@@ -684,6 +686,7 @@ void AboutWindow::updateLocalKeyData(bool isActivating)
     options.filenameSuffix = "settings";
     options.osxLibrarySubFolder = "Application Support"; // macOS-specific
     options.storageFormat = juce::PropertiesFile::StorageFormat::storeAsXML; // Easier to read
+    TestHooks::redirectSettings(options);   // [Claude 2026-10-29] UI tests: a temp folder (TestHooks.h); unchanged otherwise
 
     juce::PropertiesFile props(options);
 

@@ -18,6 +18,8 @@ struct WindowWrapperOscilloscope :  juce::Component,
                                     juce::AudioProcessorValueTreeState::Listener,
                                     juce::AsyncUpdater   // [Claude 2026-10-27] moves parameter changes to the message thread
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
     WindowWrapperOscilloscope(audio_plugin::AudioPluginAudioProcessor& p);
     ~WindowWrapperOscilloscope();
     

@@ -379,6 +379,16 @@ void BandControl::setMode(juce::String bandMode)
     mToggleBypass.setBandMode(mode, "BYP");
     mToggleSolo.setBandMode(mode, "SOLO");
     mToggleMute.setBandMode(mode, "MUTE");
+
+    // [Claude 2026-10-29] Names for screen readers and UI Automation ("Low Depth", "Mid Sync"...): the keys and sliders
+    // had none. Only their accessible names; nothing drawn or done changes. The Windows smoke test finds them by these.
+    const juce::String band = mode == 0 ? "Low" : mode == 1 ? "Mid" : "High";
+    for (auto [c, what] : { std::pair<juce::Component*, const char*> { &mSliderDepth.slider, "Depth" }, { &mSliderSkew.slider, "Skew" },
+                            { &mSliderRate.slider, "Rate" }, { &mSliderPhase.slider, "Phase" }, { &mSliderBandGain.slider, "Gain" },
+                            { &mToggleSync.mToggleButton, "Sync" }, { &mToggleInvert.mToggleButton, "Invert" },
+                            { &mToggleBypass.mToggleButton, "Bypass" }, { &mToggleSolo.mToggleButton, "Solo" },
+                            { &mToggleMute.mToggleButton, "Mute" }, { &mDropWaveshape, "Shape" }, { &mDropRhythm, "Rhythm" } })
+        c->setTitle(band + " " + what);
     
     
 }

@@ -370,6 +370,7 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       options.filenameSuffix = "settings";
       options.osxLibrarySubFolder = "Application Support";
       options.storageFormat = juce::PropertiesFile::StorageFormat::storeAsXML;
+      TestHooks::redirectSettings(options);   // [Claude 2026-10-29] UI tests: a temp folder (TestHooks.h); unchanged otherwise
       return options;
     }
 
@@ -425,12 +426,12 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
           if (safeThis == nullptr || item == 0) return;
           auto& self = *safeThis;
           if (item == 1) { self.aboutWindow.setVisible(true); self.aboutWindow.toFront(false); }
-          else if (item == 2 || item == 4) juce::URL("https://www.wonderlandaudio.com").launchInDefaultBrowser();
+          else if (item == 2 || item == 4) TestHooks::openUrl(juce::URL("https://www.wonderlandaudio.com"));   // [Claude 2026-10-29] UI tests: recorded, not opened
           else if (item > 100) self.setUiScale((float) (item - 100) / 100.f);
           else if (item == 3)
           {
             self.audioProcessor.presets.getUserFolder().createDirectory();
-            self.audioProcessor.presets.getUserFolder().startAsProcess();
+            TestHooks::openFolder(self.audioProcessor.presets.getUserFolder());   // [Claude 2026-10-29] UI tests: recorded, not opened
           }
         });
     }

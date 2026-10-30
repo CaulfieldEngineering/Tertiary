@@ -19,6 +19,8 @@ struct ScrollPad :	juce::Component,
 					juce::Slider::Listener,
 					juce::ActionBroadcaster
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
 public:
 
 	ScrollPad(audio_plugin::AudioPluginAudioProcessor& p);
