@@ -41,9 +41,12 @@ home page are filled from it by the pipeline; nobody edits them by hand at a rel
        passes.
 
    Safety rules in that step: every entry it would show must be approved (an older one still marked draft stops
-   it too); it reads both pages again just before writing and, if Joe saved one meanwhile, rebuilds on his new copy
-   so his edit is kept; if the home page can't be written, the changelog page is put back as it was; a re-run of the
-   same version keeps the date already on the page, and older entries keep the dates they were published with.
+   it too); each page is read fresh immediately before its own write and the change is built on that copy, so an
+   edit Joe saved meanwhile is kept, and the read-back checks only the block and the version line; if the home page
+   can't be written, only the changelog block is put back (and read back), never the rest of the page, and not at
+   all if someone changed the block meanwhile; whatever happens, the error says what each page shows now and the
+   cache is cleared; a re-run of the same version keeps the date already on the page, and older entries keep the
+   dates they were published with.
 
 The draft script runs `claude -p` with the style guide as its system prompt, no tools, no MCP servers and no hooks,
 from an empty folder: it can only answer with text, and its answer is checked (bullets only, at most 8, no

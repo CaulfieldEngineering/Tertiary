@@ -301,7 +301,7 @@ def current_block(page):
         return hits[0][1]["settings"].get("editor", "") if len(hits) == 1 else ""
     content = (page.get("content") or {}).get("raw", "")
     if START in content and END in content:
-        return content[content.index(START):content.index(END)]
+        return content[content.index(START):content.index(END) + len(END)]
     return ""
 
 
@@ -526,14 +526,17 @@ def links(fragment):
 
 
 def served_widget(body, css_class):
-    """The inside of the one rendered widget with this CSS class in a page's HTML, or None."""
-    m = list(re.finditer(r'<div class="elementor-element[^"]*\s' + re.escape(css_class) + r'[\s"]', body))
+    """The inside of the one rendered widget with this CSS class in a page's HTML (up to its own closing </div>),
+    or None."""
+    m = list(re.finditer(r'<div\b[^>]*\bclass="elementor-element\b[^"]*\s' + re.escape(css_class) + r'[\s"][^>]*>', body))
     if len(m) != 1:
         return None
-    rest = body[m[0].end():]
-    rest = rest[rest.find(">") + 1:]   # past the rest of the widget's opening tag
-    nxt = re.search(r'<div class="elementor-element\b', rest)
-    return rest[:nxt.start()] if nxt else rest
+    depth, start = 1, m[0].end()
+    for t in re.finditer(r"<div\b|</div\s*>", body[start:]):
+        depth += 1 if t.group(0).startswith("<div") else -1
+        if depth == 0:
+            return body[start:start + t.start()]
+    return None
 
 
 def served_block(body):
@@ -592,29 +595,6 @@ def publish(site, entries, version, page_id, plugin, dry_run=False, release_date
         if home_new is None:
             log(f"The home page ({home_id}) has no '{version_class}' widget; no version line to update.")
 
-    # Read both pages again right before writing. If either changed since (Joe saving in Elementor), build the change
-    # again on the fresh copy so his edit is kept. WordPress has no "write only if unchanged", so a save landing in the
-    # second between this read and the write could still be lost; the read-back below would then show it.
-    def settle(pid, first, build):
-        current, value = first, build(first)
-        for attempt in range(3):
-            fresh = site.page(pid)
-            if fresh.get("meta") == current.get("meta") and (fresh.get("content") or {}).get("raw") == \
-                    (current.get("content") or {}).get("raw"):
-                return current, value
-            log(f"Page {pid} changed on the site meanwhile; building the change again on the new copy.")
-            current, value = fresh, build(fresh)
-        raise Fail(f"Page {pid} keeps changing on the site (someone is editing it). Nothing was changed; re-run the job.")
-
-    page, (kind, new_value) = settle(page_id, page, lambda pg: replace_block(pg, block))
-    if home_new is not None:
-        def build_home(pg):
-            v = set_version_line(pg, version, entries[0]["date"], version_class)
-            if v is None:
-                raise Fail("The home page's version line disappeared while the release ran. Nothing was changed.")
-            return v
-        home, home_new = settle(home_id, home, build_home)
-
     if dry_run:
         site.write_page(page_id, kind, new_value)
         if home_new is not None:
@@ -623,45 +603,67 @@ def publish(site, entries, version, page_id, plugin, dry_run=False, release_date
         log(f"Dry run: wrote {site.out}/page-{page_id}.*, block.html" + (f", page-{home_id}.*" if home_new else ""))
         return
 
-    old_value = page["meta"]["_elementor_data"] if kind == "elementor" else page["content"]["raw"]
-
-    def same(pid, k, sent):
+    # Each page is read fresh immediately before its own write and the change is built on that copy, so an edit Joe
+    # saved meanwhile is kept. (WordPress has no "write only if unchanged": a save landing in the same second as the
+    # write can still be lost; that gap is one request.) The read-back checks only what the pipeline owns on the page
+    # (the block, the version line), so an edit elsewhere is neither undone nor mistaken for a failure.
+    def write_owned(pid, build, owned, what):
+        fresh = site.page(pid)
+        k, value, want = build(fresh)
+        err = None
+        try:
+            site.write_page(pid, k, value)
+        except Fail as e:          # the answer was lost or an error came back: the write may still have landed
+            err = e
         back = site.page(pid)
-        got = (back.get("meta") or {}).get("_elementor_data") if k == "elementor" else (back.get("content") or {}).get("raw")
-        try:
-            return back, (json.loads(got) == json.loads(sent)) if k == "elementor" else got == sent
-        except (TypeError, ValueError):
-            return back, False
+        now = owned(back)
+        if now != want:
+            raise Fail(f"{what} did not take" + (f" ({err})" if err else "") + f"; it now reads: {visible_text(str(now))[:200]}")
+        return back
 
-    # Write the changelog page, then the home page. If the home page can't be written, the changelog page is put
-    # back as it was, so the site never shows the new version in one place and the old one in the other.
+    def build_block(new_block, expect_now=None):
+        def build(pg):
+            if expect_now is not None and current_block(pg) != expect_now:
+                raise Fail("the changelog block was changed by someone else meanwhile, so it was left as it is")
+            k, v = replace_block(pg, new_block)
+            return k, v, new_block
+        return build
+
+    def build_home(pg):
+        v = set_version_line(pg, version, entries[0]["date"], version_class)
+        if v is None:
+            raise Fail("the home page's version line disappeared while the release ran")
+        return "elementor", v, version_line_texts({"meta": {"_elementor_data": v}}, version_class)
+
+    old_block = current_block(page)
     try:
-        site.write_page(page_id, kind, new_value)
-    except Fail as e:
-        _, done = same(page_id, kind, new_value)   # a write that failed on the way back may still have landed
-        if not done:
-            raise Fail(f"Writing the changelog page failed ({e}). Nothing was changed.")
-    back, ok = same(page_id, kind, new_value)
-    if not ok:
-        raise Fail("The changelog page's data reads back different from what was sent (an edit landed at the same "
-                   "moment?). Check the page in Elementor, then re-run the job.")
-    log(f"✓ Changelog page {page_id} written and read back")
-    if home_new is not None:
         try:
-            site.write_page(home_id, "elementor", home_new)
-            hb, ok = same(home_id, "elementor", home_new)
-            if not ok:
-                raise Fail("The home page's data reads back different from what was sent.")
+            back = write_owned(page_id, build_block(block), current_block, "The changelog page")
         except Fail as e:
+            now = current_block(site.page(page_id))
+            state = ("it still shows the old entries" if now == old_block else
+                     "it shows the new entries" if now == block else "its block reads something else; look at it")
+            raise Fail(f"Writing the changelog page failed: {e}. Checked again: {state}. The home page was not touched.")
+        log(f"✓ Changelog page {page_id} written and read back")
+        if home_new is not None:
             try:
-                site.write_page(page_id, kind, old_value)
-                site.clear_cache()
-                undo = "the changelog page was put back as it was"
-            except Fail as e2:
-                undo = f"putting the changelog page back ALSO failed ({e2}): it shows {version}, the home page doesn't"
-            raise Fail(f"The home page's version line could not be set ({e}); {undo}. Re-run the job.")
-        log(f"✓ Home page {home_id} version line set to {version} and read back")
-    site.clear_cache()
+                hb = write_owned(home_id, build_home, lambda pg: version_line_texts(pg, version_class),
+                                 "The home page's version line")
+            except Fail as e:
+                # The home page is not on the new version (checked). Put the changelog block back as it was, so the
+                # site never shows the new version in one place and the old one in the other; leave other edits alone.
+                try:
+                    write_owned(page_id, build_block(old_block, expect_now=block), current_block, "Putting the block back")
+                    undo = "the changelog block was put back as it was (read back)"
+                except Fail as e2:
+                    undo = f"putting the changelog block back failed too ({e2}): the changelog shows {version}, the home page doesn't"
+                raise Fail(f"The home page's version line could not be set: {e}. {undo}. Fix the cause and re-run the job.")
+            log(f"✓ Home page {home_id} version line set to {version} and read back")
+    finally:
+        try:
+            site.clear_cache()   # whatever is stored now is what visitors should see
+        except Fail as e:
+            log(f"::warning::Clearing Elementor's cache failed ({e}); Elementor > Tools > Clear Files & Data.")
 
     # Live: what a visitor gets (a unique query string, so no page cache answers). The block as served must read
     # exactly like the block that was written, with the same links; the version line likewise.

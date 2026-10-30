@@ -75,6 +75,7 @@ class FakeLive:
         self.pages = {p["id"]: copy.deepcopy(p) for p in pages}
         self.front, self.media, self.stale, self.mangle, self.dead = front, media, stale, mangle, dead
         self.fail_write, self.wrong_bullets = fail_write, wrong_bullets
+        self.before_write, self.lost_answer = None, None
         self.writes, self.cleared = [], 0
         self.served = {pid: self.render(pid) for pid in self.pages}
 
@@ -101,10 +102,14 @@ class FakeLive:
         return hits[0]["source_url"] if hits else None
 
     def write_page(self, pid, kind, value):
+        if self.before_write:
+            self.before_write(self, pid)
         if pid == self.fail_write:
             raise cl.Fail(f"POST page {pid} answered HTTP 500")
         self.writes.append((pid, kind))
         self.pages[pid]["meta"]["_elementor_data"] = value if not self.mangle else value.replace("1.1.0", "1.1.O")
+        if pid == self.lost_answer:   # stored, but the answer never came back
+            raise cl.Fail(f"POST page {pid}: connection reset")
 
     def clear_cache(self):
         self.cleared += 1
@@ -334,7 +339,7 @@ class Publish(unittest.TestCase):
         self.assertEqual(s.writes, [])
 
     def test_read_back_mismatch_fails(self):
-        with self.assertRaisesRegex(cl.Fail, "reads back"):
+        with self.assertRaisesRegex(cl.Fail, "did not take.*Checked again"):
             self.run_publish(FakeLive([page(), home()], mangle=True))
 
     def test_stale_live_page_fails(self):
@@ -409,6 +414,59 @@ class Publish(unittest.TestCase):
         cl.publish(s, cl.parse(LOG), "1.1.0", 10, "Plug", lookup=lookup({"1.1.0": "2026-10-30"}),
                    version_class="wla-version-otherplugin")
         self.assertEqual(s.writes, [(10, "elementor")])
+
+    def test_rollback_keeps_an_edit_made_meanwhile(self):
+        # the changelog page is written, Joe edits its intro, then the home page fails: the block goes back,
+        # his new intro stays
+        s = FakeLive([page(), home()], fail_write=20)
+
+        def joe_edits(site, pid):
+            if pid == 20:
+                d = json.loads(site.pages[10]["meta"]["_elementor_data"])
+                d[0]["elements"][1]["settings"]["editor"] = "<p>Joe's newer intro</p>"
+                site.pages[10]["meta"]["_elementor_data"] = json.dumps(d)
+        s.before_write = joe_edits
+        with self.assertRaisesRegex(cl.Fail, "put back as it was"):
+            self.run_publish(s)
+        self.assertIn("Joe's newer intro", cl.visible_text(s.served[10]))
+        self.assertEqual(cl.current_block(s.pages[10]), "<p>old</p>")
+
+    def test_rollback_leaves_a_block_someone_changed(self):
+        s = FakeLive([page(), home()], fail_write=20)
+
+        def someone_rewrites_block(site, pid):
+            if pid == 20:
+                d = json.loads(site.pages[10]["meta"]["_elementor_data"])
+                d[0]["elements"][2]["settings"]["editor"] = "<p>hand edit</p>"
+                site.pages[10]["meta"]["_elementor_data"] = json.dumps(d)
+        s.before_write = someone_rewrites_block
+        with self.assertRaisesRegex(cl.Fail, "changed by someone else"):
+            self.run_publish(s)
+        self.assertEqual(cl.current_block(s.pages[10]), "<p>hand edit</p>")
+
+    def test_lost_answer_but_stored_counts_as_written(self):
+        s = FakeLive([page(), home()])
+        s.lost_answer = 20
+        self.run_publish(s)
+        self.assertIn("1.1.0, released 30 October 2026", cl.visible_text(s.served[20]))
+
+    def test_home_edit_during_changelog_write_is_kept(self):
+        s = FakeLive([page(), home()])
+
+        def joe_edits_home(site, pid):
+            if pid == 10:
+                d = json.loads(site.pages[20]["meta"]["_elementor_data"])
+                d[0]["elements"][1]["settings"]["editor"] = "<p>Joe's home edit</p>"
+                site.pages[20]["meta"]["_elementor_data"] = json.dumps(d)
+        s.before_write = joe_edits_home
+        self.run_publish(s)
+        self.assertIn("Joe's home edit", cl.visible_text(s.served[20]))
+
+    def test_served_widget_stops_at_its_own_end(self):
+        body = ('<div class="elementor-element elementor-element-v1 wla-version elementor-widget" data-id="v1">'
+                '<div class="elementor-widget-container"><p>1.1.0, released 30 October 2026</p></div></div>'
+                '</div></div><footer><p>Copyright WLA</p></footer>')
+        self.assertEqual(cl.visible_text(cl.served_widget(body, "wla-version")), "1.1.0, released 30 October 2026")
 
     def test_home_without_version_line(self):
         h = home()
