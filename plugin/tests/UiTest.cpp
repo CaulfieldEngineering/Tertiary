@@ -391,6 +391,86 @@ void windowAtEachScale()
     }
 }
 
+// U-24  [Claude 2026-10-30] RC1 bug (Joe, Cubase on his laptop): the window opened nearly full screen, black, with
+// the UI at its size in the corner. The editor in a stand-in for the plug-in wrapper (as JUCE's VST3 wrapper holds
+// it), opened with the host's scale already set (1.25 and 1.5, as a DAW on a scaled screen does), at each window
+// size: the editor is exactly the layout times the chosen size, the layout fills it, and the wrapper is that times
+// the host's scale. Then the host gives the wrapper another size twice: once with the editor (as JUCE's wrapper
+// does after a host resize) and once without (what Cubase's answer did in RC1): both go back. The real wrapper
+// and a Cubase-like host are HostTest section 10.
+struct WrapperStandIn : juce::Component
+{
+    juce::AudioProcessorEditor* editor = nullptr;
+    bool hostOnly = false;   // the next size is the host's alone: the editor is not resized (RC1 in Cubase)
+    bool resizingChild = false;
+
+    void fitEditor()   { setSize (getLocalArea (editor, editor->getLocalBounds()).getSmallestIntegerContainer().getWidth(),
+                                  getLocalArea (editor, editor->getLocalBounds()).getSmallestIntegerContainer().getHeight()); }
+    void childBoundsChanged (juce::Component*) override   { if (! resizingChild) fitEditor(); }   // asks the host, which says yes
+    void resized() override
+    {
+        if (editor == nullptr || hostOnly) return;
+        const juce::ScopedValueSetter<bool> s (resizingChild, true);
+        editor->setBounds (editor->getLocalArea (this, getLocalBounds()).withZeroOrigin());
+    }
+    void paint (juce::Graphics& g) override   { g.fillAll (juce::Colours::black); }
+};
+
+void hostScaleFirstOpen()
+{
+    for (float hostScale : { 1.25f, 1.5f })
+        for (float scale : { 1.f, 1.25f, 1.5f, 2.f })
+        {
+            Rig rig;
+            saveUiScale (scale);
+            WrapperStandIn wrapper;
+            rig.window.reset (rig.proc->createEditorIfNeeded());
+            wrapper.editor = rig.window.get();
+            rig.window->setScaleFactor (hostScale);   // before the window is shown, as the VST3 wrapper does
+            wrapper.addAndMakeVisible (*rig.window);
+            wrapper.fitEditor();
+            wrapper.addToDesktop (0);
+            wrapper.setTopLeftPosition (offScreen());
+            wrapper.setVisible (true);
+            pump (30);
+            rig.settle();
+            auto& ed = rig.editor();
+            const auto at = juce::String (juce::roundToInt (scale * 100)) + " %, host scale " + fmt (hostScale, 2);
+            const int w = juce::roundToInt (750 * scale), h = juce::roundToInt (478 * scale);
+            auto sizeOf = [] (juce::Component& c) { return juce::String (c.getWidth()) + " x " + juce::String (c.getHeight()); };
+            auto fills = [&] {
+                auto& content = A::content (ed);
+                const auto shown = wrapper.getLocalArea (&content, content.getLocalBounds());
+                return closeTo (shown.getWidth(), wrapper.getWidth(), 1.0) && closeTo (shown.getHeight(), wrapper.getHeight(), 1.0);
+            };
+            auto wrapperRight = [&] { return closeTo (wrapper.getWidth(), w * hostScale, 3.0) && closeTo (wrapper.getHeight(), h * hostScale, 3.0); };
+
+            // within 2 pixels: JUCE's wrapper rounds the editor's size at a fractional host scale (see keepWindowAtUiSize)
+            auto editorRight = [&] { return std::abs (ed.getWidth() - w) <= 2 && std::abs (ed.getHeight() - h) <= 2; };
+            check (editorRight(), "opens at the layout times the chosen size: " + at,
+                   sizeOf (ed), "expected " + juce::String (w) + " x " + juce::String (h));
+            check (wrapperRight() && fills(), "the window is that times the host's scale, filled by the layout: " + at, sizeOf (wrapper));
+
+            // the host sizes the window and JUCE's wrapper passes it on to the editor
+            wrapper.setSize (wrapper.getWidth() * 2, wrapper.getHeight() * 2);
+            pump (700);
+            check (editorRight() && wrapperRight() && fills(),
+                   "sized otherwise by the host (editor too): back to the chosen size, filled: " + at, sizeOf (ed) + ", window " + sizeOf (wrapper));
+
+            // the host's answer sizes the window only (RC1 in Cubase: black around the UI)
+            wrapper.hostOnly = true;
+            wrapper.setSize (1920, 1008);
+            wrapper.hostOnly = false;
+            pump (700);
+            check (editorRight() && wrapperRight() && fills(),
+                   "the host's window alone made bigger: asked again, back to the UI's size: " + at, sizeOf (ed) + ", window " + sizeOf (wrapper));
+
+            check (closeTo (A::uiScale (ed), scale, 0.001), "the chosen size is unchanged: " + at, fmt (A::uiScale (ed), 3));
+            rig.close();
+            check (closeTo (savedUiScale(), scale, 0.001), "and that is what is remembered: " + at, fmt (savedUiScale(), 3));
+        }
+}
+
 // U-02  Window size from the Menu (the icon at the top right), and remembered
 void windowSizeMenu()
 {
@@ -1398,6 +1478,7 @@ std::vector<Scenario> scenarios()
         { "U-21", "T2-11", "User presets: save, rename, reload, delete (temp folder)", userPresets },
         { "U-22", "T2-02", "Open and close the window many times: no leak, no use after close", openCloseMany },
         { "U-23", "R-01 T1-09", "No ghost strip on the crossover floor", crossoverFloor },
+        { "U-24", "R-18 T2-04", "Opened at the host's scale (1.25, 1.5): the window is the layout times the chosen size, and stays so", hostScaleFirstOpen },   // [Claude 2026-10-30]
     };
 }
 

@@ -53,7 +53,16 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       // pixels at exactly these four. The window was 750 x 515 before the shorter layout.
       setResizable(false, false);
       uiScale = loadUiScale();
-      setSize(juce::roundToInt(baseWidth * uiScale), juce::roundToInt(baseHeight * uiScale));
+      setSize(wantedSize().getWidth(), wantedSize().getHeight());   // [Claude 2026-10-30] the same size the menu sets
+
+      // [Claude 2026-10-30] then keep the host's window at that size (see the header)
+     #if ! WLA_REVIEW_RENDER_BUILD
+      if (audioProcessor.wrapperType != juce::AudioProcessor::wrapperType_Standalone)
+      {
+        sizeKeeper.onTick = [this] { keepWindowAtUiSize(); };
+        sizeKeeper.startTimer(250);
+      }
+     #endif
 
       // Scope Channels listens to Band Controls
       globalControls.getLowControl().addActionListener(
@@ -268,10 +277,12 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       //centreWithSize(newWidth, newHeight);
 
       // [Claude 2026-10-29] the content keeps its 750 x 478 layout and is scaled to the window's width
-      uiScale = (float) getWidth() / (float) baseWidth;
+      // [Claude 2026-10-30] ...but the window's width no longer sets the chosen size: a host that sized the window
+      // itself (RC1 in Cubase) had its size remembered for every later window. keepWindowAtUiSize puts it back.
+      const float drawScale = (float) getWidth() / (float) baseWidth;
       content.setTransform({});
       content.setBounds(0, 0, baseWidth, baseHeight);
-      content.setTransform(juce::AffineTransform::scale(uiScale));
+      content.setTransform(juce::AffineTransform::scale(drawScale));
 
       buildFlexboxLayout();
 
@@ -412,8 +423,65 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
 
     void AudioPluginAudioProcessorEditor::setUiScale(float scale)
     {
-      setSize(juce::roundToInt(baseWidth * scale), juce::roundToInt(baseHeight * scale));
+      uiScale = scale;   // [Claude 2026-10-30] was read back from the window's width in resized()
+      sizeRequests = 0;
+      setSize(wantedSize().getWidth(), wantedSize().getHeight());
       saveUiScale();
+    }
+
+    // [Claude 2026-10-30] The UI's size at the chosen scale, before the host's scale
+    juce::Rectangle<int> AudioPluginAudioProcessorEditor::wantedSize() const
+    {
+      return { juce::roundToInt(baseWidth * uiScale), juce::roundToInt(baseHeight * uiScale) };
+    }
+
+    // [Claude 2026-10-30] A few times a second (plug-in only): is the host's window the UI's size? The plug-in's
+    // window in the host (the wrapper, our parent) gets its size from the host's answer to a resize request; RC1 in
+    // Cubase got the whole screen back once and never asked again. So when the window and the UI differ, ask again,
+    // the way the menu does (a new size for the editor makes JUCE's wrapper ask the host). A host that keeps
+    // refusing gets three tries, then is left alone until the size changes.
+    void AudioPluginAudioProcessorEditor::keepWindowAtUiSize()
+    {
+      if (! isShowing())
+        return;
+
+      // within a pixel: at a fractional host scale (125 %) JUCE's wrapper rounds the editor's size by a pixel when the
+      // host confirms it, which is not worth asking again for (the layout is scaled to the width either way)
+      const auto want = wantedSize();
+      const bool uiRight = std::abs(getWidth() - want.getWidth()) <= 1 && std::abs(getHeight() - want.getHeight()) <= 1;
+
+      bool windowRight = true;
+      if (auto* window = getParentComponent())
+      {
+        // our area in the window, with the host's scale; within a pixel (fractional scales round)
+        const auto ours = window->getLocalArea(this, getLocalBounds().toFloat());
+        const auto theirs = window->getLocalBounds().toFloat();
+        windowRight = std::abs(ours.getWidth() - theirs.getWidth()) <= 1.5f && std::abs(ours.getHeight() - theirs.getHeight()) <= 1.5f;
+      }
+
+      if (uiRight && windowRight)
+      {
+        sizeRequests = 0;
+        return;
+      }
+
+      if (sizeRequests >= 3)
+        return;
+
+      ++sizeRequests;
+      if (! uiRight)
+        setSize(want.getWidth(), want.getHeight());   // the host sized the UI itself: back to the chosen size
+      else
+        requestHostSize();
+    }
+
+    // [Claude 2026-10-30] Asks the host for the UI's size again. JUCE's wrapper asks the host whenever the editor's
+    // size changes, so the editor steps one pixel and back: two requests, the last one the right size.
+    void AudioPluginAudioProcessorEditor::requestHostSize()
+    {
+      const auto want = wantedSize();
+      setSize(want.getWidth(), want.getHeight() + 1);
+      setSize(want.getWidth(), want.getHeight());
     }
 
     void AudioPluginAudioProcessorEditor::showMainMenu()
