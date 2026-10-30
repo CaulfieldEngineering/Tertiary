@@ -1,0 +1,19 @@
+# Cubase harness project: only the .cpr and the small build parts in Misc/ are in git (2026-10-29).
+# Everything below is rebuilt or per machine.
+
+# harness-input.wav: rebuild with  python ../tertiary_harness_build.py audio
+Audio/
+# the import copy of the input (same file as Audio/harness-input.wav)
+Misc/*.wav
+# Cubase's waveform caches, exports, backups
+Images/
+*.peak
+Mixdown/
+Auto Saves/
+*.bak
+*.csh
+Track Pictures/
+# run logs, screenshots and renders from tertiary_harness_run.ps1
+Runs/
+# goldens are per machine and live outside the repo: %USERPROFILE%\.wla-test\goldens\tertiary\cubase\
+Golden/
