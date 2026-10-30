@@ -2,6 +2,9 @@
 # Written by Claude (2026-10-27). PREPARED, NOT RUN: REAPER isn't installed (Joe hasn't decided). See README.md.
 #
 #   python plugin/tests/reaper/run_reaper_test.py <HostTest executable> [--reaper <path to reaper>]
+#          [--fx "AU:Tertiary"] [--prefix reaper_au]
+#   [Claude 2026-10-30, Mac day] --fx picks the plug-in (format) REAPER loads; --prefix names this run's files in
+#   out/ (so a VST3 run and an AU run sit side by side). Without them: the VST3, prefix "reaper", as before.
 #
 # 1. HostTest --write-input writes the golden renders' input to plugin/tests/reaper/input.wav
 # 2. REAPER starts headless-ish with tertiary_reaper_test.lua, which builds the project, renders, saves
@@ -29,6 +32,8 @@ def main():
         return 2
     hosttest = os.path.abspath(sys.argv[1])
     reaper = sys.argv[sys.argv.index("--reaper") + 1] if "--reaper" in sys.argv else DEFAULT_REAPER.get(sys.platform, "reaper")
+    fx = sys.argv[sys.argv.index("--fx") + 1] if "--fx" in sys.argv else None
+    prefix = sys.argv[sys.argv.index("--prefix") + 1] if "--prefix" in sys.argv else "reaper"
     if not os.path.exists(reaper):
         print("SKIP  REAPER is not installed (" + reaper + ")")
         return 0
@@ -36,23 +41,26 @@ def main():
     out = os.path.join(HERE, "out")
     os.makedirs(out, exist_ok=True)
     for f in os.listdir(out):
-        os.remove(os.path.join(out, f))
+        if f.startswith(prefix + "_"):
+            os.remove(os.path.join(out, f))
 
     subprocess.run([hosttest, "--write-input", os.path.join(HERE, "input.wav")], check=True)
 
     # -newinst: a fresh REAPER; -nosplash; the .lua runs at start-up. (Command-line options unverified.)
-    env = dict(os.environ, TERTIARY_TEST_DIR=HERE)
+    env = dict(os.environ, TERTIARY_TEST_DIR=HERE, TERTIARY_PREFIX=prefix)
+    if fx:
+        env["TERTIARY_FX"] = fx
     start = time.time()
     subprocess.run([reaper, "-newinst", "-nosplash", os.path.join(HERE, "tertiary_reaper_test.lua")],
                    env=env, timeout=300)
     print("REAPER ran for %.0f s" % (time.time() - start))
-    log = os.path.join(out, "reaper_log.txt")
+    log = os.path.join(out, prefix + "_log.txt")
     if os.path.exists(log):
         print(open(log).read())
 
     failed = 0
     golden = os.path.join(HERE, "..", "golden", "default.wav")
-    rendered = os.path.join(out, "reaper_default.wav")
+    rendered = os.path.join(out, prefix + "_default.wav")
     if not os.path.exists(rendered):
         print("FAIL  no REAPER render")
         return 1
@@ -68,7 +76,7 @@ def main():
     print(("PASS" if ok else "FAIL") + "  REAPER render = golden default  max diff %.3g over %d samples" % (diff, n // 2))
     failed += 0 if ok else 1
 
-    auto = os.path.join(out, "reaper_automation.wav")
+    auto = os.path.join(out, prefix + "_automation.wav")
     if os.path.exists(auto):
         _, _, c = read_wav(auto)
         sane = all(x == x and abs(x) < 4.0 for x in c)     # x == x is false for NaN
@@ -79,7 +87,7 @@ def main():
         print("FAIL  no automation render")
         failed += 1
 
-    rpp = os.path.join(HERE, "tertiary_test.rpp")
+    rpp = os.path.join(out, prefix + "_test.rpp")
     print(("PASS" if os.path.exists(rpp) else "FAIL") + "  project saved: " + rpp)
     failed += 0 if os.path.exists(rpp) else 1
     return 1 if failed else 0

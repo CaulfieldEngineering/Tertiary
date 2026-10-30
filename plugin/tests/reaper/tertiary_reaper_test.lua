@@ -14,7 +14,7 @@
 local dir = os.getenv("TERTIARY_TEST_DIR") or reaper.GetResourcePath()
 local sep = package.config:sub(1, 1)
 local function path(name) return dir .. sep .. name end
-local log = io.open(path("out" .. sep .. "reaper_log.txt"), "w")
+local log = io.open(path("out" .. sep .. (os.getenv("TERTIARY_PREFIX") or "reaper") .. "_log.txt"), "w")
 local function say(text) if log then log:write(text .. "\n") log:flush() end end
 
 -- 1. Project and track ------------------------------------------------------------------------------------
@@ -29,10 +29,17 @@ reaper.SetEditCurPos(0, false, false)
 reaper.InsertMedia(path("input.wav"), 0)                         -- 0 = add to the selected track at the cursor
 
 -- 2. Tertiary --------------------------------------------------------------------------------------------
-local fx = reaper.TrackFX_AddByName(track, "VST3:Tertiary (Wonderland Audio)", false, -1)
-if fx < 0 then fx = reaper.TrackFX_AddByName(track, "Tertiary", false, -1) end
+-- [Claude 2026-10-30, Mac day] TERTIARY_FX picks the format ("VST3:Tertiary", "AU:Tertiary"); TERTIARY_PREFIX names
+-- the renders and the project (default "reaper"), so the VST3 and AU runs on the Mac don't overwrite each other.
+local want = os.getenv("TERTIARY_FX")
+local prefix = os.getenv("TERTIARY_PREFIX") or "reaper"
+local fx = -1
+if want then fx = reaper.TrackFX_AddByName(track, want, false, -1) end
+if fx < 0 and not want then fx = reaper.TrackFX_AddByName(track, "VST3:Tertiary (Wonderland Audio)", false, -1) end
+if fx < 0 and not want then fx = reaper.TrackFX_AddByName(track, "Tertiary", false, -1) end
 if fx < 0 then say("FAIL Tertiary not found in REAPER's plug-in list") reaper.Main_OnCommand(40004, 0) return end
-say("loaded Tertiary as FX " .. fx)
+local _, fxname = reaper.TrackFX_GetFXName(track, fx, "")
+say("loaded Tertiary as FX " .. fx .. ": " .. fxname)
 
 -- Render settings: the whole project, master mix, 48 kHz stereo, 32-bit float WAV, no tail
 local function renderTo(name)
@@ -47,7 +54,7 @@ local function renderTo(name)
     reaper.Main_OnCommand(42230, 0)                              -- Render project, using the most recent settings
     say("rendered " .. name)
 end
-renderTo("reaper_default")
+renderTo(prefix .. "_default")
 
 -- 3. Automation ------------------------------------------------------------------------------------------
 local depth = -1
@@ -60,13 +67,13 @@ if depth >= 0 then
     reaper.InsertEnvelopePoint(env, 0.0, 0.0, 0, 0, false, true)
     reaper.InsertEnvelopePoint(env, 2.0, 1.0, 0, 0, false, true)
     reaper.Envelope_SortPoints(env)
-    renderTo("reaper_automation")
+    renderTo(prefix .. "_automation")
 else
     say("FAIL no 'Depth Low Band' parameter")
 end
 
 -- 4. Save the project and quit ---------------------------------------------------------------------------
-reaper.Main_SaveProjectEx(0, path("tertiary_test.rpp"), 0)
-say("saved tertiary_test.rpp")
+reaper.Main_SaveProjectEx(0, path("out" .. sep .. prefix .. "_test.rpp"), 0)
+say("saved " .. prefix .. "_test.rpp")
 if log then log:close() end
 reaper.Main_OnCommand(40004, 0)                                  -- File: Quit REAPER
