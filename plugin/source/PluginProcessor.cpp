@@ -678,6 +678,17 @@ namespace audio_plugin {
       inputGain.prepare(spec);
       outputGain.prepare(spec);
 
+      // [Claude 2026-10-29] V-04: the band gains too. They were never prepared, so they had no sample rate and their
+      // 50 ms ramp (updateTremoloSettings) did nothing: every change jumped straight to the new level (zipper noise,
+      // clicks on automation and preset changes). Each starts at its knob's value, as before, so nothing fades in;
+      // only changes from here on are smoothed.
+      for (auto& trem : tremolos) {
+        trem.bandGain.setRampDurationSeconds(0.0);
+        trem.bandGain.prepare(spec);
+        trem.bandGain.setGainDecibels(trem.bandGainParam->get());   // no ramp yet: set at once
+        trem.bandGain.setRampDurationSeconds(0.05);
+      }
+
       /* Pass spec information into filters */
       LP1.prepare(spec);
       HP1.prepare(spec);

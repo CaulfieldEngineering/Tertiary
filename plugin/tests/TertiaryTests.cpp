@@ -500,6 +500,29 @@ struct ProcessorTests : juce::UnitTest
             b.setStateInformation ("garbage", 7);   // a bad state is ignored, not a crash
         }
 
+        // [Claude 2026-10-29] V-04 of the 2026-10-29 review: the band gains were never prepared, so they had no sample
+        // rate and their 50 ms ramp did nothing: a change jumped straight to the new level (zipper noise, clicks).
+        beginTest ("Band gain changes are smoothed (50 ms), not a jump");
+        {
+            audio_plugin::AudioPluginAudioProcessor p;
+            p.setDemoState (false);
+            for (auto band : { "Low", "Mid", "High" })
+                setParam (p, juce::String ("Depth ") + band + " Band", 0);   // no tremolo: the DC goes straight through
+            p.setRateAndBufferSizeDetails (48000, 64);
+            p.prepareToPlay (48000, 64);
+            auto settled = runDC (p, 48000, 64);
+            const float before = settled.back();
+            expectWithinAbsoluteError (before, 0.5f, 0.01f);   // the DC is in the low band only
+
+            setParam (p, "Low Output Gain", -20);              // 0.5 -> 0.05
+            auto after = runDC (p, 48000 / 2, 64);
+            logMessage ("Low band gain 0 -> -20 dB: " + juce::String (before) + " before, " + juce::String (after[0])
+                        + " on the next sample, " + juce::String (after[1200]) + " after 25 ms, " + juce::String (after.back()) + " after 0.5 s");
+            expect (after[0] > 0.45f, "no jump on the first sample after the change");
+            expect (after[1200] > 0.1f && after[1200] < 0.45f, "half way through the 50 ms ramp");
+            expectWithinAbsoluteError (after.back(), 0.05f, 0.005f);
+        }
+
         // [Claude 2026-10-29] V-05 of the 2026-10-29 review: an LFO setting that changed while processBlock was rebuilding the wave (after the
         // settings were read, before the "changed" flag was cleared) was lost: the band kept the old setting. A second
         // thread plays while this one changes the low band's depth twice in quick succession, as a preset change does.
