@@ -10,7 +10,11 @@
 
 
 #include "AboutWindow.h"
+#if __has_include("build_id.h")
 #include "build_id.h"   // [Claude 2026-10-29] WLA_BUILD_ID
+#else
+#define WLA_BUILD_ID "unknown"   // [Claude 2026-10-29] builds without the build_id step (the web demo)
+#endif
 #include <cstdlib>
 #include "PluginEditor.h"
 
