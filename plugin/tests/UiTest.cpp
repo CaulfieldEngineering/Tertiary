@@ -975,6 +975,10 @@ void freshLoadSyncOff()
         const double rate = value (*rig.proc, bandParam ("Rate", b));
         check (closeTo (rate, expected, 0.05 * expected + 0.05) && rate > 4.0, juce::String (bandNames[b]) + ": dragging the rate slider moves the rate", fmt (rate) + " Hz");
         auto& scope = A::scope (ed, b);
+        // [Claude 2026-10-30] the slider tells the scope through an action message, which arrives on the message loop:
+        // let it arrive (up to 1 s; at once on a fast machine). The slow Intel Mac runner checked before it had.
+        for (int waited = 0; waited < 1000 && ! closeTo (A::targetRate (scope), rate, 0.01); waited += 10)
+            pump (10);
         check (closeTo (A::targetRate (scope), rate, 0.01), juce::String (bandNames[b]) + ": the scope hears the slider at once",
                "scope's rate " + fmt (A::targetRate (scope)), "the scope never heard the rate slider: the dead free-rate slider (R-06)");
         const double heard = rig.listen (b, 2.0).frequency();
