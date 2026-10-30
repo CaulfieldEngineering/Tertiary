@@ -1105,7 +1105,9 @@ void licenceBox()
     waitFor ([&] { return ! rig.proc->getDemoState(); });
     rig.settle();
     check (! rig.proc->getDemoState() && A::status (about).getText().contains ("successful"), "the right key: activated", A::status (about).getText());
-    check (server->lastEmail == "joe@example.com", "the email is sent in lower case", server->lastEmail);
+    // [Claude 2026-10-30] M-01: the server compares the email exactly, capitals included, so it goes as typed (this
+    // check expected lower case, the 1.1 behaviour M-01 reversed; found when ui-tests was merged into the release branch)
+    check (server->lastEmail == "Joe@Example.com", "the email is sent exactly as typed (M-01)", server->lastEmail);
     check (! A::bannerDemo (banner) && A::activateArea (banner).isEmpty(), "the DEMO tag and the Activate key are gone");
     check (A::keyField (about).isReadOnly() && A::keyField (about).getText().endsWith ("ABCD") && ! A::keyField (about).getText().contains ("TERT-TEST"),
            "the key shows masked, read-only, its last four kept", A::keyField (about).getText());
@@ -1113,6 +1115,8 @@ void licenceBox()
         juce::PropertiesFile props (LicenseCheck::getSettingsOptions());
         check (props.getValue ("licenseKey") == server->goodKey && props.getFile().isAChildOf (TestHooks::testFolder()),
                "saved in the test's own settings file, never the real one", props.getFile().getFullPathName());
+        check (props.getValue ("licenseEmail") == "Joe@Example.com", "the email is saved as sent, so a reload stays activated (M-01, R-09)",
+               props.getValue ("licenseEmail"));
     }
     snapshot (ed, "about_activated");
     check (openMainMenu (rig) && findMenuItem ("About Tertiary...") != nullptr, "Menu now says About Tertiary...");
