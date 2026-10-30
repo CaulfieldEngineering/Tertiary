@@ -13,6 +13,7 @@
 */
 
 #include "LicenseServer.h"
+#include <atomic>
 
 namespace
 {
@@ -21,43 +22,60 @@ namespace
     const int timeoutMs { 5000 };
 }
 
+// [Claude 2026-10-30] M-02: the four routes build their address with requestUrl (the same parameters as before, plus t)
 LicenseReply WonderlandLicenseServer::validate(const juce::String& key, const juce::String& email)
 {
-    juce::StringPairArray parameters;
-    parameters.set("serial_key", key);
-    parameters.set("request", "validate");
-    parameters.set("email", email);
-    return call("validate", parameters);
+    return call(requestUrl("validate", key, email));
 }
 
 LicenseReply WonderlandLicenseServer::activate(const juce::String& key, const juce::String& email,
                                                const juce::String& instance, const juce::String& platform)
 {
-    juce::StringPairArray parameters;
-    parameters.set("serial_key", key);
-    parameters.set("instance", instance);
-    parameters.set("platform", platform);
-    parameters.set("email", email);
-    return call("activate", parameters);
+    return call(requestUrl("activate", key, email, instance, platform));
 }
 
 LicenseReply WonderlandLicenseServer::deactivate(const juce::String& key, const juce::String& email,
                                                  const juce::String& instance, const juce::String& platform)
 {
-    juce::StringPairArray parameters;
-    parameters.set("serial_key", key);
-    parameters.set("instance", instance);
-    parameters.set("platform", platform);
-    parameters.set("email", email);
-    return call("deactivate", parameters);
+    return call(requestUrl("deactivate", key, email, instance, platform));
 }
 
 LicenseReply WonderlandLicenseServer::versionCheck(const juce::String& key, const juce::String& email)
 {
+    return call(requestUrl("version_check", key, email));
+}
+
+// [Claude 2026-10-30] M-02. See LicenseServer.h.
+juce::URL WonderlandLicenseServer::requestUrl(const juce::String& route, const juce::String& key, const juce::String& email,
+                                              const juce::String& instance, const juce::String& platform)
+{
     juce::StringPairArray parameters;
     parameters.set("serial_key", key);
+    if (route == "validate")
+        parameters.set("request", "validate");
+    parameters.set("instance", instance);
+    parameters.set("platform", platform);
     parameters.set("email", email);
-    return call("version_check", parameters);
+
+    juce::URL url(serverAddress + route);
+    url = url.withParameter("product_id", productId);
+
+    for (auto& name : parameters.getAllKeys())
+        if (parameters[name].isNotEmpty())
+            url = url.withParameter(name, parameters[name]);
+
+    // Unique on every call, even two in the same millisecond: the time, a random number and a counter
+    static std::atomic<juce::uint32> counter { 0 };
+    auto unique = juce::String(juce::Time::currentTimeMillis()) + "-"
+                + juce::String::toHexString(juce::Random::getSystemRandom().nextInt64())
+                + juce::String::toHexString((int) ++counter);
+    return url.withParameter("t", unique);
+}
+
+// [Claude 2026-10-30] M-02. See LicenseServer.h.
+juce::String WonderlandLicenseServer::requestHeaders()
+{
+    return "Cache-Control: no-cache\r\nPragma: no-cache";
 }
 
 void WonderlandLicenseServer::cancel()
@@ -71,19 +89,13 @@ void WonderlandLicenseServer::cancel()
    #endif
 }
 
-LicenseReply WonderlandLicenseServer::call(const juce::String& route, const juce::StringPairArray& parameters)
+LicenseReply WonderlandLicenseServer::call(const juce::URL& url)
 {
     LicenseReply reply;
 
-    juce::URL url(serverAddress + route);
-    url = url.withParameter("product_id", productId);
-
-    for (auto& name : parameters.getAllKeys())
-        if (parameters[name].isNotEmpty())
-            url = url.withParameter(name, parameters[name]);
-
     juce::WebInputStream stream(url, false);
     stream.withConnectionTimeout(timeoutMs);
+    stream.withExtraHeaders(requestHeaders());   // [Claude 2026-10-30] M-02: no cached answers
 
     {
         const juce::ScopedLock lock(streamLock);

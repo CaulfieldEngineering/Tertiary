@@ -55,9 +55,19 @@ struct WonderlandLicenseServer : LicenseServer
     LicenseReply versionCheck (const juce::String& key, const juce::String& email) override;
     void cancel() override;
 
+    /* [Claude 2026-10-30] M-02: the address of one request: product 45, the route's parameters, and t=<ms>-<random>,
+       different on every call. The site's page cache (Batcache, Cache-Control: max-age=300) answered the same GET
+       address with the same reply for 5 minutes, so a validate just after an activate or a refund could get the
+       old answer. The server ignores t. Public so the tests can check it. Empty instance / platform are left out. */
+    static juce::URL requestUrl(const juce::String& route, const juce::String& key, const juce::String& email,
+                                const juce::String& instance = {}, const juce::String& platform = {});
+
+    /* [Claude 2026-10-30] M-02: sent with every request: Cache-Control: no-cache and Pragma: no-cache */
+    static juce::String requestHeaders();
+
 private:
-    /* Sends one GET request to wonderlandaudio.com/wp-json/wcsn/<route> and reads the JSON reply */
-    LicenseReply call(const juce::String& route, const juce::StringPairArray& parameters);
+    /* Sends one GET request (an address from requestUrl) and reads the JSON reply */
+    LicenseReply call(const juce::URL& url);
 
     juce::CriticalSection streamLock;
     juce::WebInputStream* currentStream { nullptr };   // The call in progress, so cancel() can stop it

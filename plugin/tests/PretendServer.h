@@ -13,6 +13,7 @@
 
 #pragma once
 #include "LicenseCheck.h"
+#include <map>
 
 //==============================================================================
 // A pretend license server: answers what the test tells it to, and counts the calls
@@ -32,6 +33,33 @@ struct PretendServer : LicenseServer
     juce::StringArray validateEmails;    // every email validate was sent, in order
 
     bool emailMatches (const juce::String& email) const { return orderEmail.isEmpty() || email == orderEmail; }
+
+    // [Claude 2026-10-30] M-02: the site's page cache. When pageCache is on, every call is looked up by the address
+    // the real plugin would send (WonderlandLicenseServer::requestUrl): the same address within 300 s of clockMs
+    // gets the earlier reply, as Batcache did on wonderlandaudio.com. The tests move clockMs themselves.
+    bool pageCache = false;
+    juce::int64 clockMs = 0;
+    int cacheHits = 0;
+    std::map<juce::String, std::pair<juce::int64, LicenseReply>> cache;
+
+    template <typename Fresh>
+    LicenseReply throughCache (const juce::URL& url, Fresh&& fresh)
+    {
+        if (! pageCache)
+            return fresh();
+
+        auto address = url.toString (true);
+        auto found = cache.find (address);
+        if (found != cache.end() && clockMs - found->second.first < 300 * 1000)
+        {
+            ++cacheHits;
+            return found->second.second;
+        }
+
+        auto r = fresh();
+        cache[address] = { clockMs, r };
+        return r;
+    }
     static LicenseReply invalidEmail()  { return reply ("invalid_email", "Invalid email address."); }
 
     static LicenseReply reply (const juce::String& code, const juce::String& message = {}, const juce::String& version = {})
@@ -44,14 +72,17 @@ struct PretendServer : LicenseServer
         return r;
     }
 
-    LicenseReply validate (const juce::String&, const juce::String& email) override
+    LicenseReply validate (const juce::String& key, const juce::String& email) override
     {
-        ++validateCalls;
-        lastEmail = email;
-        validateEmails.add (email);
-        if (! emailMatches (email))
-            return invalidEmail();
-        return validateReply;
+        return throughCache (WonderlandLicenseServer::requestUrl ("validate", key, email), [&]
+        {
+            ++validateCalls;
+            lastEmail = email;
+            validateEmails.add (email);
+            if (! emailMatches (email))
+                return invalidEmail();
+            return validateReply;
+        });
     }
 
     LicenseReply activate (const juce::String&, const juce::String& email, const juce::String&, const juce::String&) override

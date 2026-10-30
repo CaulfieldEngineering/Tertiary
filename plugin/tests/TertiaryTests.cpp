@@ -335,6 +335,53 @@ struct LicenseTests : juce::UnitTest
             expectEquals (s.get().getValue ("licenseEmail"), juce::String ("Joe@Example.com"));   // kept for re-entry
         }
 
+        // [Claude 2026-10-30] M-02 of the 2026-10-30 master list: the site's page cache answered the same GET address
+        // with the same reply for 300 s, so a validate after a refund (or after an activate or deactivate) could get
+        // the old answer. Every request now carries a different t=, and no-cache headers.
+        beginTest ("M-02: every request address is different (t=), with the same parameters; no-cache headers");
+        {
+            auto a = WonderlandLicenseServer::requestUrl ("validate", "ABCD-1234", "Joe@Example.com");
+            auto b = WonderlandLicenseServer::requestUrl ("validate", "ABCD-1234", "Joe@Example.com");
+            expect (a.toString (true) != b.toString (true), "two validates, two addresses");
+            expect (a.getParameterNames().contains ("t") && a.getParameterValues()[a.getParameterNames().indexOf ("t")].isNotEmpty());
+            expectEquals (a.toString (false), juce::String ("https://wonderlandaudio.com/wp-json/wcsn/validate"));
+
+            auto values = [] (const juce::URL& u, const juce::String& name)
+            { return u.getParameterValues()[u.getParameterNames().indexOf (name)]; };
+            expectEquals (values (a, "product_id"), juce::String ("45"));
+            expectEquals (values (a, "serial_key"), juce::String ("ABCD-1234"));
+            expectEquals (values (a, "request"), juce::String ("validate"));
+            expectEquals (values (a, "email"), juce::String ("Joe@Example.com"));
+            expect (! a.getParameterNames().contains ("instance"));
+
+            auto act = WonderlandLicenseServer::requestUrl ("activate", "ABCD-1234", "Joe@Example.com", "TRT-1", "Windows");
+            expectEquals (values (act, "instance"), juce::String ("TRT-1"));
+            expectEquals (values (act, "platform"), juce::String ("Windows"));
+            expect (! act.getParameterNames().contains ("request"));
+            expect (act.getParameterNames().contains ("t"));
+
+            juce::StringArray seen;
+            for (int i = 0; i < 1000; ++i)
+                seen.addIfNotAlreadyThere (WonderlandLicenseServer::requestUrl ("deactivate", "K", "e", "i", "p").toString (true));
+            expectEquals (seen.size(), 1000);
+
+            auto headers = WonderlandLicenseServer::requestHeaders();
+            expect (headers.contains ("Cache-Control: no-cache") && headers.contains ("Pragma: no-cache"));
+        }
+
+        beginTest ("M-02: a refund within 5 minutes of a good check is seen, not the cached key_valid");
+        {
+            PretendServer server;
+            server.pageCache = true;
+            server.validateReply = PretendServer::reply ("key_valid");
+            expectEquals (server.validate ("ABCD-1234", "Joe@Example.com").code, juce::String ("key_valid"));
+
+            server.clockMs += 60 * 1000;   // a minute later the order is refunded
+            server.validateReply = PretendServer::reply ("invalid_order", "Please complete your order to activate the serial key.");
+            expectEquals (server.validate ("ABCD-1234", "Joe@Example.com").code, juce::String ("invalid_order"));
+            expectEquals (server.cacheHits, 0);
+        }
+
         beginTest ("Machine instance: stable, not empty, and not the raw machine ID");
         {
             TempSettings s;
