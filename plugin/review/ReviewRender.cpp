@@ -17,6 +17,7 @@
 //   --rate hz     tell the plugin this sample rate instead of the file's (for sample-rate tests)
 // [Claude 2026-10-29] --bpm-at t:bpm  the host tempo changes to bpm at t seconds (repeatable; the beat position then
 //                counts on smoothly), to check that the scope follows a live tempo change
+// [Claude 2026-10-29] --jump-at t:beats  the host's position jumps to beats at t seconds (a loop or a locate)
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -157,6 +158,7 @@ int main (int argc, char* argv[])
 
     std::vector<Ramp> ramps;
     std::vector<std::pair<double, double>> tempoAt;   // [Claude 2026-10-29] --bpm-at
+    std::vector<std::pair<double, double>> jumpAt;    // [Claude 2026-10-29] --jump-at (each used once)
     for (int i = 0; i < args.size(); ++i)
     {
         if (args[i] == "--set" && i + 1 < args.size())
@@ -164,6 +166,9 @@ int main (int argc, char* argv[])
             const auto kv = args[i + 1];
             setParam (*proc, kv.upToFirstOccurrenceOf ("=", false, false), kv.fromFirstOccurrenceOf ("=", false, false));
         }
+        if (args[i] == "--jump-at" && i + 1 < args.size())
+            jumpAt.push_back ({ args[i + 1].upToFirstOccurrenceOf (":", false, false).getDoubleValue(),
+                                args[i + 1].fromFirstOccurrenceOf (":", false, false).getDoubleValue() });
         if (args[i] == "--bpm-at" && i + 1 < args.size())
             tempoAt.push_back ({ args[i + 1].upToFirstOccurrenceOf (":", false, false).getDoubleValue(),
                                  args[i + 1].fromFirstOccurrenceOf (":", false, false).getDoubleValue() });
@@ -243,6 +248,12 @@ int main (int argc, char* argv[])
             clock.tempoChanges = true;
             for (auto& ta : tempoAt)
                 if (t >= ta.first) clock.bpm = ta.second;
+        }
+        if (! jumpAt.empty())   // [Claude 2026-10-29] --jump-at
+        {
+            if (! clock.tempoChanges) { clock.tempoChanges = true; clock.ppq = pos / rate * clock.bpm / 60.0; }
+            for (auto& ja : jumpAt)
+                if (ja.first >= 0 && t >= ja.first) { clock.ppq = ja.second; ja.first = -1; }
         }
         clock.sample = pos;
         proc->processBlock (view, midi);
