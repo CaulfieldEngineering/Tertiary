@@ -307,7 +307,7 @@ bool chooseFromComboBox (Rig& rig, juce::ComboBox& box, const juce::String& item
     if (! waitForMenu())
         return false;
     const bool chosen = chooseMenuItem (item);
-    pump (30);
+    waitFor ([&] { return box.getText() == item; }, 2000);   // the drop-down shows it once the choice has arrived
     rig.settle();
     return chosen;
 }

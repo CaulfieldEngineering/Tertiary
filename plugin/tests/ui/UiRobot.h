@@ -651,7 +651,16 @@ bool chooseMenuItem (const juce::String& title)
         // the pretend pointer rests on the menu, as it would when choosing, so the menu doesn't close itself
         if (auto* menuWindow = h->getComponent().getTopLevelComponent())
             setFakePointer (menuWindow->getScreenBounds().getCentre().toFloat());
+        const bool opensSubmenu = h->getActions().contains (juce::AccessibilityActionType::showMenu);
         const bool done = h->getActions().invoke (juce::AccessibilityActionType::press);
+        // an item (not a submenu): wait until the menu has closed and its result has been delivered, however slow the
+        // machine (a fixed wait was too short on CI's Intel Mac)
+        if (done && ! opensSubmenu)
+        {
+            for (int i = 0; i < 2000 && ! openMenus().isEmpty(); ++i)
+                pump (1);
+            pump (20);
+        }
         return done;
     }
     return false;
