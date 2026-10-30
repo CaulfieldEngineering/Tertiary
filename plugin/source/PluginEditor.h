@@ -110,21 +110,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         void paintContent(juce::Graphics& g);
         void setUiScale(float scale);
 
-        // [Claude 2026-10-30] RC1 bug (Joe, Cubase on his laptop): the window opened nearly full screen, black, with the UI
-        // at its size in the top left; choosing a size from the menu put it right. The host had answered the first
-        // resize request with another size, and nothing asked again. The window's size is now the UI's size, checked
-        // a few times a second: when the host's window differs (or the host sized the UI itself), it is asked again,
-        // the same way the menu does it. Not in the standalone, whose window is its own.
-        juce::Rectangle<int> wantedSize() const;
-        void keepWindowAtUiSize();
-        void requestHostSize();
-        struct SizeKeeper : juce::Timer
-        {
-            std::function<void()> onTick;
-            void timerCallback() override { if (onTick) onTick(); }
-        };
-        SizeKeeper sizeKeeper;
-        int sizeRequests { 0 };   // asked again without success; gives up after a few (a host that insists wins)
+        juce::Rectangle<int> wantedSize() const;   // [Claude 2026-10-30] the UI's size at the chosen scale
         static float loadUiScale();
         void saveUiScale();   // review renders only   // [Claude 2026-10-27] top left of the banner
 

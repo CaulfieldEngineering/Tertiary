@@ -46,6 +46,11 @@
 #include "PresetManager.h"
 #include "PretendServer.h"
 #include "ui/UiRobot.h"   // the generic part (mouse, keys, menus, checks, crash and hang reports); one .cpp only
+#if __has_include("build_id.h")
+ #include "build_id.h"   // [Claude 2026-10-30] WLA_BUILD_ID, to check what the About window copies
+#else
+ #define WLA_BUILD_ID "unknown"
+#endif
 
 //==============================================================================
 // Private state the checks read, through the friend declared in each class (source/TestHooks.h)
@@ -395,13 +400,13 @@ void windowAtEachScale()
 // the UI at its size in the corner. The editor in a stand-in for the plug-in wrapper (as JUCE's VST3 wrapper holds
 // it), opened with the host's scale already set (1.25 and 1.5, as a DAW on a scaled screen does), at each window
 // size: the editor is exactly the layout times the chosen size, the layout fills it, and the wrapper is that times
-// the host's scale. Then the host gives the wrapper another size twice: once with the editor (as JUCE's wrapper
-// does after a host resize) and once without (what Cubase's answer did in RC1): both go back. The real wrapper
-// and a Cubase-like host are HostTest section 10.
+// the host's scale. Then the host gives the window another size (JUCE's wrapper passes it to the editor): the layout
+// still fills it, and the size chosen from the menu is neither changed nor remembered as the host's (RC1 remembered
+// it, so every later window opened at the host's size). The real wrapper is HostTest section 10. (Joe's full-screen
+// window itself was a maximized-window record in his Cubase preferences, left by a local resizable build.)
 struct WrapperStandIn : juce::Component
 {
     juce::AudioProcessorEditor* editor = nullptr;
-    bool hostOnly = false;   // the next size is the host's alone: the editor is not resized (RC1 in Cubase)
     bool resizingChild = false;
 
     void fitEditor()   { setSize (getLocalArea (editor, editor->getLocalBounds()).getSmallestIntegerContainer().getWidth(),
@@ -409,7 +414,7 @@ struct WrapperStandIn : juce::Component
     void childBoundsChanged (juce::Component*) override   { if (! resizingChild) fitEditor(); }   // asks the host, which says yes
     void resized() override
     {
-        if (editor == nullptr || hostOnly) return;
+        if (editor == nullptr) return;
         const juce::ScopedValueSetter<bool> s (resizingChild, true);
         editor->setBounds (editor->getLocalArea (this, getLocalBounds()).withZeroOrigin());
     }
@@ -445,7 +450,7 @@ void hostScaleFirstOpen()
             };
             auto wrapperRight = [&] { return closeTo (wrapper.getWidth(), w * hostScale, 3.0) && closeTo (wrapper.getHeight(), h * hostScale, 3.0); };
 
-            // within 2 pixels: JUCE's wrapper rounds the editor's size at a fractional host scale (see keepWindowAtUiSize)
+            // within 2 pixels: JUCE's wrapper rounds the editor's size at a fractional host scale
             auto editorRight = [&] { return std::abs (ed.getWidth() - w) <= 2 && std::abs (ed.getHeight() - h) <= 2; };
             check (editorRight(), "opens at the layout times the chosen size: " + at,
                    sizeOf (ed), "expected " + juce::String (w) + " x " + juce::String (h));
@@ -453,21 +458,14 @@ void hostScaleFirstOpen()
 
             // the host sizes the window and JUCE's wrapper passes it on to the editor
             wrapper.setSize (wrapper.getWidth() * 2, wrapper.getHeight() * 2);
-            pump (700);
-            check (editorRight() && wrapperRight() && fills(),
-                   "sized otherwise by the host (editor too): back to the chosen size, filled: " + at, sizeOf (ed) + ", window " + sizeOf (wrapper));
-
-            // the host's answer sizes the window only (RC1 in Cubase: black around the UI)
-            wrapper.hostOnly = true;
-            wrapper.setSize (1920, 1008);
-            wrapper.hostOnly = false;
-            pump (700);
-            check (editorRight() && wrapperRight() && fills(),
-                   "the host's window alone made bigger: asked again, back to the UI's size: " + at, sizeOf (ed) + ", window " + sizeOf (wrapper));
+            pump (100);
+            check (fills(), "sized otherwise by the host: the layout fills the window: " + at, sizeOf (ed) + ", window " + sizeOf (wrapper));
 
             check (closeTo (A::uiScale (ed), scale, 0.001), "the chosen size is unchanged: " + at, fmt (A::uiScale (ed), 3));
             rig.close();
             check (closeTo (savedUiScale(), scale, 0.001), "and that is what is remembered: " + at, fmt (savedUiScale(), 3));
+            auto& again = rig.open (0.f);   // 0: what was remembered
+            check (again.getWidth() == w && again.getHeight() == h, "opened again: the chosen size, not the host's: " + at, sizeOf (again));
         }
 }
 
@@ -1085,6 +1083,19 @@ void aboutBuildId()
         const auto line = areaInEditor (ed, about).withHeight (juce::roundToInt (70 * scale));
         check (differingPixels (plain, shown, line) > 20, "and the version line is drawn differently" + at, juce::String (differingPixels (plain, shown, line)) + " pixels changed");
         snapshot (ed, "about_build_id_" + juce::String (juce::roundToInt (scale * 100)));
+        // [Claude 2026-10-30] a plain click on the build line copies the build id (plain text) and says so briefly
+        TestHooks::copied() = {};
+        const auto beforeCopy = picture (ed);
+        mouse.click (about, version);
+        rig.settle();
+        check (TestHooks::copied() == juce::String (juce::CharPointer_UTF8 (WLA_BUILD_ID)) && TestHooks::copied().isNotEmpty(),
+               "a click on the build line copies the build id" + at, TestHooks::copied());
+        check (A::buildIdShown (about), "and the build line stays shown" + at);
+        check (differingPixels (beforeCopy, picture (ed), line) > 10, "\"Copied\" shows in its place" + at);
+        pump (1400);
+        rig.settle();
+        check (differingPixels (shown, picture (ed), line) < 10, "then the build line comes back" + at,
+               juce::String (differingPixels (shown, picture (ed), line)) + " pixels differ from before");
         mouse.keys = juce::ModifierKeys (juce::ModifierKeys::ctrlModifier | juce::ModifierKeys::shiftModifier);
         mouse.click (about, version);
         mouse.keys = {};
@@ -1470,7 +1481,7 @@ std::vector<Scenario> scenarios()
         { "U-13", "R-06 T2-06", "Opened with Sync off: the rate slider works at once", freshLoadSyncOff },
         { "U-14", "R-04", "Free rate changes don't scramble the scope", freeRateScope },
         { "U-15", "R-08 T2-09", "Synced LFOs land on the beat after a jump", relockAfterJump },
-        { "U-16", "R-03 T2-12 T1-02", "Ctrl+Shift+click the About version shows the build", aboutBuildId },
+        { "U-16", "R-03 T2-12 T1-02", "Ctrl+Shift+click the About version shows the build; a click copies it", aboutBuildId },
         { "U-17", "T2-12", "About window open and close; links don't crash or open anything", aboutWindowAndLinks },
         { "U-18", "T2-12 T2-13", "The licence box with a pretend server; DEMO tag", licenceBox },
         { "U-19", "T2-13", "Demo mode bypass gap", demoBypass },
@@ -1478,7 +1489,7 @@ std::vector<Scenario> scenarios()
         { "U-21", "T2-11", "User presets: save, rename, reload, delete (temp folder)", userPresets },
         { "U-22", "T2-02", "Open and close the window many times: no leak, no use after close", openCloseMany },
         { "U-23", "R-01 T1-09", "No ghost strip on the crossover floor", crossoverFloor },
-        { "U-24", "R-18 T2-04", "Opened at the host's scale (1.25, 1.5): the window is the layout times the chosen size, and stays so", hostScaleFirstOpen },   // [Claude 2026-10-30]
+        { "U-24", "R-18 T2-04", "Opened at the host's scale (1.25, 1.5): the layout times the chosen size; a host's size is not remembered", hostScaleFirstOpen },   // [Claude 2026-10-30]
     };
 }
 

@@ -39,6 +39,8 @@ public:
     void mouseUp(const juce::MouseEvent& event) override;   // [Claude 2026-10-29] Ctrl+Shift+click the version: the build number
     bool mShowBuildId { false };
     juce::Time mLastBuildIdClick;   // [Claude 2026-10-29] the same click reaches mouseUp twice (see mouseUp)
+    juce::uint32 mCopiedAt { 0 };   // [Claude 2026-10-30] when the build line was last copied (shows "Copied" briefly)
+    static constexpr juce::uint32 copiedHintMs = 1200;
 
 	/* Tells this class whether or not the app is in Demo Version */
     void setDemoState(bool demoState){mIsDemoVersion = demoState;}
