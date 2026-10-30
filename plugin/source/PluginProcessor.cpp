@@ -927,12 +927,18 @@ namespace audio_plugin {
       playHead = this->getPlayHead();
 
       // [Claude 2026-10-30] R-15: getCurrentPosition() fills a missing beat position in as 0, and keeps the last answer
-      // when the host gives none, so the re-lock only trusts a beat position the host really gave this block
+      // when the host gives none, so the re-lock only trusts a beat position the host really gave this block. The host
+      // is asked ONCE; JUCE's own conversion then runs on that same answer (a host could answer two calls differently).
       hostPpqValid = false;
       if (playHead != nullptr)
         if (const auto position = playHead->getPosition()) {
+          struct SameAnswer : juce::AudioPlayHead {   // on the stack, no allocation
+            juce::Optional<PositionInfo> answer;
+            juce::Optional<PositionInfo> getPosition() const override { return answer; }
+          } same;
+          same.answer = position;
           hostPpqValid = position->getPpqPosition().hasValue();
-          playHead->getCurrentPosition(hostInfo);
+          same.getCurrentPosition(hostInfo);
         }
 
       playPosition = hostInfo.ppqPosition;  // [Claude 2026-10-27] Read after the update, not from the previous block

@@ -516,6 +516,23 @@ struct NoPpqPlayHead : juce::AudioPlayHead
     }
 };
 
+/* [Claude 2026-10-30] R-15: a host whose answers alternate: odd calls give the real beat position, even calls none.
+   The processor must use one answer per block (it asked twice: checked the first, used the second, a 0) */
+struct AlternatingPlayHead : juce::AudioPlayHead
+{
+    mutable int calls = 0;
+    mutable juce::int64 samples = 0;   // advanced by the test after each block
+    juce::Optional<PositionInfo> getPosition() const override
+    {
+        PositionInfo p;
+        p.setBpm (120);
+        p.setIsPlaying (true);
+        if ((calls++ % 2) == 0)
+            p.setPpqPosition ((double) samples / 48000.0 * 2.0);
+        return p;
+    }
+};
+
 static void setParam (juce::AudioProcessor& p, const juce::String& id, float value)
 {
     for (auto* prm : p.getParameters())
@@ -678,6 +695,32 @@ struct ProcessorTests : juce::UnitTest
             const auto periodFailed = measurePeriod (out, 4800);
             logMessage ("then the position query fails: " + juce::String (periodFailed) + " samples (expect 24000)");
             expectWithinAbsoluteError (periodFailed, 24000.0, 240.0);
+            p.setPlayHead (nullptr);
+        }
+
+        beginTest ("R-15: a host that answers two position queries differently: one answer per block is used");
+        {
+            audio_plugin::AudioPluginAudioProcessor p;
+            AlternatingPlayHead head;
+            p.setPlayHead (&head);
+            setUpForPeriod (p, true);
+            p.setRateAndBufferSizeDetails (48000, 128);
+            p.prepareToPlay (48000, 128);
+            std::vector<float> out;
+            juce::AudioBuffer<float> buffer (2, 128);
+            juce::MidiBuffer midi;
+            for (int pos = 0; pos < 48000 * 3; pos += 128)
+            {
+                for (int c = 0; c < 2; ++c)
+                    juce::FloatVectorOperations::fill (buffer.getWritePointer (c), 0.5f, 128);
+                head.calls = 0;   // each block's first query is the one with the beat position
+                p.processBlock (buffer, midi);
+                head.samples += 128;
+                out.insert (out.end(), buffer.getReadPointer (0), buffer.getReadPointer (0) + 128);
+            }
+            const auto period = measurePeriod (out, 4800);
+            logMessage ("1/4 note at 120 bpm, a beat position in the first answer only: " + juce::String (period) + " samples (expect 24000)");
+            expectWithinAbsoluteError (period, 24000.0, 240.0);
             p.setPlayHead (nullptr);
         }
 
