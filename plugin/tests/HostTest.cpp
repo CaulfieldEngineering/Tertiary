@@ -21,6 +21,8 @@
                   --write-session <file>   save a session (and its values, .txt) from the loaded plugin
                   --describe          print the plug-in's description as XML  [Claude 2026-10-30]
         HostTest --write-input <file.wav>               the golden renders' input, for the REAPER test
+        HostTest --write-reaper-input <file.wav>        the same input with 0.5 s of silence first  [Codex 2026-10-30]
+        HostTest --vst3 <path> | --au --write-reaper-reference <file.wav>   matched playing host clock and input
         HostTest --live-license <key> <email>           [Claude 2026-10-30] the licence routes against the REAL server,
                                                         with a test key; leaves the key with nothing activated
 
@@ -332,6 +334,70 @@ struct Clock : juce::AudioPlayHead
         return p;
     }
 };
+
+// [Codex 2026-10-30] REAPER processes stopped audio before an offline render, while the old golden starts a
+// fresh plugin with only 256 silent samples. Its 50 ms gain ramps and free-running LFO phase are therefore
+// different. This separate fixture supplies the same playing 120 BPM timeline to both hosts, with 0.5 s of
+// silence to settle the gain ramps and transport's 10 ms phase fade before the original signal starts.
+// Keep the original input/golden paths unchanged: they remain the independent cross-platform DSP check.
+juce::AudioBuffer<float> reaperInput()
+{
+    constexpr int leadSamples = 24000;
+    auto signal = testSignal(48000, 2);
+    juce::AudioBuffer<float> input(2, leadSamples + signal.getNumSamples());
+    input.clear();
+    for (int channel = 0; channel < 2; ++channel)
+        input.copyFrom(channel, leadSamples, signal, channel, 0, signal.getNumSamples());
+    return input;
+}
+
+// [Codex 2026-10-30] Share Clock's sample counter and tempo without changing the stopped clock used by the
+// existing tests. REAPER's beat position starts at zero and advances with every processed block.
+struct ReaperClock : Clock
+{
+    juce::Optional<PositionInfo> getPosition() const override
+    {
+        auto position = *Clock::getPosition();
+        position.setIsPlaying(true);
+        position.setTimeInSeconds(sample / rate);
+        position.setPpqPosition(sample / rate * bpm / 60.0);
+        return position;
+    }
+};
+
+// [Codex 2026-10-30] Write both REAPER fixture files as stereo 48 kHz float WAVs, reporting I/O failures.
+bool writeReaperWav(const juce::File& file, const juce::AudioBuffer<float>& audio)
+{
+    if (file.getParentDirectory().createDirectory().failed() || ! file.deleteFile())
+    {
+        report("FAIL", "write REAPER fixture", "cannot replace " + file.getFullPathName());
+        return false;
+    }
+    juce::WavAudioFormat wav;
+    std::unique_ptr<juce::AudioFormatWriter> writer(wav.createWriterFor(new juce::FileOutputStream(file), 48000, 2, 32, {}, 0));
+    if (writer == nullptr || ! writer->writeFromAudioSampleBuffer(audio, 0, audio.getNumSamples()))
+    {
+        report("FAIL", "write REAPER fixture", file.getFullPathName());
+        return false;
+    }
+    std::cout << "wrote " << file.getFullPathName() << " (48000 Hz, stereo, " << audio.getNumSamples() << " frames)" << std::endl;
+    return true;
+}
+
+// [Codex 2026-10-30] Reference through the loaded binary, not a replacement Mac-specific golden.
+int writeReaperReference(const juce::File& file)
+{
+    auto plugin = create(48000, 512);
+    if (plugin == nullptr) return 1;
+    ReaperClock clock;
+    plugin->setPlayHead(&clock);
+    plugin->setNonRealtime(true);
+    auto output = render(*plugin, reaperInput(), { 512 }, [&](juce::AudioPluginInstance&, int position) {
+        clock.sample = position;
+    });
+    plugin->setPlayHead(nullptr);
+    return writeReaperWav(file, output) ? 0 : 1;
+}
 
 //==============================================================================
 // 1. Load, prepare, process
@@ -1347,6 +1413,146 @@ int liveLicenseCheck(const juce::String& key, const juce::String& email)
     return failures == 0 ? 0 : 1;
 }
 
+// [Codex 2026-10-30] Reused section 11 from fix-instance-isolation for the release sequence.
+//==============================================================================
+// 11. Two instances are independent  [Claude 2026-10-30]
+//==============================================================================
+/* Joe, RC1b in Cubase: "It looks like automation is happening on my 2nd instance of Tertiary ... all of the
+   automation is assigned to the test track." Two copies in one host, both windows open, as on two tracks: A is
+   automated, changed by program changes (presets), given a session, and run past the demo's 50 s; B must not move
+   at any time. A listener on B catches a change even if it is put back later. */
+struct ChangeSpy : juce::AudioProcessorParameter::Listener
+{
+    juce::StringArray changed;
+    juce::CriticalSection lock;
+    void parameterValueChanged(int index, float value) override
+    {
+        const juce::ScopedLock sl(lock);
+        changed.addIfNotAlreadyThere(juce::String(index) + "=" + juce::String(value, 4));
+    }
+    void parameterGestureChanged(int, bool) override {}
+    int count() { const juce::ScopedLock sl(lock); return changed.size(); }
+    juce::String first() { const juce::ScopedLock sl(lock); return changed.isEmpty() ? juce::String() : changed[0]; }
+};
+
+std::vector<float> values(juce::AudioPluginInstance& p)
+{
+    std::vector<float> v;
+    for (auto* prm : p.getParameters()) v.push_back(prm->getValue());
+    return v;
+}
+
+juce::String differences(juce::AudioPluginInstance& p, const std::vector<float>& before)
+{
+    juce::StringArray out;
+    const auto now = values(p);
+    for (size_t i = 0; i < now.size() && i < before.size(); ++i)
+        if (std::abs(now[i] - before[i]) > 1.0e-6f)
+            out.add(p.getParameters()[(int) i]->getName(64) + " " + juce::String(before[i], 4) + " -> " + juce::String(now[i], 4));
+    return out.isEmpty() ? juce::String("none") : out.joinIntoString(", ");
+}
+
+void section11()
+{
+    const double rate = 48000;
+    const int block = 512;
+    auto a = create(rate, block);
+    auto b = create(rate, block);
+    if (a == nullptr || b == nullptr) return;
+
+    // B: something other than the defaults, set by hand (as Joe did), then left alone
+    setNorm(*b, "Depth Low Band", 0.25f);
+    setNorm(*b, "Rate Low Band", rateNorm(3.0f));
+    setNorm(*b, "Sync to Host Low Band", 0.0f);
+    setNorm(*b, "Low-Mid Crossover Freq", 0.5f);
+
+    std::unique_ptr<juce::AudioProcessorEditor> editorA(a->createEditorIfNeeded()), editorB(b->createEditorIfNeeded());
+    for (auto* e : { editorA.get(), editorB.get() })
+        if (e != nullptr) { e->addToDesktop(0); e->setTopLeftPosition(40, 40); e->setVisible(true); }
+    check(editorA != nullptr && editorB != nullptr, "11 both windows open");
+
+    juce::AudioBuffer<float> io(2, block);
+    juce::MidiBuffer midi;
+    juce::Random rnd(11);
+    auto runBlocks = [&](int n, std::function<void(int)> beforeA) {
+        for (int k = 0; k < n; ++k)
+        {
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < block; ++i) io.setSample(c, i, 0.1f * (rnd.nextFloat() * 2.f - 1.f));
+            if (beforeA) beforeA(k);
+            a->processBlock(io, midi);
+            b->processBlock(io, midi);
+            if (k % 8 == 0) juce::MessageManager::getInstance()->runDispatchLoopUntil(1);
+        }
+    };
+    runBlocks(32, {});
+    pump(300);
+
+    const auto start = values(*b);
+    ChangeSpy spy;
+    for (auto* prm : b->getParameters()) prm->addListener(&spy);
+
+    // 1. A automated: every automatable parameter, a new value each block, for 12 s of audio
+    auto& paramsA = a->getParameters();
+    runBlocks((int) (12 * rate / block), [&](int) {
+        for (int j = 0; j < 4; ++j)
+            if (auto* prm = paramsA[rnd.nextInt(paramsA.size())]; prm->isAutomatable())
+                prm->setValueNotifyingHost(rnd.nextFloat());
+    });
+    if (std::getenv("WLA_HOSTTEST_11_SELFTEST") != nullptr)   // proves the check can fail: B is moved on purpose
+        setNorm(*b, "Depth Low Band", 0.9f);
+    pump(500);
+    check(differences(*b, start) == "none" && spy.count() == 0, "11 automating A leaves B alone",
+          "B changed: " + differences(*b, start) + (spy.count() ? ", listener saw " + spy.first() : juce::String()));
+
+    // 2. A's program list (presets), each one, as a host's program change does
+    for (int i = 0; i < a->getNumPrograms(); ++i)
+    {
+        a->setCurrentProgram(i);
+        runBlocks(8, {});
+    }
+    pump(500);
+    check(differences(*b, start) == "none" && spy.count() == 0, "11 loading every preset on A leaves B alone",
+          juce::String(a->getNumPrograms()) + " presets; B changed: " + differences(*b, start));
+
+    // 3. A given a session (as a project load or undo does)
+    {
+        auto c = create(rate, block);
+        for (auto* prm : c->getParameters()) if (prm->isAutomatable()) prm->setValueNotifyingHost(rnd.nextFloat());
+        juce::MemoryBlock state;
+        c->getStateInformation(state);
+        a->setStateInformation(state.getData(), (int) state.getSize());
+        runBlocks(16, {});
+        pump(500);
+    }
+    check(differences(*b, start) == "none" && spy.count() == 0, "11 a session loaded into A leaves B alone",
+          "B changed: " + differences(*b, start));
+
+    // 4. Over time: 70 s of audio on both (past the demo's 50 s on and into its gap), windows open throughout
+    runBlocks((int) (70 * rate / block), [&](int k) {
+        if (k % 64 == 0)
+            if (auto* prm = paramsA[rnd.nextInt(paramsA.size())]; prm->isAutomatable())
+                prm->setValueNotifyingHost(rnd.nextFloat());
+    });
+    pump(1500);
+    check(differences(*b, start) == "none" && spy.count() == 0, "11 over 70 s (demo on and off) B stays as set",
+          "B changed: " + differences(*b, start) + (spy.count() ? ", listener saw " + spy.first() : juce::String()));
+
+    // 5. And the other way: B changed by hand still sticks while A is automated
+    setNorm(*b, "Depth Low Band", 0.6f);
+    runBlocks(64, {});
+    const auto afterHand = values(*b);
+    runBlocks((int) (4 * rate / block), [&](int) {
+        if (auto* prm = paramsA[rnd.nextInt(paramsA.size())]; prm->isAutomatable()) prm->setValueNotifyingHost(rnd.nextFloat());
+    });
+    pump(500);
+    check(differences(*b, afterHand) == "none", "11 a change made by hand on B sticks", "B changed: " + differences(*b, afterHand));
+
+    for (auto* prm : b->getParameters()) prm->removeListener(&spy);
+    editorA.reset();
+    editorB.reset();
+}
+
 } // namespace
 
 //==============================================================================
@@ -1359,6 +1565,18 @@ int main(int argc, char* argv[])
     juce::ScopedJuceInitialiser_GUI init;
     juce::StringArray args;
     for (int i = 1; i < argc; ++i) args.add(argv[i]);
+
+    // [Codex 2026-10-30] Padded input for the matched REAPER fixture; no plugin is needed to write it.
+    if (args.contains("--write-reaper-input"))
+    {
+        const int i = args.indexOf("--write-reaper-input");
+        if (i + 1 >= args.size())
+        {
+            std::cout << "usage: HostTest --write-reaper-input <file.wav>" << std::endl;
+            return 2;
+        }
+        return writeReaperWav(juce::File::getCurrentWorkingDirectory().getChildFile(args[i + 1]), reaperInput()) ? 0 : 1;
+    }
 
     // The golden renders' input as a WAV, for the REAPER test (tests/reaper)
     if (args.contains("--write-input"))
@@ -1401,6 +1619,18 @@ int main(int argc, char* argv[])
     report("PASS", "load " + description.pluginFormatName + " " + description.name + " " + description.version,
            description.fileOrIdentifier);
 
+    // [Codex 2026-10-30] Accept either --vst3 <path> or --au; use exactly that binary for the reference.
+    if (args.contains("--write-reaper-reference"))
+    {
+        const int i = args.indexOf("--write-reaper-reference");
+        if (i + 1 >= args.size())
+        {
+            std::cout << "usage: HostTest --vst3 <path> | --au --write-reaper-reference <file.wav>" << std::endl;
+            return 2;
+        }
+        return writeReaperReference(juce::File::getCurrentWorkingDirectory().getChildFile(args[i + 1]));
+    }
+
     auto option = [&](const juce::String& name, const juce::String& fallback) {
         const int i = args.indexOf(name);
         return i >= 0 && i + 1 < args.size() ? args[i + 1] : fallback;
@@ -1440,6 +1670,7 @@ int main(int argc, char* argv[])
         run(7, section7);
         run(9, [&] { section9(golden); });
         run(10, section10);   // [Claude 2026-10-30]
+        run(11, section11);   // [Codex 2026-10-30] independent instances
     }
     run(8, [&] { section8(golden, makeGolden); });
 
