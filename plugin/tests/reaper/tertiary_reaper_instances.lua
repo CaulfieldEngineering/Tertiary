@@ -74,6 +74,7 @@ local function play_and_measure()
     local lastAudio, lastMedia = audio0, media0
     local audioEvents, mediaEvents, notPlaying, polls = 0, 0, 0, 0
     local tRef, posRef = nil, nil
+    local xrunTimes = {}
     reaper.SetEditCurPos(0, false, false)
     reaper.OnPlayButton()
     local t0 = reaper.time_precise()
@@ -83,8 +84,8 @@ local function play_and_measure()
         local a, m = reaper.GetUnderrunTime()
         polls = polls + 1
         -- Each new timestamp is at least one xrun since the previous poll (about 30 per second).
-        if a ~= lastAudio then audioEvents = audioEvents + 1 lastAudio = a end
-        if m ~= lastMedia then mediaEvents = mediaEvents + 1 lastMedia = m end
+        if a ~= lastAudio then audioEvents = audioEvents + 1 lastAudio = a xrunTimes[#xrunTimes + 1] = string.format('audio@%.2f', now - t0) end
+        if m ~= lastMedia then mediaEvents = mediaEvents + 1 lastMedia = m xrunTimes[#xrunTimes + 1] = string.format('media@%.2f', now - t0) end
         if reaper.GetPlayState() & 1 ~= 1 then notPlaying = notPlaying + 1 end
         -- Lost time: a device that cannot keep up falls behind the clock (REAPER's dummy device does this
         -- instead of flagging an xrun). Reference taken 1 s in, after playback has settled.
@@ -96,7 +97,7 @@ local function play_and_measure()
         say("play-end")
         finish({ count = count, loaded = loaded, fx = want, idents = table.concat(identList, " | "),
                  seconds = now - t0, play_position = position, lost_seconds = lost, polls = polls, not_playing_polls = notPlaying,
-                 audio_xruns = audioEvents, media_xruns = mediaEvents,
+                 audio_xruns = audioEvents, media_xruns = mediaEvents, xrun_times = table.concat(xrunTimes, ' '),
                  device_mode = mode, device_in = idev, device_out = odev,
                  srate = ok_srate and srate or "unknown", block = ok_bsize and bsize or "unknown",
                  anticipative = reaper.SNM_GetIntConfigVar and tostring(reaper.SNM_GetIntConfigVar("workrender", -1)) or "default",

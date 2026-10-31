@@ -79,9 +79,12 @@ def main():
         stale.unlink(missing_ok=True)
     subprocess.run([str(Path(args.hosttest).resolve()), '--write-reaper-input', work / 'input.wav'], check=True)
 
-    expected = Path(args.expected_plugin).resolve()
+    # --expected-plugin none: a diagnostic control run with another plug-in (for example "VST:ReaEQ (Cockos)");
+    # its binary is not checked and its result is never a Tertiary pass.
+    control = args.expected_plugin == 'none'
+    expected = None if control else Path(args.expected_plugin).resolve()
     sub = 'x86_64-win' if sys.platform == 'win32' else 'MacOS'
-    binary = next(x for x in (expected / 'Contents' / sub).iterdir() if x.is_file()) if expected.is_dir() else expected
+    binary = None if control else next(x for x in (expected / 'Contents' / sub).iterdir() if x.is_file()) if expected.is_dir() else expected
     digest = lambda x: hashlib.sha256(Path(x).read_bytes()).hexdigest()
 
     env = dict(os.environ, TERTIARY_TEST_DIR=str(work), TERTIARY_PREFIX=args.prefix, TERTIARY_FX=args.fx,
@@ -105,6 +108,8 @@ def main():
         while proc.poll() is None and time.monotonic() < deadline:
             text = log_path.read_text(errors='replace') if log_path.exists() else ''
             ready = ui.poll(finished='instances-done' in text) if ui else True
+            if proof is None and control and 'loaded Tertiary as FX' in text:
+                proof = dict(control=args.fx)
             if proof is None and 'loaded Tertiary as FX' in text:
                 for module in (Path(x) for x in mapped(proc.pid) if Path(x).name.casefold() == binary.name.casefold()):
                     if module.is_file() and digest(module) == digest(binary) and (
@@ -134,7 +139,7 @@ def main():
     print(log_path.read_text(errors='replace') if log_path.exists() else 'no REAPER log', flush=True)
     data = json.loads(result_path.read_text(encoding='utf-8')) if result_path.exists() else {}
     fmt = args.fx.split(':')[0].lower()
-    check(f'{fmt}-binary', proof is not None, 'REAPER loaded the tested binary: ' + json.dumps(proof))
+    check(f'{fmt}-binary', proof is not None and not control, 'REAPER loaded the tested binary: ' + json.dumps(proof))
     check(f'{fmt}-instances', data.get('loaded') == args.count == data.get('count'),
           f"{data.get('loaded')} of {args.count} Tertiary instances online ({data.get('idents', '')})")
     check(f'{fmt}-device', str(data.get('srate')) in ('48000', '48000.0') and str(data.get('block')) == '128',
@@ -159,7 +164,7 @@ def main():
     # REAPER's render-ahead buffer and shows as a media xrun while the device callback itself never overruns:
     # 600 instances on WASAPI gave 0 audio and 21 media xruns. So PASS needs zero of each.
     check(f'{fmt}-no-dropouts', data.get('audio_xruns') == 0 and data.get('media_xruns') == 0,
-          f"audio xruns {data.get('audio_xruns')}, media xruns {data.get('media_xruns')} (both must be 0); "
+          f"audio xruns {data.get('audio_xruns')}, media xruns {data.get('media_xruns')} (both must be 0) {data.get('xrun_times', '')}; "
           f"REAPER CPU {('%.1f s, %.0f%% of one core' % (used, 100 * used / max(data.get('seconds', 1), 1))) if used is not None else 'not measured'}")
     check(f'{fmt}-quit', quit_ok, 'REAPER quit normally' if quit_ok else 'REAPER did not quit by itself in time')
     Path(args.out).write_text(json.dumps(dict(checks=checks, measurements=data, cpu_seconds=used, proof=proof), indent=2) + '\n',
