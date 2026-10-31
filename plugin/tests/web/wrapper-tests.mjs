@@ -114,7 +114,10 @@ export async function testPlayer({ page, check }) {
     await playingReady();
     assert.equal(await page.locator('#btn-play').getAttribute('aria-label'), 'Pause');
     const resumed = await read();
-    assert.ok(resumed.time >= paused.offset && resumed.time < paused.offset + 1,
+    // [Claude 2026-10-31] W-25 failed once on 2026-10-31 with resumed 1.059410430839002 vs paused 1.0594104308390022:
+    // the same instant, 2e-16 s apart from floating-point rounding. Compare to 1 microsecond; a real lost
+    // offset is a whole buffer or more, and the upper bound (within 1 s) is unchanged.
+    assert.ok(resumed.time >= paused.offset - 1e-6 && resumed.time < paused.offset + 1,
       `Resume did not preserve the paused offset: ${JSON.stringify({ paused, resumed })}`);
     await page.waitForTimeout(250);
     const audio = await audioSummary(page, 500);
