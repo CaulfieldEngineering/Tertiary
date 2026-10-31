@@ -44,6 +44,22 @@ print('Chooser buttons:', [b.window_text() for b in buttons], flush=True)
 save = next((b for b in buttons if b.window_text().replace('&', '') == 'Save'), None)
 if save is None:
     raise RuntimeError('Expected the native Save button; nothing confirmed')
-save.click()
-chooser.wait_not('visible', timeout=20)
+# [Claude 2026-10-31] W-08 failed once (repeat run, 14:18): the filename read back correctly but the chooser
+# ignored the Save click and stayed open for 20 s. A dropped click is retried, bounded: Save again, then Enter
+# in the filename field, each followed by a 10 s wait. The filename is re-read before every retry and the
+# export itself is still verified by the harness afterwards; nothing else changes.
+from pywinauto.timings import TimeoutError as WaitTimeout
+for attempt, confirm in enumerate((lambda: save.click(), lambda: save.click(),
+                                   lambda: (edit.set_focus(), edit.type_keys('{ENTER}')))):
+    if attempt and edit.window_text() != str(destination):
+        raise RuntimeError('The export filename changed before retrying Save; nothing confirmed')
+    confirm()
+    try:
+        chooser.wait_not('visible', timeout=10)
+        break
+    except WaitTimeout:
+        others = [w.window_text() for w in Desktop(backend='win32').windows(process=pid) if w.is_visible()]
+        print(f'Save attempt {attempt + 1} left the chooser open; visible windows: {others}', flush=True)
+else:
+    raise RuntimeError('The chooser stayed open after three Save attempts')
 print('PASS export filename accepted: ' + str(destination), flush=True)
