@@ -448,10 +448,12 @@ static int runInstances (int count, int block, double seconds)
     double mean = 0; for (auto t : audio.blockUs) mean += t; mean /= juce::jmax<size_t> (1, audio.blockUs.size());
     const double p99 = percentile (audio.blockUs, 0.99);
     const double mx = audio.blockUs.empty() ? 0.0 : *std::max_element (audio.blockUs.begin(), audio.blockUs.end());
+    const double first = audio.blockUs.empty() ? 0.0 : audio.blockUs.front();
     std::cout << "T2-03 " << count << " instances on one real-time thread, 48 kHz / " << block << " (" << juce::String (blockUs, 0) << " us per block), "
               << juce::String (wall, 0) << " s\n"
               << "  blocks " << audio.blocks.load() << " of " << (juce::int64) (wall * rate / block) << " due; dropouts (finished after the deadline) "
               << audio.overruns.load() << ", whole periods missed " << audio.missedPeriods.load() << "\n"
+              << "  first block: " << juce::String (first, 1) << " us\n"
               << "  all instances per block: mean " << juce::String (mean, 1) << " us (" << juce::String (100.0 * mean / blockUs, 1)
               << "% of the block), p99 " << juce::String (p99, 1) << " us (" << juce::String (100.0 * p99 / blockUs, 1)
               << "%), max " << juce::String (mx, 1) << " us (" << juce::String (100.0 * mx / blockUs, 1) << "%)\n"
@@ -470,6 +472,7 @@ static int runInstances (int count, int block, double seconds)
     o->setProperty ("blocks", audio.blocks.load()); o->setProperty ("dropouts", audio.overruns.load());
     o->setProperty ("missedPeriods", audio.missedPeriods.load()); o->setProperty ("blocksDue", (juce::int64) (wall * rate / block));
     o->setProperty ("meanUs", mean); o->setProperty ("p99Us", p99); o->setProperty ("maxUs", mx);
+    o->setProperty ("firstUs", first);
     o->setProperty ("meanPctBlock", 100.0 * mean / blockUs); o->setProperty ("p99PctBlock", 100.0 * p99 / blockUs);
     o->setProperty ("maxPctBlock", 100.0 * mx / blockUs);
     o->setProperty ("mbForAll", mbLoaded - mb0);
