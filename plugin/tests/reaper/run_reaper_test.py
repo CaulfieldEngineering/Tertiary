@@ -18,6 +18,10 @@ from pathlib import Path
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "regression"))
 from compare_renders import read_wav  # noqa: E402
+# [Codex 2026-10-30] Shared named-dialog watchdog; no product-code changes.
+if sys.platform == 'win32':
+    sys.path.insert(0, str(Path(HERE).parents[2] / 'tests' / 'lib'))
+    from reaper_windows import ReaperWindows
 
 DEFAULT_REAPER = {
     "win32": r"C:\Program Files\REAPER (x64)\reaper.exe",
@@ -100,8 +104,8 @@ def main():
         return 1
 
     env = dict(os.environ, TERTIARY_TEST_DIR=work, TERTIARY_PREFIX=args.prefix, TERTIARY_FX=args.fx,
-               WLA_VERIFY_MODULE='1' if args.expected_plugin else '',
-               WLA_DRIVER_QUIT='1' if sys.platform == 'win32' and args.expected_plugin else '')
+               WLA_VERIFY_MODULE='1' if args.expected_plugin or sys.platform == 'win32' else '',
+               WLA_DRIVER_QUIT='1' if sys.platform == 'win32' else '')
     command = [args.reaper]
     if args.reaper_config:
         command += ["-cfgfile", os.path.abspath(args.reaper_config)]
@@ -116,55 +120,20 @@ def main():
     start = time.time()
     # A short defer in the Lua script holds the loaded plugin while its mapped module is inspected.
     proof = None
-    proof_ready = None
     inspection_attempts = 0
     proc = subprocess.Popen(command, env=env, startupinfo=startup)
-    last_close = 0
-    window_state = None
-    about_seen = None
+    windows_ui = None
     host_failed = False
     try:
+        if sys.platform == 'win32':
+            windows_ui = ReaperWindows(proc.pid, work)
         deadline = time.monotonic() + 90
         while proc.poll() is None and time.monotonic() < deadline:
             log_path = Path(output('_log.txt'))
-            if sys.platform == 'win32':
-                # [Codex 2026-10-30] A fresh profile can show update/evaluation notices
-                # after the startup Lua has already rendered. Close only these named
-                # informational dialogs in OUR process; never touch purchase/activation.
-                from pywinauto import Desktop
-                import ctypes
-                windows = Desktop(backend='win32').windows(process=proc.pid)
-                state = [(w.window_text(), w.class_name(),
-                          [(b.window_text(), b.is_enabled()) for b in w.children(class_name='Button')]) for w in windows]
-                if state != window_state:
-                    with Path(work, 'windows.log').open('a', encoding='utf-8') as ui_log:
-                        ui_log.write(json.dumps(state) + '\n')
-                    window_state = state
-                for window in windows:
-                    title = window.window_text()
-                    if title.startswith('About REAPER v'):
-                        if about_seen is None:
-                            window.set_focus()  # Activate the standard dialog before waiting for its countdown.
-                        about_seen = about_seen or time.monotonic()
-                        # Closing the informational About window is equivalent to its X.
-                        # Honour the evaluation countdown before doing so.
-                        if time.monotonic() - about_seen >= 8:
-                            ctypes.windll.user32.PostMessageW(window.handle, 0x0010, 0, 0)
-                    for button in window.children(class_name='Button'):
-                        label = button.window_text().replace('&', '').lower()
-                        allowed = (title == 'REAPER New Version Notification' and label == 'close') or (
-                            title.startswith('About REAPER v') and 'still evaluating' in label)
-                        if allowed and button.is_enabled():
-                            # Post BM_CLICK so an unresponsive modal cannot block the watchdog.
-                            ctypes.windll.user32.PostMessageW(button.handle, 0x00F5, 0, 0)
-                if (not any(w.window_text().startswith('About REAPER v') for w in windows)
-                        and time.monotonic() - last_close > 2 and log_path.exists()
-                        and ('saved ' + args.prefix + '_test.rpp') in log_path.read_text(errors='replace')):
-                    main = next((w for w in windows if w.class_name() == 'REAPERwnd'), None)
-                    if main:
-                        # Native File: Quit, retried after any startup informational dialog closes.
-                        ctypes.windll.user32.PostMessageW(main.handle, 0x0111, 40004, 0)
-                        last_close = time.monotonic()
+            # [Codex 2026-10-30] A fixed delay released rendering while About was
+            # still modal. Require its enabled Still Evaluating button and closure.
+            windows_ready = windows_ui.poll(finished=log_path.exists() and
+                ('saved ' + args.prefix + '_test.rpp') in log_path.read_text(errors='replace')) if windows_ui else True
             if args.expected_plugin and proof is None and log_path.exists() and 'loaded Tertiary as FX' in log_path.read_text(errors='replace'):
                 expected = Path(args.expected_plugin).resolve()
                 sub = 'x86_64-win' if sys.platform == 'win32' else 'MacOS'
@@ -190,7 +159,6 @@ def main():
                         same = same and module.resolve() == binary.resolve()
                     if same:
                         proof = dict(path=str(module), sha256=digest(module), expected=str(binary))
-                        proof_ready = time.monotonic() + (8 if sys.platform == 'win32' else 0)
                         Path(work, 'binary-proof.json').write_text(json.dumps(proof, indent=2), encoding='utf-8')
                         print('PASS  REAPER loaded tested binary: ' + json.dumps(proof), flush=True)
                         break
@@ -201,10 +169,9 @@ def main():
                 if proof is None:
                     Path(work, 'module-inspected').touch()
                     raise RuntimeError('REAPER did not map the requested build; mapped candidates: ' + repr(loaded))
-            # A fresh Windows profile's evaluation notice has a normal countdown.
-            # Let its event loop and the named Still Evaluating button finish before
-            # Lua renders/quits; quitting behind that startup modal can strand REAPER.
-            if proof is not None and time.monotonic() >= proof_ready and not Path(work, 'module-inspected').exists():
+            if (proof is not None or not args.expected_plugin) and windows_ready and not Path(work, 'module-inspected').exists():
+                if windows_ui:
+                    windows_ui.event('render-ready', detail='startup dialogs closed; binary inspection complete')
                 Path(work, 'module-inspected').touch()
             time.sleep(0.1)
         if proc.poll() is None:
@@ -213,14 +180,15 @@ def main():
         elif proc.returncode:
             print('FAIL  REAPER exited with code ' + str(proc.returncode), flush=True)
             host_failed = True
+        else:
+            print('PASS  REAPER native Quit exited zero in %.2f s' % (time.time() - start), flush=True)
     finally:
         if proc.poll() is None:
-            if sys.platform == 'win32':
-                from PIL import ImageGrab
+            if windows_ui:
                 try:
-                    ImageGrab.grab(all_screens=True).save(Path(work, 'reaper-timeout.png'))
-                except Exception:
-                    pass
+                    windows_ui.capture_timeout()
+                except Exception as error:
+                    print('REAPER timeout screenshot unavailable: ' + str(error), flush=True)
             proc.terminate()
             try:
                 proc.wait(timeout=10)
