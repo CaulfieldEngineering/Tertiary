@@ -21,6 +21,8 @@
                   --write-session <file>   save a session (and its values, .txt) from the loaded plugin
                   --describe          print the plug-in's description as XML  [Claude 2026-10-30]
         HostTest --write-input <file.wav>               the golden renders' input, for the REAPER test
+        HostTest --write-reaper-input <file.wav>        the same input with 0.5 s of silence first  [Codex 2026-10-30]
+        HostTest --vst3 <path> | --au --write-reaper-reference <file.wav>   matched playing host clock and input
         HostTest --live-license <key> <email>           [Claude 2026-10-30] the licence routes against the REAL server,
                                                         with a test key; leaves the key with nothing activated
 
@@ -332,6 +334,70 @@ struct Clock : juce::AudioPlayHead
         return p;
     }
 };
+
+// [Codex 2026-10-30] REAPER processes stopped audio before an offline render, while the old golden starts a
+// fresh plugin with only 256 silent samples. Its 50 ms gain ramps and free-running LFO phase are therefore
+// different. This separate fixture supplies the same playing 120 BPM timeline to both hosts, with 0.5 s of
+// silence to settle the gain ramps and transport's 10 ms phase fade before the original signal starts.
+// Keep the original input/golden paths unchanged: they remain the independent cross-platform DSP check.
+juce::AudioBuffer<float> reaperInput()
+{
+    constexpr int leadSamples = 24000;
+    auto signal = testSignal(48000, 2);
+    juce::AudioBuffer<float> input(2, leadSamples + signal.getNumSamples());
+    input.clear();
+    for (int channel = 0; channel < 2; ++channel)
+        input.copyFrom(channel, leadSamples, signal, channel, 0, signal.getNumSamples());
+    return input;
+}
+
+// [Codex 2026-10-30] Share Clock's sample counter and tempo without changing the stopped clock used by the
+// existing tests. REAPER's beat position starts at zero and advances with every processed block.
+struct ReaperClock : Clock
+{
+    juce::Optional<PositionInfo> getPosition() const override
+    {
+        auto position = *Clock::getPosition();
+        position.setIsPlaying(true);
+        position.setTimeInSeconds(sample / rate);
+        position.setPpqPosition(sample / rate * bpm / 60.0);
+        return position;
+    }
+};
+
+// [Codex 2026-10-30] Write both REAPER fixture files as stereo 48 kHz float WAVs, reporting I/O failures.
+bool writeReaperWav(const juce::File& file, const juce::AudioBuffer<float>& audio)
+{
+    if (file.getParentDirectory().createDirectory().failed() || ! file.deleteFile())
+    {
+        report("FAIL", "write REAPER fixture", "cannot replace " + file.getFullPathName());
+        return false;
+    }
+    juce::WavAudioFormat wav;
+    std::unique_ptr<juce::AudioFormatWriter> writer(wav.createWriterFor(new juce::FileOutputStream(file), 48000, 2, 32, {}, 0));
+    if (writer == nullptr || ! writer->writeFromAudioSampleBuffer(audio, 0, audio.getNumSamples()))
+    {
+        report("FAIL", "write REAPER fixture", file.getFullPathName());
+        return false;
+    }
+    std::cout << "wrote " << file.getFullPathName() << " (48000 Hz, stereo, " << audio.getNumSamples() << " frames)" << std::endl;
+    return true;
+}
+
+// [Codex 2026-10-30] Reference through the loaded binary, not a replacement Mac-specific golden.
+int writeReaperReference(const juce::File& file)
+{
+    auto plugin = create(48000, 512);
+    if (plugin == nullptr) return 1;
+    ReaperClock clock;
+    plugin->setPlayHead(&clock);
+    plugin->setNonRealtime(true);
+    auto output = render(*plugin, reaperInput(), { 512 }, [&](juce::AudioPluginInstance&, int position) {
+        clock.sample = position;
+    });
+    plugin->setPlayHead(nullptr);
+    return writeReaperWav(file, output) ? 0 : 1;
+}
 
 //==============================================================================
 // 1. Load, prepare, process
@@ -1360,6 +1426,18 @@ int main(int argc, char* argv[])
     juce::StringArray args;
     for (int i = 1; i < argc; ++i) args.add(argv[i]);
 
+    // [Codex 2026-10-30] Padded input for the matched REAPER fixture; no plugin is needed to write it.
+    if (args.contains("--write-reaper-input"))
+    {
+        const int i = args.indexOf("--write-reaper-input");
+        if (i + 1 >= args.size())
+        {
+            std::cout << "usage: HostTest --write-reaper-input <file.wav>" << std::endl;
+            return 2;
+        }
+        return writeReaperWav(juce::File::getCurrentWorkingDirectory().getChildFile(args[i + 1]), reaperInput()) ? 0 : 1;
+    }
+
     // The golden renders' input as a WAV, for the REAPER test (tests/reaper)
     if (args.contains("--write-input"))
     {
@@ -1400,6 +1478,18 @@ int main(int argc, char* argv[])
     }
     report("PASS", "load " + description.pluginFormatName + " " + description.name + " " + description.version,
            description.fileOrIdentifier);
+
+    // [Codex 2026-10-30] Accept either --vst3 <path> or --au; use exactly that binary for the reference.
+    if (args.contains("--write-reaper-reference"))
+    {
+        const int i = args.indexOf("--write-reaper-reference");
+        if (i + 1 >= args.size())
+        {
+            std::cout << "usage: HostTest --vst3 <path> | --au --write-reaper-reference <file.wav>" << std::endl;
+            return 2;
+        }
+        return writeReaperReference(juce::File::getCurrentWorkingDirectory().getChildFile(args[i + 1]));
+    }
 
     auto option = [&](const juce::String& name, const juce::String& fallback) {
         const int i = args.indexOf(name);
