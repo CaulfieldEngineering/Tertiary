@@ -247,6 +247,8 @@ installed plugin.
 
 ## One test run, one report (2026-10-31)
 
+The work branch is `development`; `test.yml` runs on every push to it.
+
 Joe: "when we go to release in a normal process, I'm expecting one test run/GitHub run which yields a passing
 report before moving on." On the final commit, run `Run-All` once on each machine (Windows including web, Mac
 including Logic and the microphone) and let GitHub run once. Then compile the one report:

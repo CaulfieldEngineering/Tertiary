@@ -6,7 +6,8 @@ Wonderland Audio's three-band tremolo (JUCE; VST3, AU and standalone). Settings 
 
 ## Release flow
 
-Staging is the last look at what will be customer-facing. Nothing public changes until a `v*` tag.
+Work happens on **`development`**, the work branch (Joe, 2026-10-31; it replaced `ui-house-style`), then `staging`, then
+`production`. Staging is the last look at what will be customer-facing. Nothing public changes until a `v*` tag.
 
 **Push to `staging`** (`.github/workflows/workflow.yml`)
 
