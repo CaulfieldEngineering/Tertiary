@@ -174,7 +174,8 @@ export async function testOptions({ page, check }) {
         const index = await page.evaluate(title => TRACKS.findIndex(track => track._userUpload && track.title === title), title);
         if (index >= 0) await page.locator('#track-list .playlist-track').nth(index).locator('.playlist-track__delete').click();
       }
-      await page.locator('#btn-stop').click();
+      // Removal already stops and disables transport when its selected file is gone.
+      if (await page.locator('#btn-stop').isEnabled()) await page.locator('#btn-stop').click();
       await page.mouse.move(1, 1);
     }
   });

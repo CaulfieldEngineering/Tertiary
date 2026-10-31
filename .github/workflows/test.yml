@@ -329,7 +329,7 @@ jobs:
       working-directory: plugin/tests/web
       run: |
         npm run test:harness
-        npm test -- --no-ai
+        npm test -- --no-ai --engine=chromium
 
     - name: Upload browser test results
       if: always()
@@ -337,3 +337,58 @@ jobs:
       with:
         name: web-test-results
         path: plugin/tests/web/out/
+
+    - name: Upload the actual browser build for WebKit
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: web-demo-test-build
+        path: |
+          build/web/index.html
+          build/web/plugin-config.js
+          build/web/*Web*.js
+          build/web/*Web*.wasm
+          build/web/audio/
+          build/web/test-build.json
+
+  # Windows WebKit has no Web Audio. Use the same WASM in a WebKit build with audio.
+  web-mobile:
+    needs: web
+    if: ${{ !cancelled() && needs.web.result != 'skipped' }}
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+    - uses: actions/download-artifact@v4
+      with:
+        name: web-demo-test-build
+        path: build/web
+    - name: Install WebKit
+      working-directory: plugin/tests/web
+      run: |
+        npm ci
+        npx playwright install webkit
+    - name: Test iPhone portrait and landscape with real Web Audio
+      working-directory: plugin/tests/web
+      run: npm test -- --no-ai --engine=webkit
+    - name: Upload iPhone results and screenshots
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: web-mobile-results
+        path: plugin/tests/web/out/
+
+  # One work-branch gate, including the mobile WebKit/Chromium checks in web.
+  ci-ok:
+    if: always()
+    needs: [mac-build, mac-intel, windows, compare, web, web-mobile]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Require every test job
+      env:
+        RESULTS: ${{ toJSON(needs) }}
+      run: |
+        python3 -c 'import json, os; jobs=json.loads(os.environ["RESULTS"]); assert all(j["result"] == "success" for j in jobs.values()), jobs'

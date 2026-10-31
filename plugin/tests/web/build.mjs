@@ -66,17 +66,19 @@ set(PLUGIN_PROCESSOR_HEADER "${config.processorHeader}")
 set(PLUGIN_PROCESSOR_CLASS ${config.processorClass})
 set(PLUGIN_EXTRA_INCLUDE_DIRS "${cmakeExtraDirs}")
 set(PLUGIN_EXTRA_SOURCE_DIRS "${cmakeExtraDirs}")
-include(\${WONDERLAB_DIR}/cmake/WonderlabBuild.cmake)
+include("${unix(path.join(root, "plugin/web/wonderlab.cmake"))}")
 ${inspect ? `target_sources(${name}Web PRIVATE "${unix(path.join(here, 'inspect.cpp'))}")\ntarget_sources(${name}WebFallback PRIVATE "${unix(path.join(here, 'inspect.cpp'))}")` : ''}
 `);
 run(emcmake, ['cmake', '-G', 'Ninja', '-S', webDir, '-B', webDir, '-DCMAKE_BUILD_TYPE=Release']);
 run('cmake', ['--build', webDir, '--parallel', process.env.WEB_BUILD_JOBS || '4']);
 const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+const shortCommit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], {cwd:root,encoding:'utf8'}).trim();
+const buildId = fs.readFileSync(path.join(webDir,'generated/build_id.h'),'utf8').match(/WLA_BUILD_ID "([^"]+)"/)[1];
 const wlCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: wonderlab, encoding: 'utf8' }).trim();
-const assembleArgs = [path.join(wonderlab, 'scripts/assemble-web.js'), '--name', name, '--build', webDir,
+const assembleArgs = [path.join(root, 'plugin/web/assemble.mjs'), '--wonderlab', wonderlab, '--name', name, '--build', webDir,
   '--samples', path.join(root, 'plugin/sample_audio'), '--build-id', commit.slice(0, 8)];
 const extra = path.join(root, 'plugin/web_demo.json');
 if (fs.existsSync(extra)) assembleArgs.push('--extra', extra);
 run(process.execPath, assembleArgs);
-fs.writeFileSync(path.join(webDir, 'test-build.json'), JSON.stringify({ name, version, commit, wonderlab: wlCommit,
+fs.writeFileSync(path.join(webDir, 'test-build.json'), JSON.stringify({ name, version, commit, shortCommit, buildId, wonderlab: wlCommit,
   emsdk: config.emsdkVersion, inspector: inspect }, null, 2));

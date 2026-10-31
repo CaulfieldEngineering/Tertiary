@@ -172,6 +172,18 @@ export async function testPlayer({ page, check }) {
     await page.waitForFunction(title => !TRACKS.some(track => track._userUpload && track.title === title)
       && !playing && audioBuffer === null, uploadTitle);
     assert.equal(await page.locator('#track-list .playlist-track').count(), before - 1);
+    assert.equal(await page.locator('#track-name').innerText(), '', 'Removed upload filename remains visible');
+    assert.equal((await read()).index, -1, 'A different track is falsely selected');
+    assert.equal(await page.locator('#track-list [aria-current="true"]').count(), 0);
+    assert.equal((await read()).sourcePresent, false);
+    assert.equal((await read()).offset, 0);
+    assert.equal(Number(await page.locator('#progress').inputValue()), 0);
+    assert.equal(await page.locator('#file-upload').inputValue(), '');
+    assert.equal(await page.locator('#btn-play').isDisabled(), true);
+    assert.equal(await page.locator('#btn-stop').isDisabled(), true);
+    assert.equal(await page.locator('#progress').isDisabled(), true);
+    await page.waitForTimeout(500);
+    assert.equal(await page.locator('#track-name').innerText(), '', 'A stale load restored the filename');
     return { count: before - 1, state: await read() };
   });
   await check('W-29-restore-player', 'Player returns to its first built-in track, stopped', async () => {

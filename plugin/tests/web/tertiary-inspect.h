@@ -4,6 +4,25 @@ struct UiTestAccess {
     static void append(juce::AudioProcessorEditor& base, juce::DynamicObject& result) {
         auto* e = dynamic_cast<audio_plugin::AudioPluginAudioProcessorEditor*>(&base);
         if (!e) return;
+        result.setProperty("aboutVisible", e->aboutWindow.isVisible());
+        result.setProperty("demo", e->audioProcessor.getDemoState());
+        result.setProperty("activationBadge", !e->topBanner.mActivateArea.isEmpty());
+        result.setProperty("licenseThreadRunning", e->audioProcessor.licenseCheck.isThreadRunning());
+        juce::Array<juce::var> sizeOptions;
+        auto menu = e->buildMainMenu();
+        for (juce::PopupMenu::MenuItemIterator it(menu, true); it.next();)
+        {
+            const auto& item = it.getItem();
+            if (item.itemID > 100)
+            {
+                auto* option = new juce::DynamicObject();
+                option->setProperty("text", item.text);
+                option->setProperty("enabled", item.isEnabled);
+                option->setProperty("checked", item.isTicked);
+                sizeOptions.add(juce::var(option));
+            }
+        }
+        result.setProperty("sizeOptions", juce::var(sizeOptions));
         auto& scope = e->wrapperOscilloscope.oscilloscope;
         juce::Array<juce::var> scopes;
         for (auto* s : {&scope.lowScope, &scope.midScope, &scope.highScope}) {

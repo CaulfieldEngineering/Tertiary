@@ -3,7 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { chromium } from 'playwright';
+import { chromium, webkit, devices } from 'playwright';
+import { testMobile } from './mobile-tests.mjs';
+import { noActivation, disabledActivation, waitPastNagCycle } from './activation-tests.mjs';
 import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
 import config from './config.mjs';
@@ -17,11 +19,14 @@ import { snapshot, until, point, clickAt, clickControl, dragControl, selectItem,
 
 fs.mkdirSync(outDir, {recursive:true});
 const update = process.argv.includes('--update-refs');
+const engineArg=process.argv.find(a=>a.startsWith('--engine='));
+const engine=engineArg?.split('=')[1];
+if(engine && !['chromium','webkit'].includes(engine))throw new Error('Expected --engine=chromium or --engine=webkit');
 if (update && process.env.CI) throw new Error('CI must never approve screenshot references');
 const meta = JSON.parse(fs.readFileSync(path.join(webDir,'test-build.json'),'utf8'));
 const commit = execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
 const rows=[], differences=[];
-let page, browser, server;
+let page, browser, mobileWebkit, server;
 function safe(s) { return s.replace(/[^a-zA-Z0-9_-]+/g,'-').slice(0,140); }
 async function check(id, title, fn) {
   const row = {id,title,status:'pass'};
@@ -52,9 +57,10 @@ function watch(p) {
   p.on('response',r=>{if(r.status()>=400)errors.push(`HTTP ${r.status()}: ${r.url()}`);});
   return errors;
 }
-async function context(view, fallback=false) {
-  const ctx=await browser.newContext({viewport:{width:view.width,height:view.height},deviceScaleFactor:1,
-    isMobile:!!view.touch,hasTouch:!!view.touch,locale:'en-US',timezoneId:'UTC',reducedMotion:'reduce'});
+async function context(view, fallback=false, engine=browser) {
+  const profile=view.device ? devices[view.device] : {viewport:{width:view.width,height:view.height},deviceScaleFactor:1,
+    isMobile:!!view.touch,hasTouch:!!view.touch};
+  const ctx=await engine.newContext({...profile,locale:'en-US',timezoneId:'UTC',reducedMotion:'reduce'});
   // Explicit analytics-only allowlist. No plugin, WASM, font, audio or UI requests are stubbed.
   await ctx.route(url=>config.analyticsHosts.includes(url.hostname), r=>r.fulfill({status:200,contentType:'text/javascript',body:''}));
   if(fallback) await ctx.addInitScript(()=>Object.defineProperty(window,'SharedArrayBuffer',{value:undefined}));
@@ -115,8 +121,9 @@ async function gestureCheck(id,c,gesture,{reset=true, prepare}={}) {
 }
 try {
   server=await serve();
-  browser=await chromium.launch({headless:true,args:['--autoplay-policy=user-gesture-required']});
+  if(engine!=='webkit')browser=await chromium.launch({headless:true,args:['--autoplay-policy=user-gesture-required']});
   await check('W-00','Built commit is the checkout being tested',async()=>{assert.equal(meta.commit,commit);return meta;});
+  if (engine!=='webkit' && !process.argv.includes('--mobile-only')) {
   for(const view of config.viewports) {
     let ctx,errors;
     const ok=await check(`W-01-${view.name}`,'Loads, ready, correct config build ID and isolation',async()=>{
@@ -277,7 +284,9 @@ try {
       await page.screenshot({path:path.join(outDir,'desktop-about-build-id.png'),fullPage:true});
       const state=await snapshot(page);
       assert.equal(state.aboutBuildVisible,true,'Build line did not appear after Ctrl+Shift+click');
-      assert.ok(state.compiledBuildId.includes(meta.commit.slice(0,7)),`About build ID is "${state.compiledBuildId}"; expected ${meta.commit.slice(0,8)}`);
+      assert.equal(state.compiledBuildId,meta.buildId);
+      assert.equal(state.compiledBuildId.split(' \u00b7 ')[0].replace(/\+$/,''),meta.shortCommit);
+      assert.match(state.compiledBuildId,/^[a-f0-9]+\+? \u00b7 \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
     });
   }
   await check('W-16','No errors after all desktop gestures',async()=>{assert.deepEqual(errors,[]);});
@@ -292,18 +301,26 @@ try {
   });
   {
     const {ctx,errors}=await context(desktop);
+    await check('W-33-activation-load','No activation UI at load',()=>noActivation(page));
     await start(page);await testPlayer({page,check});
+    if(config.adapter==='tertiary') await check('W-34-activation-disabled','Activation fields stay disabled after clicks',()=>disabledActivation(page));
+    await check('W-35-activation-timer','No activation or nag past the 50/10-second cycle',()=>waitPastNagCycle(page));
     await check('W-30','Player controls produce no console or request errors',async()=>assert.deepEqual(errors,[]));
     await ctx.close();
   }
+  }
+  if(engine!=='chromium')mobileWebkit=await webkit.launch({headless:true});
+  await testMobile({context:profile=>context({device:profile},false,devices[profile].defaultBrowserType==='webkit'?mobileWebkit:browser),
+    check,shot,outDir,meta,engine});
 } catch(e) { rows.push({id:'HARNESS',title:'Runner completed',status:'fail',error:e.stack});console.error(e); }
 finally {
-  await browser?.close();await server?.close();
-  const summary={passed:rows.filter(r=>r.status==='pass').length,failed:rows.filter(r=>r.status==='fail').length};
-  fs.writeFileSync(path.join(outDir,'report.json'),JSON.stringify({meta,summary,rows},null,2));
+  await mobileWebkit?.close();await browser?.close();await server?.close();
+  const warnings=rows.flatMap(r=>(r.data?.warnings||[]).map(w=>`${r.id}: ${w}`));
+  const summary={warnings:warnings.length,passed:rows.filter(r=>r.status==='pass').length,failed:rows.filter(r=>r.status==='fail').length};
+  fs.writeFileSync(path.join(outDir,'report.json'),JSON.stringify({meta,summary,warnings,rows},null,2));
   fs.writeFileSync(path.join(outDir,'differences.json'),JSON.stringify(differences,null,2));
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  fs.writeFileSync(path.join(outDir,'report.html'),`<!doctype html><meta charset="utf-8"><title>${esc(name)} web tests</title><style>body{font:16px system-ui;max-width:1100px;margin:40px auto;background:#14161a;color:#ddd}td,th{text-align:left;padding:9px;border-bottom:1px solid #444}.fail{color:#ff9c93}a{color:#8fc9ff}pre{white-space:pre-wrap}</style><h1>${esc(name)} web tests</h1><p>${summary.passed} passed, ${summary.failed} failed. Commit ${esc(meta.commit)}</p><table><tr><th>ID</th><th>Check</th><th>Result</th></tr>${rows.map(r=>`<tr class="${r.status}"><td>${esc(r.id)}</td><td>${esc(r.title)}${r.error?`<pre>${esc(r.error)}</pre>`:''}${r.screenshot?`<a href="${esc(r.screenshot)}">Screenshot</a>`:''}</td><td>${r.status}</td></tr>`).join('')}</table>`);
+  fs.writeFileSync(path.join(outDir,'report.html'),`<!doctype html><meta charset="utf-8"><title>${esc(name)} web tests</title><style>body{font:16px system-ui;max-width:1100px;margin:40px auto;background:#14161a;color:#ddd}td,th{text-align:left;padding:9px;border-bottom:1px solid #444}.fail{color:#ff9c93}a{color:#8fc9ff}pre{white-space:pre-wrap}</style><h1>${esc(name)} web tests</h1><p>${summary.passed} passed, ${summary.failed} failed; ${summary.warnings} touch-target warnings. Commit ${esc(meta.commit)}</p><table><tr><th>ID</th><th>Check</th><th>Result</th></tr>${rows.map(r=>`<tr class="${r.status}"><td>${esc(r.id)}</td><td>${esc(r.title)}${r.error?`<pre>${esc(r.error)}</pre>`:''}${r.data?.warnings?.length?`<details><summary>${r.data.warnings.length} targets under 40 px</summary><pre>${esc(r.data.warnings.join("\n"))}</pre></details>`:""}${r.screenshot?`<a href="${esc(r.screenshot)}">Screenshot</a>`:''}</td><td>${r.status}</td></tr>`).join('')}</table>`);
   if(update) fs.writeFileSync(path.join(refsDir,'build.json'),JSON.stringify({...meta,browser:chromium.executablePath().split(/[\\/]/).slice(-4).join('/'),platform:process.platform},null,2));
   if(process.argv.includes('--no-ai')) fs.writeFileSync(path.join(outDir,'ai-review.md'),'# Advisory AI review\n\nSkipped: --no-ai (CI does not run AI review).\n');
   else await reviewDifferences(differences,{outDir});

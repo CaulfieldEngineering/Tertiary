@@ -124,7 +124,7 @@ echo set(PLUGIN_PROCESSOR_CLASS audio_plugin::AudioPluginAudioProcessor^)
 echo set(PLUGIN_EXTRA_INCLUDE_DIRS "%BINARY_DATA_FWD%"^)
 echo set(PLUGIN_EXTRA_SOURCE_DIRS "%BINARY_DATA_FWD%"^)
 echo.
-echo include(%WONDERLAB_FWD%/cmake/WonderlabBuild.cmake^)
+echo include("%PLUGIN_SRC_FWD%/../web/wonderlab.cmake"^)
 ) > CMakeLists.txt
 
 echo         Configuring Emscripten...
@@ -154,35 +154,8 @@ cd ..\..
 
 echo  [4/5] Assembling web app...
 
-copy "%WONDERLAB_DIR%\web\index.html" "%WEB_BUILD_DIR%\index.html" >nul
-
-set "SAMPLE_DIR=%cd%\plugin\sample_audio"
-set "TRACK_LIST="
-
-if exist "!SAMPLE_DIR!" (
-    echo         Copying audio samples...
-    mkdir "%WEB_BUILD_DIR%\audio" 2>nul
-    for %%f in ("!SAMPLE_DIR!\*.*") do (
-        copy "%%f" "%WEB_BUILD_DIR%\audio\" >nul
-        if defined TRACK_LIST (
-            set "TRACK_LIST=!TRACK_LIST!, { title: '%%~nf', file: 'audio/%%~nxf' }"
-        ) else (
-            set "TRACK_LIST={ title: '%%~nf', file: 'audio/%%~nxf' }"
-        )
-        echo           + %%~nxf
-    )
-)
-
-echo         Generating plugin-config.js...
-(
-echo window.WONDERLAB_CONFIG = {
-echo     pluginName: '!REPOSITORY_NAME!',
-echo     pluginWidth: 750,
-echo     pluginHeight: 515,
-echo     wasmJs: '!REPOSITORY_NAME!Web.js',
-echo     tracks: [!TRACK_LIST!]
-echo };
-) > "%WEB_BUILD_DIR%\plugin-config.js"
+node "%cd%\plugin\web\assemble.mjs" --wonderlab "%WONDERLAB_DIR%" --name "!REPOSITORY_NAME!" --build "%WEB_BUILD_DIR%" --samples "%cd%\plugin\sample_audio" --extra "%cd%\plugin\web_demo.json"
+if errorlevel 1 exit /b 1
 
 echo.
 

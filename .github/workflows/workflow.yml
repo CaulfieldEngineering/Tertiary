@@ -1606,6 +1606,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: CaulfieldEngineering/Wonderlab
+        ref: 5248a157cfdf472caf1fafc7b9b71dec09485947
         path: Wonderlab
         token: ${{ secrets.CE_GITHUB_PAT }}
 
@@ -1708,7 +1709,7 @@ jobs:
           echo "set(PLUGIN_EXTRA_INCLUDE_DIRS \"${BINARY_DATA_DIR}\")"
           echo "set(PLUGIN_EXTRA_SOURCE_DIRS \"${BINARY_DATA_DIR}\")"
           echo ''
-          echo 'include(${WONDERLAB_DIR}/cmake/WonderlabBuild.cmake)'
+          echo 'include("${PLUGIN_SRC_DIR}/../web/wonderlab.cmake")'
         } > CMakeLists.txt
 
         # Configure with Emscripten
@@ -1737,7 +1738,7 @@ jobs:
       shell: bash
       run: |
         set -e
-        node "${GITHUB_WORKSPACE}/Wonderlab/scripts/assemble-web.js" \
+        node "${GITHUB_WORKSPACE}/plugin/web/assemble.mjs" --wonderlab "${GITHUB_WORKSPACE}/Wonderlab" \
           --name "${wPLUGIN_NAME}" \
           --build "${GITHUB_WORKSPACE}/build/web" \
           --samples "${GITHUB_WORKSPACE}/plugin/sample_audio" \
