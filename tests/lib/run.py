@@ -111,6 +111,8 @@ def command_for(script, args, results):
             command += ['-BuildDir', args.build_dir]
         if args.expect_demo:
             command += ['-ExpectDemo']
+        if script.stem.lower() == 'test-web':
+            command += ['-Engine', args.engine]
     else:
         command = ['bash', str(script), '--results-dir', str(results), '--profile', args.profile]
         if args.build_dir:
@@ -119,6 +121,8 @@ def command_for(script, args, results):
             command += ['--no-logic']
         if args.expect_demo:
             command += ['--expect-demo']
+        if script.stem.lower() == 'test-web':
+            command += ['--engine', args.engine]
     return command
 
 
@@ -236,7 +240,7 @@ def main():
     parser.add_argument('--build-dir')
     parser.add_argument('--profile', choices=('local', 'ci'), default='local')
     parser.add_argument('--expect-demo', action='store_true')
-    parser.add_argument('--engine', default='all', choices=('all', 'chromium', 'firefox', 'webkit'))
+    parser.add_argument('--engine', default='chromium' if PLATFORM == 'win' else 'all', choices=('all', 'chromium', 'firefox', 'webkit'))
     parser.add_argument('--no-logic', action='store_true')
     args = parser.parse_args()
     rows = sequence()

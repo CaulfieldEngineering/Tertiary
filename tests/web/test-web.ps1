@@ -1,7 +1,7 @@
 # [Codex 2026-10-30] WEB-01: independently runnable; common result contract.
 param([string]$ResultsDir = '', [string]$BuildDir = '',
       [ValidateSet('local','ci')][string]$Profile = 'local', [switch]$ExpectDemo,
-      [string]$Engine = 'all')
+      [string]$Engine = 'chromium')
 $ErrorActionPreference = 'Stop'
 $TestRoot = Split-Path $PSScriptRoot -Parent
 $Python = if ($env:WLA_TEST_PYTHON) { $env:WLA_TEST_PYTHON } else { 'python' }

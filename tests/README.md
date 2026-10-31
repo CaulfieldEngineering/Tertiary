@@ -100,6 +100,11 @@ bash tests/mac/run-all.sh --profile ci --build-dir out --results-dir tests/resul
 bash tests/web/test-web.sh --profile ci --engine chromium --results-dir tests/results/ci
 ```
 
+Windows defaults to Chromium for WEB-01; `Run-All.ps1 -Engine chromium` forwards the selection to
+the web child. The template's iPhone/WebKit checks require the Mac web job: Windows WebKit has no
+Web Audio. No browser assertions or screenshot references are changed by this platform selection.
+Rebuild an existing web demo after changing commits; its own W-00 rejects stale build provenance.
+
 The `ci` profile selects checked rows, excludes DAWs/humans/Mac-day-only rows, and delegates WEB-01 to the
 separate web job. M-01 also requires AU in `config.cmake`; a VST3-only template records it as not applicable. M-05/06/07 retain checked GitHub flags but need a real Mac desktop/Retina/microphone session;
 they are explicitly listed as excluded, not silently marked passed. T2-03 is local-only as before and its

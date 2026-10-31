@@ -225,6 +225,12 @@ class Contracts(unittest.TestCase):
             self.assertEqual(result['coverage'], 'no product tests yet')
             self.assertEqual(result['results'], [])
 
+    def test_main_forwards_web_engine_to_both_platform_wrappers(self):
+        args = argparse.Namespace(build_dir=None, no_logic=False, profile='local', expect_demo=False, engine='chromium')
+        for suffix, flag in (('.ps1', '-Engine'), ('.sh', '--engine')):
+            command = run.command_for(Path('test-web' + suffix), args, Path('results'))
+            self.assertEqual(command[command.index(flag) + 1], 'chromium')
+
     def test_all_registry_ids_and_suite_membership_are_preserved(self):
         rows = run.sequence()
         expected = {f'W-{n:02}' for n in range(1,16)} | {f'M-{n:02}' for n in range(1,10)}
