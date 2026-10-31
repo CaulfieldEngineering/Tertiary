@@ -298,7 +298,7 @@ is included. Restore journals retain recovery paths if a future host prevents re
   release installer retention unchanged. Original build/sign/deploy steps unchanged; release tests additionally
   build the ReviewRender test tool. No plug-in code or T2-03 threshold changed.
 
-Validation so far: 16 runner contract/restoration tests, PowerShell/Bash/Python syntax, exact Blocks metadata
+Validation so far: 18 runner contract/restoration tests, PowerShell/Bash/Python syntax, exact Blocks metadata
 comparison and workflow structure/retention checks. Windows product: 43 unit sections, two LFO regressions,
 493 UI assertions; HostTest: 96 passes. Full local and post-push CI outcomes are recorded in the follow-up
 verification note. The separate fix-first-block worktree is untouched.

@@ -74,8 +74,9 @@ script row and every check (`test_id`); internal assertion IDs remain separate.
 
 Product runners live in `win/` and `mac/` and discover all `Test-*.ps1` / `test-*.sh` files directly in that
 platform's `product/` folder. There is no top-level `tests/product/` and no second runner list. Register
-metadata in `sequence.json`; an unregistered file is still executed, then explicitly fails the result
-contract. Main Run-All invokes the product runner once and merges its results. Each has its own summary.
+metadata in `sequence.json`; locally an unregistered file is still executed, then explicitly fails the
+result contract. In CI it fails without execution because it has no registered GitHub checkbox.
+Main Run-All invokes the product runner once and merges its results. Each has its own summary.
 Product checks run together first; the final report follows registry order, with failures first.
 
 Tertiary product scripts: W-01 unit, W-05 LFO, W-06 Windows UI robot and M-04 Mac UI robot. Mac unit/LFO

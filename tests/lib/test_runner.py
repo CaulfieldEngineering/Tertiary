@@ -198,6 +198,21 @@ class Contracts(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'mismatched Blocks'):
                 run.validate_result(r.data, {'id':'W-01', 'suite_ids':[]}, 0)
 
+    def test_ci_never_executes_a_product_script_without_a_registry_checkbox(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / 'tests' / common.PLATFORM / 'product'
+            folder.mkdir(parents=True)
+            (folder / ('Test-New.ps1' if common.PLATFORM == 'win' else 'test-new.sh')).write_text('# unknown test')
+            out = root / 'results'
+            out.mkdir()
+            args = argparse.Namespace(build_dir=None, no_logic=False, profile='ci', expect_demo=False)
+            with patch('run.ROOT', root), patch('run.subprocess.run') as proc:
+                self.assertEqual(run.run_product(args, out, []), 1)
+                proc.assert_not_called()
+            result = json.loads((out / 'product-summary.json').read_text())
+            self.assertIn('not executed', result['results'][0]['checks'][0]['detail'])
+
     def test_no_product_tests_is_explicit(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

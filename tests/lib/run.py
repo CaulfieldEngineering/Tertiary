@@ -140,6 +140,8 @@ def child(row, args, results):
     if target.exists():
         target.unlink()  # An earlier PASS can never cover a failed launch.
     try:
+        if row.get('unregistered') and args.profile == 'ci':
+            raise ValueError('No registered CI checkbox for product script; not executed: ' + str(script))
         code = subprocess.run(command_for(script, args, results), cwd=ROOT, timeout=5400).returncode
         if row.get('unregistered'):
             raise ValueError('Executed product script, but it has no Blocks ID/metadata in sequence.json: ' + str(script))
