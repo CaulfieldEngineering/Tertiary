@@ -42,8 +42,12 @@
  #pragma comment (lib, "psapi.lib")
  #include <timeapi.h>
  #pragma comment (lib, "winmm.lib")
+ #include <avrt.h>   // [Claude 2026-10-30, Codex] match JUCE's WASAPI audio-thread scheduling
+ #pragma comment (lib, "avrt.lib")
 #elif JUCE_MAC
  #include <mach/mach.h>
+ #include <mach/thread_policy.h>
+ #include <pthread.h>
  #include <sys/resource.h>
 #else
  #include <sys/resource.h>
@@ -261,8 +265,24 @@ struct AudioThread
     std::vector<double> blockUs;   // read only after join
     std::thread thread;
 
+    // [Claude 2026-10-30, Codex] Diagnostics only, owned by the audio thread and read after join. Start lateness
+    // includes carried-over delay; processing duration includes input filling and any preemption, as before.
+    double maxStartLatenessUs = 0.0;
+    juce::int64 processingOverBudget = 0, lateWithinBudget = 0;
+
    #if JUCE_WINDOWS
     HANDLE timer = nullptr;
+    bool mmcssRegistered = false;
+    DWORD threadPriorityError = 0, mmcssRegistrationError = 0, mmcssPriorityError = 0, mmcssRevertError = 0;
+    // [Claude 2026-10-30, Codex] Preserve unrelated process policies and expose any unsupported timer-policy API.
+    PROCESS_POWER_THROTTLING_STATE timerPolicyBefore { PROCESS_POWER_THROTTLING_CURRENT_VERSION, 0, 0 };
+    PROCESS_POWER_THROTTLING_STATE timerPolicyAfter { PROCESS_POWER_THROTTLING_CURRENT_VERSION, 0, 0 };
+    bool timerPolicyApplied = false;
+    DWORD timerPolicyQueryError = 0, timerPolicySetError = 0, timerPolicyReadbackError = 0, timerPolicyRestoreError = 0;
+    MMRESULT timerResolutionResult = TIMERR_NOCANDO;
+   #elif JUCE_MAC
+    kern_return_t realtimePolicyResult = KERN_FAILURE;
+    int qosFallbackResult = -1;   // -1 means the realtime policy succeeded, so no fallback was attempted
    #endif
     void waitUntil (Clock::time_point deadline)
     {
@@ -279,7 +299,16 @@ struct AudioThread
        #else
         std::this_thread::sleep_until (early);
        #endif
-        while (Clock::now() < deadline) std::this_thread::yield();
+        // [Claude 2026-10-30, Codex] MSVC's yield calls SwitchToThread, surrendering the time slice just before
+        // the deadline. Use a CPU pause for this final 300 us spin; the timer above still handles the long wait.
+        while (Clock::now() < deadline)
+        {
+           #if JUCE_WINDOWS
+            YieldProcessor();
+           #else
+            std::this_thread::yield();
+           #endif
+        }
     }
 
     void start()
@@ -287,23 +316,62 @@ struct AudioThread
         thread = std::thread ([this]
         {
            #if JUCE_WINDOWS
-            SetThreadPriority (GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
-            // [Claude 2026-10-30] Windows sleeps in 15.6 ms steps by default, longer than a block: the first run
-            // "missed" thousands of periods with the thread a quarter busy. 1 ms timer steps, then a spin to the deadline.
-            // That alone was not enough: Windows 11 ignores timeBeginPeriod for a process with no visible window, and
-            // with NO plugin loaded the thread still missed half its periods. A high-resolution waitable timer is not
-            // affected; it sleeps to 0.3 ms before the deadline and a spin covers the rest (a DAW's audio thread is
-            // woken by the audio driver instead).
-            timeBeginPeriod (1);
+            if (! SetThreadPriority (GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL))
+                threadPriorityError = GetLastError();
+            // [Claude 2026-10-30, Codex] Win11 may ignore resolution requests for an invisible, inaudible process.
+            // Explicitly honor this host's request; retain execution-speed policy and restore the original state.
+            // API: learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-setprocessinformation
+            if (GetProcessInformation (GetCurrentProcess(), ProcessPowerThrottling, &timerPolicyBefore, sizeof (timerPolicyBefore)))
+            {
+                auto requested = timerPolicyBefore;
+                // An active audio host uses HighQoS; keep this hidden benchmark out of EcoQoS too.
+                constexpr ULONG activeHostFlags = PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION
+                    | PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
+                requested.ControlMask |= activeHostFlags;
+                requested.StateMask &= ~activeHostFlags;
+                timerPolicyApplied = SetProcessInformation (GetCurrentProcess(), ProcessPowerThrottling, &requested, sizeof (requested)) != FALSE;
+                if (! timerPolicyApplied) timerPolicySetError = GetLastError();
+            }
+            else
+                timerPolicyQueryError = GetLastError();
+            if (! GetProcessInformation (GetCurrentProcess(), ProcessPowerThrottling, &timerPolicyAfter, sizeof (timerPolicyAfter)))
+                timerPolicyReadbackError = GetLastError();
+            timerResolutionResult = timeBeginPeriod (1);
+            // The timer sleeps to 0.3 ms before the deadline, then spins. High-resolution timers are not documented
+            // as exempt from the process policy, and neither timer resolution nor priority guarantees a timely wake.
             timer = CreateWaitableTimerExW (nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+            // [Claude 2026-10-30, Codex] The real JUCE WASAPI callback registers Pro Audio / NORMAL. Give this
+            // synthetic host the same scheduling; retain and report the existing priority as a fallback.
+            DWORD taskIndex = 0;
+            const HANDLE mmcssTask = AvSetMmThreadCharacteristicsW (L"Pro Audio", &taskIndex);
+            mmcssRegistered = mmcssTask != nullptr;
+            if (mmcssRegistered)
+            {
+                if (! AvSetMmThreadPriority (mmcssTask, AVRT_PRIORITY_NORMAL))
+                    mmcssPriorityError = GetLastError();
+            }
+            else
+                mmcssRegistrationError = GetLastError();
+           #elif JUCE_MAC
+            // [Claude 2026-10-30, Codex] Match JUCE juce_Threads_mac.mm: RealtimeOptions.withPeriodMs plus
+            // withApproximateAudioProcessingTime makes period, computation and constraint one audio block.
+            // This host's std::thread otherwise has normal scheduling; no plugin processing is warmed here.
+            const auto policyTicks = (uint32_t) juce::Time::secondsToHighResolutionTicks (block / rate);
+            thread_time_constraint_policy_data_t policy { policyTicks, policyTicks, policyTicks, true };
+            realtimePolicyResult = thread_policy_set (pthread_mach_thread_np (pthread_self()),
+                THREAD_TIME_CONSTRAINT_POLICY, (thread_policy_t) &policy, THREAD_TIME_CONSTRAINT_POLICY_COUNT);
+            if (realtimePolicyResult != KERN_SUCCESS)
+                qosFallbackResult = pthread_set_qos_class_self_np (QOS_CLASS_USER_INTERACTIVE, 0);
            #endif
             juce::AudioBuffer<float> buf (2, block);
             juce::MidiBuffer midi;
             Signal sig;
             const auto period = std::chrono::duration_cast<Clock::duration> (std::chrono::duration<double> (block / rate));
             const double cpu0 = threadCpuSeconds();
-            auto next = Clock::now();   // this block's scheduled start
+            // [Claude 2026-10-30, Codex] Allocate the harness's timing storage before its first scheduled period.
+            // No plugin audio is processed here: its first callback remains measured against the full deadline.
             blockUs.reserve (1 << 20);
+            auto next = Clock::now();   // this block's scheduled start
             while (! stop.load())
             {
                 const auto t0 = Clock::now();
@@ -313,7 +381,15 @@ struct AudioThread
                 const double us = std::chrono::duration<double, std::micro> (t1 - t0).count();
                 busySeconds = busySeconds.load() + us * 1e-6;
                 cpuSeconds = threadCpuSeconds() - cpu0;
-                if (t1 > next + period) ++overruns;   // finished after its deadline
+                // [Claude 2026-10-30, Codex] Reuse existing timestamps; no extra clock calls, allocations or logging.
+                maxStartLatenessUs = juce::jmax (maxStartLatenessUs, std::chrono::duration<double, std::micro> (t0 - next).count());
+                const bool overBudget = t1 - t0 > period;
+                if (overBudget) ++processingOverBudget;
+                if (t1 > next + period)   // finished after its deadline; the pass/fail condition is unchanged
+                {
+                    ++overruns;
+                    if (! overBudget) ++lateWithinBudget;
+                }
                 ++blocks;
                 if (blockUs.size() < blockUs.capacity()) blockUs.push_back (us);
                 next += period;
@@ -324,8 +400,15 @@ struct AudioThread
                 waitUntil (next);
             }
            #if JUCE_WINDOWS
+            // [Claude 2026-10-30, Codex] MMCSS must be reverted on the same thread that registered it.
+            if (mmcssTask != nullptr && ! AvRevertMmThreadCharacteristics (mmcssTask))
+                mmcssRevertError = GetLastError();
             if (timer != nullptr) CloseHandle (timer);
-            timeEndPeriod (1);
+            // [Claude 2026-10-30, Codex] Balance a successful request and restore only a policy we changed.
+            if (timerResolutionResult == TIMERR_NOERROR) timeEndPeriod (1);
+            if (timerPolicyApplied && ! SetProcessInformation (GetCurrentProcess(), ProcessPowerThrottling,
+                                                              &timerPolicyBefore, sizeof (timerPolicyBefore)))
+                timerPolicyRestoreError = GetLastError();
            #endif
         });
     }
@@ -392,7 +475,12 @@ static int runLive (double seconds)
     if (p == nullptr) return 1;
     juce::Array<juce::var> rows;
     std::cout << "T2-02 CPU and memory, 48 kHz / 512, " << seconds << " s each (CPU in % of one core; memory = "
-              << (JUCE_WINDOWS ? "private bytes" : "resident") << ", MB)\n"
+             #if JUCE_WINDOWS
+              << "private bytes"
+             #else
+              << "resident"
+             #endif
+              << ", MB)\n"
               << "phase                 s     process CPU   audio thread  everything else  MB start MB end   MB max   MB/min(2nd half)  GUI objects\n"
               << "(audio thread and everything else: CPU time; in processBlock (elapsed): wall time, preemption included)\n";
 
@@ -448,10 +536,12 @@ static int runInstances (int count, int block, double seconds)
     double mean = 0; for (auto t : audio.blockUs) mean += t; mean /= juce::jmax<size_t> (1, audio.blockUs.size());
     const double p99 = percentile (audio.blockUs, 0.99);
     const double mx = audio.blockUs.empty() ? 0.0 : *std::max_element (audio.blockUs.begin(), audio.blockUs.end());
+    const double first = audio.blockUs.empty() ? 0.0 : audio.blockUs.front();
     std::cout << "T2-03 " << count << " instances on one real-time thread, 48 kHz / " << block << " (" << juce::String (blockUs, 0) << " us per block), "
               << juce::String (wall, 0) << " s\n"
               << "  blocks " << audio.blocks.load() << " of " << (juce::int64) (wall * rate / block) << " due; dropouts (finished after the deadline) "
               << audio.overruns.load() << ", whole periods missed " << audio.missedPeriods.load() << "\n"
+              << "  first block: " << juce::String (first, 1) << " us\n"
               << "  all instances per block: mean " << juce::String (mean, 1) << " us (" << juce::String (100.0 * mean / blockUs, 1)
               << "% of the block), p99 " << juce::String (p99, 1) << " us (" << juce::String (100.0 * p99 / blockUs, 1)
               << "%), max " << juce::String (mx, 1) << " us (" << juce::String (100.0 * mx / blockUs, 1) << "%)\n"
@@ -470,6 +560,37 @@ static int runInstances (int count, int block, double seconds)
     o->setProperty ("blocks", audio.blocks.load()); o->setProperty ("dropouts", audio.overruns.load());
     o->setProperty ("missedPeriods", audio.missedPeriods.load()); o->setProperty ("blocksDue", (juce::int64) (wall * rate / block));
     o->setProperty ("meanUs", mean); o->setProperty ("p99Us", p99); o->setProperty ("maxUs", mx);
+    o->setProperty ("firstUs", first);
+    // [Claude 2026-10-30, Codex] Keep scheduler evidence beside the unchanged deadline result, after audio has joined.
+    o->setProperty ("maxStartLatenessUs", audio.maxStartLatenessUs);
+    o->setProperty ("processingOverBudgetBlocks", audio.processingOverBudget);
+    o->setProperty ("lateWithinBudgetBlocks", audio.lateWithinBudget);
+   #if JUCE_WINDOWS
+    o->setProperty ("schedulingMode", audio.mmcssRegistered
+        ? (audio.mmcssPriorityError == 0 ? "MMCSS Pro Audio / NORMAL" : "MMCSS Pro Audio / priority request failed")
+        : (audio.threadPriorityError == 0 ? "THREAD_PRIORITY_TIME_CRITICAL fallback" : "Thread priority request failed"));
+    o->setProperty ("threadPriorityError", (juce::int64) audio.threadPriorityError);
+    o->setProperty ("mmcssRegistrationError", (juce::int64) audio.mmcssRegistrationError);
+    o->setProperty ("mmcssPriorityError", (juce::int64) audio.mmcssPriorityError);
+    o->setProperty ("mmcssRevertError", (juce::int64) audio.mmcssRevertError);
+    // [Claude 2026-10-30, Codex] Timer-policy readback is captured before processing; errors are never hidden.
+    o->setProperty ("timerPolicyApplied", audio.timerPolicyApplied);
+    o->setProperty ("timerPolicyQueryError", (juce::int64) audio.timerPolicyQueryError);
+    o->setProperty ("timerPolicySetError", (juce::int64) audio.timerPolicySetError);
+    o->setProperty ("timerPolicyReadbackError", (juce::int64) audio.timerPolicyReadbackError);
+    o->setProperty ("timerPolicyRestoreError", (juce::int64) audio.timerPolicyRestoreError);
+    o->setProperty ("timerPolicyControlBefore", (juce::int64) audio.timerPolicyBefore.ControlMask);
+    o->setProperty ("timerPolicyStateBefore", (juce::int64) audio.timerPolicyBefore.StateMask);
+    o->setProperty ("timerPolicyControlAfter", (juce::int64) audio.timerPolicyAfter.ControlMask);
+    o->setProperty ("timerPolicyStateAfter", (juce::int64) audio.timerPolicyAfter.StateMask);
+    o->setProperty ("timeBeginPeriodResult", (juce::int64) audio.timerResolutionResult);
+   #elif JUCE_MAC
+    o->setProperty ("schedulingMode", audio.realtimePolicyResult == KERN_SUCCESS
+        ? "Mach THREAD_TIME_CONSTRAINT_POLICY"
+        : (audio.qosFallbackResult == 0 ? "QoS USER_INTERACTIVE fallback" : "Scheduling requests failed"));
+    o->setProperty ("realtimePolicyResult", (juce::int64) audio.realtimePolicyResult);
+    o->setProperty ("qosFallbackResult", (juce::int64) audio.qosFallbackResult);
+   #endif
     o->setProperty ("meanPctBlock", 100.0 * mean / blockUs); o->setProperty ("p99PctBlock", 100.0 * p99 / blockUs);
     o->setProperty ("maxPctBlock", 100.0 * mx / blockUs);
     o->setProperty ("mbForAll", mbLoaded - mb0);
@@ -482,6 +603,10 @@ static int runInstances (int count, int block, double seconds)
 int main (int argc, char* argv[])
 {
     juce::ScopedJuceInitialiser_GUI gui;
+   #if JUCE_MAC
+    // [Claude 2026-10-30, Codex] Keep this windowless audio host active: JUCE's scoped guard disables App Nap.
+    juce::ScopedLowPowerModeDisabler keepBenchmarkActive;
+   #endif
     juce::StringArray args;
     for (int i = 1; i < argc; ++i) args.add (argv[i]);
     auto opt = [&] (const juce::String& k, const juce::String& d) { const int i = args.indexOf (k); return i >= 0 && i + 1 < args.size() ? args[i + 1] : d; };

@@ -541,6 +541,13 @@ void bandSliders()
             }
             // what the scope draws follows the depth and skew
             auto& scope = A::scope (rig.editor(), b);
+            // [Codex 2026-10-30] Like rate changes, shape changes arrive through action messages. Let the
+            // final drag message arrive on slow runners; the assertions below still fail a missing update.
+            waitFor ([&]
+            {
+                return closeTo (A::drawnLfo (scope).getWaveDepth(), value (*rig.proc, bandParam ("Depth", b)), 0.01)
+                    && closeTo (A::drawnLfo (scope).getWaveSkew(), value (*rig.proc, bandParam ("Skew", b)), 0.01);
+            }, 1000);
             check (closeTo (A::drawnLfo (scope).getWaveDepth(), value (*rig.proc, bandParam ("Depth", b)), 0.6),
                    juce::String (bandNames[b]) + ": the scope draws the new depth", fmt (A::drawnLfo (scope).getWaveDepth()));
             check (closeTo (A::drawnLfo (scope).getWaveSkew(), value (*rig.proc, bandParam ("Skew", b)), 0.6),

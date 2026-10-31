@@ -23,7 +23,40 @@ dummy_srate=48000
 dummy_blocksize=512
 ```
 
-On the M1 the isolated profile requested CoreAudio 48000 Hz / 512 samples. SSH runs must enter the logged-in user's Aqua session (AU discovery needs it), for example `sudo -n launchctl asuser $(id -u) sudo -n -u $(id -un) python3 ...`. Do not use the old Mac-day wrapper that substitutes its archived Lua script. Run this driver's current Lua directly. Windows launches minimized; each test instance quits on completion.
+On the M1 the isolated profile requested CoreAudio 48000 Hz / 512 samples. SSH runs must enter the logged-in user's Aqua session (AU discovery needs it), for example `sudo -n launchctl asuser $(id -u) sudo -n -u $(id -un) python3 ...`. Do not use the old Mac-day wrapper that substitutes its archived Lua script. Run this driver's current Lua directly. Windows uses its normal startup window so the evaluation countdown can complete; each owned test instance quits on completion.
+
+## Windows quit investigation (Codex, 2026-10-30)
+
+The 20:53 run's failure was reproduced with the same binary: all audio assertions
+passed, but the process reached its 90-second watchdog with **About REAPER
+v7.83/win64 rev 6eea47 (Oct 24 2026)** still showing disabled **Buy Me [4]**.
+**REAPER New Version Notification** had taken focus after About was activated;
+the driver then released the Lua render after a fixed delay while About was still
+modal. The screenshot also shows an unrelated `electron.exe` error overlapping
+About. The driver never acts on that other process. This is a harness startup
+dialog/quit failure, not a failed plug-in audio comparison.
+
+`tests/lib/reaper_windows.py` now restores focus to the owned About dialog,
+waits for its enabled **Still Evaluating** button, and closes only that named
+button and the notification's **Close** button. The driver releases the render
+handshake only after dialogs close, then requests native **File: Quit** after
+the saved-project marker. It requires exit zero; a forced cleanup still fails.
+Unknown dialogs are recorded rather than accepted. Dependencies are `pywinauto`
+and its Windows dependencies (`pywin32` and Pillow). Timestamped `windows.log`
+and window-rendered PNGs accompany every run; screenshot capture has its own
+three-second bound and cannot prevent cleanup of an owned timed-out process.
+
+Evidence is under `tests/results/investigation-2026-10-30/`: `reaper-before`
+failed after 90.2 seconds; `reaper-after-1` and `reaper-after-2` exited normally
+in 29.65 and 29.85 seconds. `reaper-final-verified`, with the final window-rendered
+capture and main-window startup gate, exited normally in **27.21 seconds**:
+Still Evaluating at 23.922 s, render released at 24.953 s, native Quit at 26.063 s.
+The clear dialog screenshot is `reaper-final-verified/reaper-artifacts/vst3/reaper-still-evaluating.png`.
+Every corrected run retained maximum audio error **0** over all
+120000 frames, repeat error **0**, valid automation and saved projects. The
+tested module SHA256 stayed
+`5b8db0b2461338c5ffa0e371aced3c4a9e51f1df7cbb9992c1d412e337a89311`.
+No plug-in source or binary was changed. This follow-up did not use the Mac.
 
 ## Matched reference
 

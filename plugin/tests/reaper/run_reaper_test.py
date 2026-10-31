@@ -11,10 +11,17 @@ import re
 import subprocess
 import sys
 import time
+import hashlib
+import json
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "regression"))
 from compare_renders import read_wav  # noqa: E402
+# [Codex 2026-10-30] Shared named-dialog watchdog; no product-code changes.
+if sys.platform == 'win32':
+    sys.path.insert(0, str(Path(HERE).parents[2] / 'tests' / 'lib'))
+    from reaper_windows import ReaperWindows
 
 DEFAULT_REAPER = {
     "win32": r"C:\Program Files\REAPER (x64)\reaper.exe",
@@ -51,6 +58,9 @@ def main():
     parser.add_argument("--fx", default="VST3:Tertiary", help="VST3:Tertiary or AU:Tertiary")
     parser.add_argument("--vst3", help="VST3 bundle for HostTest; configure REAPER to scan this same bundle")
     parser.add_argument("--prefix", default="reaper")
+    # [Codex 2026-10-30] Isolated artifacts and proof of the module actually loaded by REAPER.
+    parser.add_argument("--work-dir", help="write fixtures and renders here instead of next to the script")
+    parser.add_argument("--expected-plugin", help="require REAPER to load this binary (hash and path checked)")
     args = parser.parse_args()
     if not re.fullmatch(r"[A-Za-z0-9_-]+", args.prefix):
         parser.error("--prefix must contain only letters, digits, underscores or hyphens")
@@ -63,8 +73,11 @@ def main():
         return 1
 
     hosttest = os.path.abspath(args.hosttest)
-    out = os.path.join(HERE, "out")
+    work = os.path.abspath(args.work_dir) if args.work_dir else HERE
+    out = os.path.join(work, "out")
     os.makedirs(out, exist_ok=True)
+    # [Codex 2026-10-30] A previous run's handshake must not skip this binary inspection.
+    Path(work, 'module-inspected').unlink(missing_ok=True)
 
     def output(suffix):
         return os.path.join(out, args.prefix + suffix)
@@ -74,7 +87,7 @@ def main():
                    "_log.txt", "_default.rpp", "_test.rpp"):
         if os.path.exists(output(suffix)):
             os.remove(output(suffix))
-    input_path = os.path.join(HERE, "input.wav")
+    input_path = os.path.join(work, "input.wav")
     if os.path.exists(input_path):
         os.remove(input_path)
     subprocess.run([hosttest, "--write-reaper-input", input_path], check=True)
@@ -90,7 +103,9 @@ def main():
         print("FAIL  invalid HostTest fixture; rebuild HostTest with the REAPER options: " + str(error))
         return 1
 
-    env = dict(os.environ, TERTIARY_TEST_DIR=HERE, TERTIARY_PREFIX=args.prefix, TERTIARY_FX=args.fx)
+    env = dict(os.environ, TERTIARY_TEST_DIR=work, TERTIARY_PREFIX=args.prefix, TERTIARY_FX=args.fx,
+               WLA_VERIFY_MODULE='1' if args.expected_plugin or sys.platform == 'win32' else '',
+               WLA_DRIVER_QUIT='1' if sys.platform == 'win32' else '')
     command = [args.reaper]
     if args.reaper_config:
         command += ["-cfgfile", os.path.abspath(args.reaper_config)]
@@ -101,15 +116,94 @@ def main():
     if sys.platform == "win32":
         startup = subprocess.STARTUPINFO()
         startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        startup.wShowWindow = 6  # SW_MINIMIZE
+        startup.wShowWindow = 1  # SW_SHOWNORMAL: startup dialogs must receive their normal GUI event loop.
     start = time.time()
-    subprocess.run(command, env=env, timeout=90, check=True, startupinfo=startup)
+    # A short defer in the Lua script holds the loaded plugin while its mapped module is inspected.
+    proof = None
+    inspection_attempts = 0
+    proc = subprocess.Popen(command, env=env, startupinfo=startup)
+    windows_ui = None
+    host_failed = False
+    try:
+        if sys.platform == 'win32':
+            windows_ui = ReaperWindows(proc.pid, work)
+        deadline = time.monotonic() + 90
+        while proc.poll() is None and time.monotonic() < deadline:
+            log_path = Path(output('_log.txt'))
+            # [Codex 2026-10-30] A fixed delay released rendering while About was
+            # still modal. Require its enabled Still Evaluating button and closure.
+            windows_ready = windows_ui.poll(finished=log_path.exists() and
+                ('saved ' + args.prefix + '_test.rpp') in log_path.read_text(errors='replace')) if windows_ui else True
+            if args.expected_plugin and proof is None and log_path.exists() and 'loaded Tertiary as FX' in log_path.read_text(errors='replace'):
+                expected = Path(args.expected_plugin).resolve()
+                sub = 'x86_64-win' if sys.platform == 'win32' else 'MacOS'
+                binary = next(p for p in (expected / 'Contents' / sub).iterdir() if p.is_file()) if expected.is_dir() else expected
+                if sys.platform == 'win32':
+                    import psutil
+                    parent = psutil.Process(proc.pid)
+                    paths = []
+                    for process in [parent, *parent.children(recursive=True)]:
+                        try:
+                            paths.extend(m.path for m in process.memory_maps())
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            pass
+                else:
+                    maps = subprocess.check_output(['vmmap', '-w', str(proc.pid)], text=True, stderr=subprocess.STDOUT, timeout=15)
+                    paths = [line[line.index(' /') + 1:].strip() for line in maps.splitlines() if ' /' in line]
+                Path(work, 'mapped-modules.txt').write_text('\n'.join(paths), encoding='utf-8')
+                loaded = [Path(p) for p in paths if Path(p).name.casefold() == binary.name.casefold() and Path(p).is_file()]
+                digest = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
+                for module in loaded:
+                    same = digest(module) == digest(binary)
+                    if args.fx.upper().startswith('VST3:'):
+                        same = same and module.resolve() == binary.resolve()
+                    if same:
+                        proof = dict(path=str(module), sha256=digest(module), expected=str(binary))
+                        Path(work, 'binary-proof.json').write_text(json.dumps(proof, indent=2), encoding='utf-8')
+                        print('PASS  REAPER loaded tested binary: ' + json.dumps(proof), flush=True)
+                        break
+                inspection_attempts += 1
+                if proof is None and not loaded and inspection_attempts < 30:
+                    time.sleep(0.2)  # A bridged VST may finish loading on the next REAPER event-loop turn.
+                    continue
+                if proof is None:
+                    Path(work, 'module-inspected').touch()
+                    raise RuntimeError('REAPER did not map the requested build; mapped candidates: ' + repr(loaded))
+            if (proof is not None or not args.expected_plugin) and windows_ready and not Path(work, 'module-inspected').exists():
+                if windows_ui:
+                    windows_ui.event('render-ready', detail='startup dialogs closed; binary inspection complete')
+                Path(work, 'module-inspected').touch()
+            time.sleep(0.1)
+        if proc.poll() is None:
+            print('FAIL  REAPER did not finish its own Quit within 90 seconds; preserving render assertions', flush=True)
+            host_failed = True
+        elif proc.returncode:
+            print('FAIL  REAPER exited with code ' + str(proc.returncode), flush=True)
+            host_failed = True
+        else:
+            print('PASS  REAPER native Quit exited zero in %.2f s' % (time.time() - start), flush=True)
+    finally:
+        if proc.poll() is None:
+            if windows_ui:
+                try:
+                    windows_ui.capture_timeout()
+                except Exception as error:
+                    print('REAPER timeout screenshot unavailable: ' + str(error), flush=True)
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=10)
+    if args.expected_plugin and proof is None:
+        print('FAIL  no proof of the REAPER module path; not accepting a render from an unknown build')
+        return 1
     print("REAPER ran for %.1f s" % (time.time() - start))
     if os.path.exists(output("_log.txt")):
         with open(output("_log.txt")) as log:
             print(log.read())
 
-    failed = 0
+    failed = int(host_failed)
 
     def check(ok, text):
         nonlocal failed

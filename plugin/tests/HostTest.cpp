@@ -1415,6 +1415,7 @@ int liveLicenseCheck(const juce::String& key, const juce::String& email)
     return failures == 0 ? 0 : 1;
 }
 
+// [Codex 2026-10-30] Reused section 11 from fix-instance-isolation for the release sequence.
 //==============================================================================
 // 11. Two instances are independent  [Claude 2026-10-30]
 //==============================================================================
@@ -1671,7 +1672,7 @@ int main(int argc, char* argv[])
         run(7, section7);
         run(9, [&] { section9(golden); });
         run(10, section10);   // [Claude 2026-10-30]
-        run(11, section11);   // [Claude 2026-10-30] two instances are independent
+        run(11, section11);   // [Codex 2026-10-30] independent instances
     }
     run(8, [&] { section8(golden, makeGolden); });
 

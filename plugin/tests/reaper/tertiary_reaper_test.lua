@@ -46,8 +46,13 @@ if fx < 0 and not want then fx = reaper.TrackFX_AddByName(track, "Tertiary", fal
 if fx < 0 then say("FAIL Tertiary not found in REAPER's plug-in list") reaper.Main_OnCommand(40004, 0) return end
 local _, fxname = reaper.TrackFX_GetFXName(track, fx, "")
 say("loaded Tertiary as FX " .. fx .. ": " .. fxname)
+-- [Codex 2026-10-30] Keep REAPER's own identity/offline flag beside the mapped-module proof.
+local _, ident = reaper.TrackFX_GetNamedConfigParm(track, fx, 'fx_ident')
+say('fx_ident: ' .. ident .. '; offline=' .. tostring(reaper.TrackFX_GetOffline(track, fx)))
 
 -- Render settings: the whole project, master mix, 48 kHz stereo, 32-bit float WAV, no tail
+-- [Codex 2026-10-30] Let the Python driver verify the mapped binary before rendering.
+local function run_tests()
 local function renderTo(name)
     reaper.GetSetProjectInfo_String(0, "RENDER_FILE", path("out"), true)
     reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN", name, true)
@@ -89,4 +94,14 @@ end
 reaper.Main_SaveProjectEx(0, path("out" .. sep .. prefix .. "_test.rpp"), 8) -- save supplied path without a dialog
 say("saved " .. prefix .. "_test.rpp")
 if log then log:close() end
-reaper.Main_OnCommand(40004, 0)                                  -- File: Quit REAPER
+-- [Codex 2026-10-30] Windows driver waits for startup informational dialogs before native Quit.
+if os.getenv('WLA_DRIVER_QUIT') ~= '1' then reaper.Main_OnCommand(40004, 0) end
+end
+local until_time = reaper.time_precise() + 20
+local function wait_for_module_check()
+    local f = io.open(path('module-inspected'), 'r')
+    if f then f:close() run_tests()
+    elseif reaper.time_precise() > until_time then say('FAIL module inspection timed out') reaper.Main_OnCommand(40004, 0)
+    else reaper.defer(wait_for_module_check) end
+end
+if os.getenv('WLA_VERIFY_MODULE') == '1' then wait_for_module_check() else run_tests() end

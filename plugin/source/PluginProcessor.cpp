@@ -712,15 +712,19 @@ namespace audio_plugin {
         buffer.setSize(spec.numChannels, samplesPerBlock);
       }
 
-      // [Claude 2026-10-27] Size the LFO wavetables for this sample rate here, off the audio thread, and have
-      // processBlock recalculate them. Before, they were sized at 0 Hz in the constructor, so the first block
-      // allocated on the audio thread, and after a sample-rate change the LFOs ran at the wrong speed.
+      // Size and build the LFO tables off the audio thread. Deferring their generation to the first
+      // processBlock made it much slower than a warm block, including after a sample-rate change.
+      // Clear each flag BEFORE its rebuild so a parameter change during/after it remains pending.
+      // No samples or phase are advanced; updateState still picks up the host's tempo on the first block.
       lowLFO.initializeLFO(sampleRate);
       midLFO.initializeLFO(sampleRate);
       highLFO.initializeLFO(sampleRate);
-      parameterChangedLfoLow = true;
-      parameterChangedLfoMid = true;
-      parameterChangedLfoHigh = true;
+      parameterChangedLfoLow = false;
+      lowLFO.updateLFO(sampleRate, hostInfo.bpm);
+      parameterChangedLfoMid = false;
+      midLFO.updateLFO(sampleRate, hostInfo.bpm);
+      parameterChangedLfoHigh = false;
+      highLFO.updateLFO(sampleRate, hostInfo.bpm);
 
 		// Demo Version
 		//#ifdef DEMO_VERSION

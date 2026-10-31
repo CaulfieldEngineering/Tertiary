@@ -29,6 +29,8 @@
 #include "PluginProcessor.h"
 #include "LicenseCheck.h"
 #include <thread>   // [Claude 2026-10-29] the V-05 test plays on a second thread
+#include <cstring>  // [Claude 2026-10-30, Codex] bitwise audio comparisons for the prepare warm-up fix
+#include "WarmupProbe.h"   // [Claude 2026-10-30, Codex] optional --warmup-probe timing, outside the unit suite
 
 //==============================================================================
 // Allocation counter: every new/delete in this program goes through here. While
@@ -604,6 +606,122 @@ static void setUpForPeriod (audio_plugin::AudioPluginAudioProcessor& p, bool syn
     setParam (p, "Multiplier Low Band", 1);  // 1/4 note
 }
 
+// [Claude 2026-10-30, Codex] Preparing the tables must not consume audio or change the first sample/phase.
+// The reference explicitly restores RC1b's empty-table + dirty state, rebuilding in its first callback.
+// Compare stereo audio from sample zero, including preset/state arrival on either side of prepare and reprepare.
+struct PreparedAudioTests : juce::UnitTest
+{
+    using Processor = audio_plugin::AudioPluginAudioProcessor;
+    PreparedAudioTests() : juce::UnitTest ("Prepared audio", "Tertiary") {}
+
+    static void deferTablesUntilCallback (Processor& p, double sampleRate)
+    {
+        p.lowLFO.initializeLFO (sampleRate);
+        p.midLFO.initializeLFO (sampleRate);
+        p.highLFO.initializeLFO (sampleRate);
+        for (auto band : { "Low", "Mid", "High" })
+            p.parameterChanged (juce::String ("Waveshape ") + band + " Band", 0.0f);
+    }
+
+    void prepare (Processor& p, double sampleRate)
+    {
+        const float phases[] { p.lowLFO.getPosition(), p.midLFO.getPosition(), p.highLFO.getPosition() };
+        p.setRateAndBufferSizeDetails (sampleRate, 128);
+        p.prepareToPlay (sampleRate, 128);
+        int band = 0;
+        for (auto* lfo : { &p.lowLFO, &p.midLFO, &p.highLFO })
+        {
+            expectEquals (lfo->getPosition(), phases[band++], "prepare must not advance or reset the oscillator");
+            expectEquals (lfo->getWaveTableScaled().size(), (int) sampleRate / 2, "audio table ready before first callback");
+        }
+    }
+
+    void compare (Processor& prepared, Processor& legacy, const juce::String& stage)
+    {
+        juce::AudioBuffer<float> a (2, 128), b (2, 128);
+        juce::MidiBuffer midi;
+        juce::Random random (0x5741524d);
+        bool identical = true, finite = true;
+        double energy = 0.0;
+        // Broad-band stereo input exercises all bands, filters, gains and phase offsets from sample zero.
+        for (int block = 0; block < 96; ++block)
+        {
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < 128; ++i)
+                    a.setSample (c, i, random.nextFloat() * 0.5f - 0.25f);
+            b.makeCopyOf (a);
+            prepared.processBlock (a, midi);
+            legacy.processBlock (b, midi);
+            for (int c = 0; c < 2; ++c)
+            {
+                identical = identical && std::memcmp (a.getReadPointer (c), b.getReadPointer (c), 128 * sizeof (float)) == 0;
+                for (int i = 0; i < 128; ++i)
+                {
+                    finite = finite && std::isfinite (a.getSample (c, i));
+                    energy += std::abs (a.getSample (c, i));
+                }
+            }
+        }
+        expect (identical, stage + ": every stereo sample bit-identical to first-callback rebuild");
+        expect (finite && energy > 1.0, stage + ": finite, non-silent output");
+        expectEquals (prepared.lowLFO.getPosition(), legacy.lowLFO.getPosition(), stage + ": low phase");
+        expectEquals (prepared.midLFO.getPosition(), legacy.midLFO.getPosition(), stage + ": mid phase");
+        expectEquals (prepared.highLFO.getPosition(), legacy.highLFO.getPosition(), stage + ": high phase");
+    }
+
+    void runTest() override
+    {
+        juce::MemoryBlock state;
+        {
+            Processor donor;
+            donor.presets.loadPreset (9);
+            setParam (donor, "Waveshape Low Band", 1);
+            setParam (donor, "Waveshape Mid Band", 3);
+            setParam (donor, "Waveshape High Band", 6);
+            setParam (donor, "Sync to Host Low Band", 0);
+            setParam (donor, "Rate Low Band", 7.1f);
+            setParam (donor, "Relative Phase Low Band", 73);
+            donor.getStateInformation (state);
+        }
+
+        for (int scenario = 0; scenario < 5; ++scenario)
+        {
+            const juce::String name = juce::StringArray { "Default", "Preset before prepare", "Preset after prepare",
+                                                         "State before prepare", "State after prepare" }[scenario];
+            beginTest (name + ": first audio, changed host tempo and reprepare match RC1b table timing");
+            TestPlayHead head;
+            head.bpm = 97.0;   // host tempo is not known to prepare; the first callback must still pick it up
+            Processor prepared, legacy;
+            for (auto* p : { &prepared, &legacy })
+            {
+                p->setDemoState (false);
+                p->setPlayHead (&head);
+                if (scenario == 1) expect (p->presets.loadPreset (6));
+                if (scenario == 3) p->setStateInformation (state.getData(), (int) state.getSize());
+                prepare (*p, 48000);
+                if (scenario == 2) expect (p->presets.loadPreset (7));
+                if (scenario == 4) p->setStateInformation (state.getData(), (int) state.getSize());
+            }
+            deferTablesUntilCallback (legacy, 48000);
+            compare (prepared, legacy, "First audio");
+            head.bpm = 137.0;
+            compare (prepared, legacy, "Host tempo changed");
+
+            for (double sampleRate : { 48000.0, 96000.0, 44100.0, 48000.0 })
+            {
+                prepared.releaseResources();
+                legacy.releaseResources();
+                prepare (prepared, sampleRate);
+                prepare (legacy, sampleRate);
+                deferTablesUntilCallback (legacy, sampleRate);
+                compare (prepared, legacy, "Reprepare at " + juce::String (sampleRate));
+            }
+            prepared.setPlayHead (nullptr);
+            legacy.setPlayHead (nullptr);
+        }
+    }
+};
+
 struct ProcessorTests : juce::UnitTest
 {
     ProcessorTests() : juce::UnitTest ("Processor", "Tertiary") {}
@@ -1097,6 +1215,7 @@ struct PresetTests : juce::UnitTest
 static PresetTests presetTests;
 static LicenseTests licenseTests;
 static ProcessorTests processorTests;
+static PreparedAudioTests preparedAudioTests;   // [Claude 2026-10-30, Codex] prepare/first-callback regression
 
 
 /* Prints the test log to the console (JUCE writes it to the debugger by default) */
@@ -1106,9 +1225,12 @@ struct ConsoleLogger : juce::Logger
 };
 
 //==============================================================================
-int main()
+int main (int argc, char* argv[])   // [Claude 2026-10-30, Codex] optional timing mode leaves the normal suite unchanged
 {
     juce::ScopedJuceInitialiser_GUI init;
+    if (argc == 2 && juce::String (argv[1]) == "--warmup-probe")
+        return WarmupProbe::run();
+
     ConsoleLogger logger;
     juce::Logger::setCurrentLogger (&logger);
 
