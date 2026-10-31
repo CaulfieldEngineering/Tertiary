@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test run</title>
+<!-- [Claude 2026-10-31] Live test dashboard (tests/dashboard/server.py). House style: HQ agent/app-design.md.
+     Served live it polls /api/state; saved by --export it carries window.SNAPSHOT and needs nothing else. -->
+<style>
+:root {
+  color-scheme: dark light;
+  --bg: light-dark(#ffffff, #1c1c1b); --side: light-dark(#f7f7f5, #161615); --raised: light-dark(#ffffff, #262625);
+  --text: light-dark(#1c1b19, #e4e3df); --muted: light-dark(#6a6964, #a3a29c); --faint: light-dark(#a09f99, #6b6a65);
+  --line: light-dark(#ebeae6, #2b2b29); --line-strong: light-dark(#dcdbd6, #3b3b38);
+  --hover: light-dark(rgba(55,53,47,.055), rgba(255,255,250,.055)); --active: light-dark(rgba(55,53,47,.09), rgba(255,255,250,.09));
+  --accent: #6FB7A0; --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --warn: #D9A441; --danger: light-dark(#c4402b, #e8796b);
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', Inter, Roboto, sans-serif;
+  --mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+  --fs-micro: 11px; --fs-small: 12px; --fs-ui: 13px; --fs-head: 15px;
+  --sp-2: 4px; --sp-3: 6px; --sp-4: 8px; --sp-5: 12px; --sp-6: 16px; --sp-7: 24px;
+  --r-sm: 4px; --r-md: 6px; --row-h: 28px; --ease: .12s ease;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: var(--fs-ui)/1.45 var(--font); }
+main { max-width: 1180px; margin: 0 auto; padding: var(--sp-7) var(--sp-6); }
+h1 { font-size: var(--fs-head); font-weight: 600; margin: 0; }
+.top { display: flex; align-items: baseline; gap: var(--sp-5); flex-wrap: wrap; }
+.sub { color: var(--muted); font-size: var(--fs-small); }
+.bar { height: 4px; background: var(--line); border-radius: 2px; margin: var(--sp-5) 0 var(--sp-2); overflow: hidden; display: flex; }
+.bar i { display: block; height: 100%; }
+.label { font-size: var(--fs-micro); font-variant: all-small-caps; letter-spacing: .04em; color: var(--muted); margin: var(--sp-6) 0 var(--sp-4); display: flex; gap: var(--sp-4); }
+.row { display: grid; grid-template-columns: 64px minmax(0, 1fr) 92px 120px 64px; align-items: center; min-height: var(--row-h);
+       padding: 0 var(--sp-4); border-radius: var(--r-sm); cursor: pointer; gap: var(--sp-4); }
+.row:hover { background: var(--hover); }
+.row.open { background: var(--active); }
+.id, .num { font-variant-numeric: tabular-nums; color: var(--muted); }
+.num { text-align: right; }
+.title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st { font-size: var(--fs-small); display: flex; align-items: center; gap: var(--sp-3); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+.PASS .dot, .success .dot { background: var(--accent); }
+.FAIL .dot, .failure .dot, .cancelled .dot { background: var(--danger); }
+.SKIP .dot, .skipped .dot { background: var(--warn); }
+.PLANNED .dot { background: var(--line-strong); }
+.RUNNING .dot, .in_progress .dot, .queued .dot { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+.FAIL .st, .failure .st { color: var(--danger); }
+.detail { padding: var(--sp-4) var(--sp-4) var(--sp-6) 72px; border-bottom: 1px solid var(--line); }
+.check { display: grid; grid-template-columns: 70px 220px minmax(0, 1fr); gap: var(--sp-4); font-size: var(--fs-small); padding: 2px 0; }
+.check .d { color: var(--muted); overflow-wrap: anywhere; }
+.check.FAIL .d { color: var(--danger); }
+.shots { display: flex; flex-wrap: wrap; gap: var(--sp-4); margin-top: var(--sp-5); }
+.shots img { height: 96px; border-radius: var(--r-sm); border: 1px solid var(--line); cursor: zoom-in; background: var(--side); }
+pre { font: var(--fs-micro)/1.5 var(--mono); background: var(--side); border-radius: var(--r-md); padding: var(--sp-4) var(--sp-5);
+      max-height: 240px; overflow: auto; white-space: pre-wrap; color: var(--muted); margin: var(--sp-3) 0 0; }
+details summary { cursor: pointer; color: var(--muted); font-size: var(--fs-small); margin-top: var(--sp-4); }
+.empty { color: var(--muted); padding: var(--sp-4); }
+.err { color: var(--danger); font-size: var(--fs-small); }
+a { color: inherit; }
+#zoom { position: fixed; inset: 0; background: rgba(0,0,0,.82); display: none; align-items: center; justify-content: center; cursor: zoom-out; z-index: 2; }
+#zoom img { max-width: 96vw; max-height: 92vh; border-radius: var(--r-md); }
+#zoom div { position: absolute; bottom: var(--sp-5); color: #ccc; font-size: var(--fs-small); }
+@media (max-width: 700px) { .row { grid-template-columns: 52px minmax(0,1fr) 80px; } .row .num { display: none; }
+  .detail { padding-left: var(--sp-4); } .check { grid-template-columns: 60px minmax(0,1fr); } .check .d { grid-column: 1 / -1; } }
+</style>
+<script id="snapshot"></script>
+</head>
+<body>
+<main>
+  <div class="top"><h1 id="head">Test run</h1><span class="sub" id="when"></span></div>
+  <div class="bar" id="bar"></div>
+  <div class="sub" id="summary">Loading.</div>
+  <div id="groups"></div>
+</main>
+<div id="zoom"><img alt=""><div></div></div>
+<script>
+const SNAP = window.SNAPSHOT || null;
+const open = new Set();
+const cache = {};
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const secs = s => s == null ? '' : s < 90 ? s.toFixed(0) + ' s' : (s / 60).toFixed(1) + ' min';
+const fileUrl = (m, p) => '/file?machine=' + encodeURIComponent(m) + '&path=' + encodeURIComponent(p);
+
+function machineRows(m) {
+  // One row per test ID from progress.jsonl: started = running, finished = its status.
+  const rows = new Map(); let start = null, end = null;
+  for (const e of m.events) {
+    if (e.event === 'run-start') start = e;
+    if (e.event === 'run-end') end = e;
+    if (e.event === 'test-start') rows.set(e.id, {id: e.id, title: e.title, status: 'RUNNING', t0: Date.parse(e.time)});
+    if (e.event === 'test-finish') rows.set(e.id, Object.assign(rows.get(e.id) || {id: e.id, title: e.id}, {status: e.status, counts: e.counts, seconds: e.seconds}));
+  }
+  return {start, end, rows: [...rows.values()]};
+}
+
+function groupsOf(state) {
+  const groups = [];
+  for (const m of state.machines) {
+    const r = machineRows(m);
+    const web = r.rows.filter(x => x.id.startsWith('WEB-')), rest = r.rows.filter(x => !x.id.startsWith('WEB-'));
+    groups.push({key: m.name, label: m.name === 'win' ? 'Windows' : m.name === 'mac' ? 'Mac' : m.name, m, r, rows: rest});
+    if (web.length) groups.push({key: m.name + '-web', label: 'Web (on ' + (m.name === 'win' ? 'Windows' : m.name) + ')', m, r, rows: web});
+  }
+  return groups;
+}
+
+function counts(rows) {
+  const c = {PASS: 0, FAIL: 0, SKIP: 0, PLANNED: 0, RUNNING: 0};
+  rows.forEach(x => c[x.status] = (c[x.status] || 0) + 1);
+  return c;
+}
+
+async function getDetail(machine, id) {
+  const key = machine + '/' + id;
+  if (SNAP) return SNAP.details?.[key] || {checks: [], logs: [], images: [], error: 'not saved'};
+  if (!cache[key] || cache[key].status === 'RUNNING') {
+    const r = await fetch('/api/test?machine=' + encodeURIComponent(machine) + '&id=' + encodeURIComponent(id));
+    cache[key] = await r.json();
+  }
+  return cache[key];
+}
+
+function detailHtml(machine, d) {
+  if (d.error) return '<div class="err">' + esc(d.error) + '</div>';
+  const checks = (d.checks || []).slice().sort((a, b) => (b.status === 'FAIL') - (a.status === 'FAIL'))
+    .map(c => '<div class="check ' + c.status + '"><span class="st"><span class="dot"></span>' + c.status + '</span><span>' + esc(c.id) + '</span><span class="d">' + esc(c.detail) + '</span></div>').join('');
+  const shots = (d.images || []).map(i => {
+    const src = typeof i === 'string' ? fileUrl(machine, i) : i.src, path = typeof i === 'string' ? i : i.path;
+    return '<img loading="lazy" src="' + esc(src) + '" title="' + esc(path) + '" data-path="' + esc(path) + '">';
+  }).join('');
+  const logs = (d.logs || []).map(l => '<details><summary>' + esc(l.path) + '</summary><pre>' + esc(l.tail) + '</pre></details>').join('');
+  const build = d.build?.id ? '<div class="sub">Build ' + esc(d.build.id) + (d.host?.name ? ' · ' + esc(d.host.name) + ' ' + esc(d.host.version || '') : '') + '</div>' : '';
+  return build + checks + (shots ? '<div class="shots">' + shots + '</div>' : '') + logs;
+}
+
+async function render(state) {
+  const groups = groupsOf(state);
+  const all = groups.flatMap(g => g.rows), c = counts(all);
+  const gh = state.github || {}, jobs = (gh.runs || []).flatMap(r => r.jobs.map(j => ({...j, run: r})));
+  const ended = state.machines.every(m => machineRows(m).end);
+  const ghDone = jobs.length && jobs.every(j => j.status === 'completed');
+  const ghFail = jobs.filter(j => j.status === 'completed' && !['success', 'skipped'].includes(j.conclusion)).length;
+  document.getElementById('head').textContent = (state.product || 'Test') + ' test run' + (state.commit ? ' · ' + state.commit.slice(0, 7) : '');
+  document.getElementById('when').textContent = (SNAP ? 'Saved ' : 'Live · ') + state.time.replace('T', ' ').slice(0, 16);
+  const total = all.length + jobs.length;
+  const part = (n, color) => n ? '<i style="width:' + (100 * n / Math.max(total, 1)) + '%;background:' + color + '"></i>' : '';
+  const jobPass = jobs.filter(j => j.conclusion === 'success').length;
+  document.getElementById('bar').innerHTML = part(c.PASS + jobPass, 'var(--accent)') + part(c.FAIL + ghFail, 'var(--danger)') +
+    part(c.SKIP, 'var(--warn)') + part(c.PLANNED, 'var(--line-strong)');
+  const verdict = c.RUNNING || !ended || !ghDone ? 'Running.' : c.FAIL || ghFail ? 'Failed.' : 'Passed.';
+  document.getElementById('summary').innerHTML = esc(verdict) + ' ' + c.PASS + ' passed, ' + c.FAIL + ' failed, ' + c.SKIP + ' skipped, ' +
+    c.PLANNED + ' planned' + (c.RUNNING ? ', ' + c.RUNNING + ' running' : '') + ' · GitHub ' + jobPass + ' of ' + jobs.length + ' jobs passed' +
+    (state.commits?.length > 1 ? ' · <span class="err">machines are on different commits: ' + state.commits.map(x => x.slice(0, 7)).join(', ') + '</span>' : '');
+  let out = '';
+  for (const g of groups) {
+    const gc = counts(g.rows), s = g.r.start;
+    out += '<div class="label"><span>' + esc(g.label) + '</span><span>' + (s ? esc(s.machine) + ' · ' + esc((s.build || '').split(';')[0]) : '') +
+      '</span><span>' + gc.PASS + ' of ' + g.rows.length + ' passed' + (g.r.end ? ' · ' + secs(g.r.end.seconds) : '') + '</span>' +
+      (g.m.error ? '<span class="err">' + esc(g.m.error) + '</span>' : '') + '</div>';
+    if (!g.rows.length) out += '<div class="empty">' + (g.m.run ? 'Waiting for the first test.' : 'No run found on this machine yet.') + '</div>';
+    for (const x of g.rows) {
+      const key = g.m.name + '/' + x.id, k = x.counts || {};
+      const dur = x.status === 'RUNNING' ? secs((Date.now() - x.t0) / 1000) : secs(x.seconds);
+      out += '<div class="row ' + x.status + (open.has(key) ? ' open' : '') + '" data-key="' + esc(key) + '"><span class="id">' + esc(x.id) +
+        '</span><span class="title">' + esc(x.title) + '</span><span class="st"><span class="dot"></span>' + (x.status === 'RUNNING' ? 'Running' : x.status) +
+        '</span><span class="sub">' + (x.counts ? (k.PASS || 0) + ' / ' + (k.FAIL || 0) + ' / ' + (k.SKIP || 0) + ' / ' + (k.PLANNED || 0) : '') +
+        '</span><span class="num">' + dur + '</span></div>';
+      if (open.has(key)) out += '<div class="detail" id="d-' + esc(key) + '">' + (cache[key] ? detailHtml(g.m.name, cache[key]) : '<span class="sub">Loading.</span>') + '</div>';
+    }
+  }
+  out += '<div class="label"><span>GitHub</span>' + (gh.error ? '<span class="err">' + esc(gh.error) + '</span>' : '') + '</div>';
+  if (!jobs.length) out += '<div class="empty">No GitHub run for this commit yet.</div>';
+  for (const j of jobs) {
+    const st = j.status === 'completed' ? j.conclusion : j.status;
+    const dur = j.started ? ((Date.parse(j.completed || new Date().toISOString()) - Date.parse(j.started)) / 1000) : null;
+    out += '<div class="row ' + esc(st) + '"><span class="id">' + esc(String(j.run.id).slice(-5)) + '</span><span class="title"><a href="' + esc(j.url) +
+      '" target="_blank" rel="noopener">' + esc(j.name) + '</a></span><span class="st"><span class="dot"></span>' + esc(st) + '</span><span class="sub">' +
+      esc(j.run.name) + '</span><span class="num">' + secs(dur) + '</span></div>';
+  }
+  document.getElementById('groups').innerHTML = out;
+  if (!SNAP) for (const key of open) {
+    const [machine, ...rest] = key.split('/'), id = rest.join('/');
+    getDetail(machine, id).then(d => { const el = document.getElementById('d-' + key); if (el) el.innerHTML = detailHtml(machine, d); });
+  }
+}
+
+document.addEventListener('click', async e => {
+  const img = e.target.closest('.shots img');
+  if (img) { const z = document.getElementById('zoom'); z.querySelector('img').src = img.src; z.querySelector('div').textContent = img.dataset.path; z.style.display = 'flex'; return; }
+  if (e.target.closest('#zoom')) { document.getElementById('zoom').style.display = 'none'; return; }
+  const row = e.target.closest('.row[data-key]');
+  if (!row || e.target.closest('a')) return;
+  const key = row.dataset.key;
+  open.has(key) ? open.delete(key) : open.add(key);
+  if (SNAP) { const [m, ...r] = key.split('/'); cache[key] = await getDetail(m, r.join('/')); }
+  render(state);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.getElementById('zoom').style.display = 'none'; });
+
+let state = SNAP;
+async function tick() {
+  try { const r = await fetch('/api/state'); state = await r.json(); render(state); }
+  catch (error) { document.getElementById('summary').innerHTML = '<span class="err">The dashboard server is not answering: ' + esc(error) + '</span>'; }
+  setTimeout(tick, 3000);
+}
+if (SNAP) render(SNAP); else tick();
+</script>
+</body>
+</html>

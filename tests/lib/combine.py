@@ -179,6 +179,19 @@ def main():
         target = (ROOT / args.report).resolve()
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding='utf-8')
+        # [Claude 2026-10-31] The same view Joe watched live, frozen with its checks, logs and screenshots.
+        dashboard = ROOT / 'tests/dashboard/server.py'
+        if dashboard.exists():
+            page = target.with_suffix('.html')
+            command = [sys.executable, str(dashboard), '--export', str(page), '--github-run', str(args.github_run)]
+            for entry in args.run:
+                name, _, folder = entry.partition('=')
+                command += ['--run', name + '=' + str(Path(folder).resolve())]
+            import subprocess
+            done = subprocess.run(command, capture_output=True, text=True)
+            print(done.stdout.strip() or done.stderr.strip())
+            if done.returncode:
+                print('The saved dashboard page could not be written; the report above stands on its own.')
     print(text)
     print('Report: ' + str(out / 'report.md'))
     return 0 if status == 'PASS' else 1

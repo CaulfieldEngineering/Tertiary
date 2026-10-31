@@ -330,9 +330,16 @@ def main():
     parser.add_argument('--expect-demo', action='store_true')
     parser.add_argument('--engine', default='chromium' if PLATFORM == 'win' else 'all', choices=('all', 'chromium', 'firefox', 'webkit'))
     parser.add_argument('--no-logic', action='store_true')
+    parser.add_argument('--dashboard', action='store_true', help='also start the live dashboard (tests/dashboard) on 127.0.0.1:4120')
     args = parser.parse_args()
     rows = sequence()
     results = result_folder(args.results_dir)
+    if args.dashboard and os.environ.get(NESTED) != '1':
+        # [Claude 2026-10-31] Detached, so it keeps serving after the run; a second copy just fails to bind.
+        flags = dict(creationflags=0x00000008 | 0x00000200) if PLATFORM == 'win' else dict(start_new_session=True)
+        subprocess.Popen([sys.executable, str(ROOT / 'tests/dashboard/server.py')], stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, **flags)
+        print('Live dashboard: http://127.0.0.1:4120/', flush=True)
     if args.name == 'product':
         return run_product(args, results, rows)
     if args.name == 'all':
