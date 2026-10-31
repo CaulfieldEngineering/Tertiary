@@ -4,6 +4,7 @@ from pathlib import Path
 import plistlib
 import shutil
 import sqlite3
+import subprocess
 import time
 from host_common import Stop, embedded_build, plist, run, sha
 
@@ -18,8 +19,57 @@ def grant():
                           ('kTCCServiceMicrophone', BUNDLE)).fetchall()
 
 
+def audio_devices(seconds=120):
+    """[Claude 2026-10-31] The audio device list. Right after coreaudiod restarts, system_profiler can take
+    longer than 30 s to answer (M-07 failed that way on 2026-10-31 11:37 after every check had passed), so each
+    attempt has 60 s and the whole query is bounded by `seconds`."""
+    end = time.monotonic() + seconds
+    while True:
+        try:
+            return run(['system_profiler', 'SPAudioDataType'], timeout=60).stdout
+        except subprocess.TimeoutExpired:
+            if time.monotonic() >= end:
+                raise Stop('system_profiler did not list audio devices within %d s' % seconds, 3)
+            time.sleep(2)
+
+
+def input_state(ui, seconds=90):
+    """[Claude 2026-10-31] Default input device and whether it is open, from Core Audio (read-only).
+    Just after coreaudiod restarts, the HAL can take longer than the helper's 12 s per call to answer (M-07 failed
+    that way on 2026-10-31 11:50), so calls are retried, bounded by `seconds`."""
+    end = time.monotonic() + seconds
+    while True:
+        try:
+            return json.loads(ui.call('input-running'))
+        except (subprocess.TimeoutExpired, RuntimeError, Stop, ValueError):
+            if time.monotonic() >= end:
+                raise Stop('Core Audio did not report the default input within %d s' % seconds, 3)
+            time.sleep(2)
+
+
+def restart_coreaudio(want_input):
+    """[Claude 2026-10-31] Restart Core Audio so it loads or drops the loopback HAL driver, then wait until it
+    answers. On 2026-10-31 11:51 coreaudiod came back spinning at 100% CPU and did not answer for minutes; one
+    more restart cleared it. So each restart is checked (device list within 60 s, with the input present or
+    gone as wanted) and repeated at most three times. Only the daemon this test restarted is touched."""
+    for _ in range(3):
+        run(['sudo', '-n', 'killall', 'coreaudiod'], check=False)
+        end = time.monotonic() + 60
+        while time.monotonic() < end:
+            time.sleep(1)
+            try:
+                devices = run(['system_profiler', 'SPAudioDataType'], timeout=30).stdout
+            except subprocess.TimeoutExpired:
+                continue
+            if (b'Input Channels:' in devices) == want_input:
+                return devices
+        run(['pkill', '-f', 'system_profiler -nospawn'], check=False)
+    raise Stop('Core Audio did not come back %s the loopback input after three restarts'
+               % ('with' if want_input else 'without'), 3)
+
+
 def has_input():
-    return 'Input Channels:' in run(['system_profiler', 'SPAudioDataType'], timeout=20).stdout.decode()
+    return b'Input Channels:' in audio_devices()
 
 
 def test(args, ui, result, here, repo):
@@ -46,25 +96,19 @@ def test(args, ui, result, here, repo):
         if running() or run(['pgrep', '-x', 'Tertiary'], check=False).returncode == 0:
             raise Stop('Close audio hosts before installing the temporary input', 2)
         run(['codesign', '--verify', '--deep', '--strict', driver])
-        devices = run(['system_profiler', 'SPAudioDataType']).stdout
+        devices = audio_devices()
         (result.out / 'audio-devices-before.txt').write_bytes(devices)
         result.artifact(result.out / 'audio-devices-before.txt')
         run(['sudo', '-n', 'ditto', driver, destination])
         installed = True
-        run(['sudo', '-n', 'killall', 'coreaudiod'], check=False)
-        for _ in range(40):
-            time.sleep(.5)
-            if has_input():
-                break
+        restart_coreaudio(want_input=True)
     try:
         _test(args, ui, result, here, repo)
     finally:
         if installed:
             # Constant, exact path, created above only when absent. Other HAL drivers stay intact.
             run(['sudo', '-n', 'rm', '-r', destination])
-            run(['sudo', '-n', 'killall', 'coreaudiod'], check=False)
-            time.sleep(2)
-            after = run(['system_profiler', 'SPAudioDataType']).stdout
+            after = restart_coreaudio(want_input=False)
             (result.out / 'audio-devices-restored.txt').write_bytes(after)
             result.artifact(result.out / 'audio-devices-restored.txt')
             result.check('M-07-input-cleanup', not destination.exists() and b'BlackHole' not in after,
@@ -136,7 +180,7 @@ def _test(args, ui, result, here, repo):
     run(['tccutil', 'reset', 'Microphone', BUNDLE])
     reset = grant()
     result.check('M-07-reset', not reset, "Tertiary's microphone decision reset before launch (was " + str(before) + ')')
-    input_before = json.loads(ui.call('input-running'))
+    input_before = input_state(ui)
     run(['open', '-n', app])
     try:
         deadline = time.monotonic() + 30
@@ -177,7 +221,7 @@ def _test(args, ui, result, here, repo):
         text = ' '.join(e.get(k, '') for e in rows for k in ('Title', 'Value', 'Description')).lower()
         result.check('M-07-no-denial', 'input denied' not in text and 'permission denied' not in text,
                      'Standalone editor is alive after Allow; no input-denied state')
-        devices = run(['system_profiler', 'SPAudioDataType'], timeout=20).stdout.decode()
+        devices = audio_devices().decode()
         (result.out / 'audio-devices.txt').write_text(devices)
         result.artifact(result.out / 'audio-devices.txt')
         # [Claude 2026-10-31] Was an always-SKIP placeholder. Now a real check: after Allow, the default
@@ -185,7 +229,7 @@ def _test(args, ui, result, here, repo):
         deadline = time.monotonic() + 10
         live = {}
         while time.monotonic() < deadline:
-            live = json.loads(ui.call('input-running'))
+            live = input_state(ui)
             if live.get('running'):
                 break
             time.sleep(.4)

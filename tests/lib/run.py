@@ -74,9 +74,9 @@ def summary(results, reports, *, product=False, omissions=(), profile='local'):
     # [Claude 2026-10-31] The commit and any uncommitted tracked changes, so combine.py can require that every
     # machine and the GitHub run tested one clean commit.
     # Popen, not subprocess.run: the runner's contract tests patch subprocess.run to fake child scripts.
-    git = lambda *a: subprocess.Popen(['git', '-C', str(ROOT), *a], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).communicate()[0].strip()
+    git = lambda *a: subprocess.Popen(['git', '-C', str(ROOT), *a], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).communicate()[0].rstrip()
     data = dict(suite_id=suite_id, platform=PLATFORM, profile=profile, finished=now(),
-                commit=git('rev-parse', 'HEAD'),
+                commit=git('rev-parse', 'HEAD').strip(),
                 dirty=[line[3:] for line in git('status', '--porcelain', '--untracked-files=no').splitlines()],
                 status='FAIL' if counts['FAIL'] else 'PASS', coverage=coverage, counts=counts,
                 results=reports, excluded=list(omissions))
