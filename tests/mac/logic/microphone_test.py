@@ -47,27 +47,6 @@ def input_state(ui, seconds=90):
             time.sleep(2)
 
 
-def restart_coreaudio(want_input):
-    """[Claude 2026-10-31] Restart Core Audio so it loads or drops the loopback HAL driver, then wait until it
-    answers. On 2026-10-31 11:51 coreaudiod came back spinning at 100% CPU and did not answer for minutes; one
-    more restart cleared it. So each restart is checked (device list within 60 s, with the input present or
-    gone as wanted) and repeated at most three times. Only the daemon this test restarted is touched."""
-    for _ in range(3):
-        run(['sudo', '-n', 'killall', 'coreaudiod'], check=False)
-        end = time.monotonic() + 60
-        while time.monotonic() < end:
-            time.sleep(1)
-            try:
-                devices = run(['system_profiler', 'SPAudioDataType'], timeout=30).stdout
-            except subprocess.TimeoutExpired:
-                continue
-            if (b'Input Channels:' in devices) == want_input:
-                return devices
-        run(['pkill', '-f', 'system_profiler -nospawn'], check=False)
-    raise Stop('Core Audio did not come back %s the loopback input after three restarts'
-               % ('with' if want_input else 'without'), 3)
-
-
 def has_input():
     return b'Input Channels:' in audio_devices()
 
@@ -75,44 +54,23 @@ def has_input():
 def test(args, ui, result, here, repo):
     """[Claude 2026-10-31] macOS shows the microphone prompt only when the app opens an audio input.
 
-    Joe's M1 has no input device, so without one the standalone never asks and M-07-prompt failed
-    (2026-10-31 08:32 and 08:33). That was the cause, not SSH: with the loopback input present the same
-    SSH-launched run passes. The temporary signed loopback input is now installed whenever the Mac has
-    no input; a Mac with a real input uses it and nothing is installed. No input and no driver is SKIP
-    (a missing fixture, like a missing host), with the reason, never a misleading prompt failure.
+    Joe's M1 has no input device; without one the standalone never asks (the 08:32 and 08:33 failures; not
+    SSH: the same SSH run passes with an input). This test never restarts coreaudiod, AirPlay or any other
+    audio service and never installs a driver: on 2026-10-31 restarting them sent the audio services into
+    runaway CPU (11:59 to 12:05) and then hung the Mac until it was power-cycled. It uses the input the Mac
+    already has. No input, or Core Audio not answering, is FAIL with what to do; never a silent pass.
     """
-    destination = Path('/Library/Audio/Plug-Ins/HAL/BlackHole2ch.driver')
-    installed = False
-    if not has_input():
-        if not args.loopback_driver:
-            raise Stop('This Mac has no audio input, so macOS will not ask for the microphone. Put a signed '
-                       'BlackHole2ch.driver at ~/.wla-test/mic/ or set WLA_MIC_LOOPBACK_DRIVER', 2)
-        driver = Path(args.loopback_driver).expanduser().resolve()
-        if destination.exists():
-            raise Stop('An existing BlackHole2ch driver is present but gives no input; it will not be replaced', 2)
-        if driver.name != destination.name or not driver.is_dir():
-            raise Stop('Expected a signed BlackHole2ch.driver bundle', 2)
-        from logic_test import running
-        if running() or run(['pgrep', '-x', 'Tertiary'], check=False).returncode == 0:
-            raise Stop('Close audio hosts before installing the temporary input', 2)
-        run(['codesign', '--verify', '--deep', '--strict', driver])
-        devices = audio_devices()
-        (result.out / 'audio-devices-before.txt').write_bytes(devices)
-        result.artifact(result.out / 'audio-devices-before.txt')
-        run(['sudo', '-n', 'ditto', driver, destination])
-        installed = True
-        restart_coreaudio(want_input=True)
     try:
-        _test(args, ui, result, here, repo)
-    finally:
-        if installed:
-            # Constant, exact path, created above only when absent. Other HAL drivers stay intact.
-            run(['sudo', '-n', 'rm', '-r', destination])
-            after = restart_coreaudio(want_input=False)
-            (result.out / 'audio-devices-restored.txt').write_bytes(after)
-            result.artifact(result.out / 'audio-devices-restored.txt')
-            result.check('M-07-input-cleanup', not destination.exists() and b'BlackHole' not in after,
-                         'Temporary signed loopback input removed; existing HAL drivers and output settings retained; no reboot')
+        devices = audio_devices(seconds=60)
+    except Stop:
+        raise Stop('Core Audio is not answering (system_profiler gave no device list in 60 s). The test does not '
+                   'restart audio services; restart the Mac, then run it again', 1)
+    (result.out / 'audio-devices-before.txt').write_bytes(devices)
+    result.artifact(result.out / 'audio-devices-before.txt')
+    result.check('M-07-input-present', b'Input Channels:' in devices,
+                 'This Mac has an audio input for macOS to ask about. Without one the prompt never appears: '
+                 'connect an input, or install a virtual input (for example BlackHole 2ch) once and restart')
+    _test(args, ui, result, here, repo)
 
 
 def source_from_cache(build):

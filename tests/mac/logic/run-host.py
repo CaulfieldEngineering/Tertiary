@@ -25,7 +25,7 @@ def main():
     p.add_argument('--juce')
     # [Claude 2026-10-31] The microphone check always resets Tertiary's own decision (tccutil, this bundle only),
     # so every run sees the prompt. The old opt-in --reset-mic is gone; a remembered decision made runs unrepeatable.
-    p.add_argument('--loopback-driver', help='Signed BlackHole2ch.driver, installed only when this Mac has no audio input, then removed')
+    # [Claude 2026-10-31] --loopback-driver removed: the test never installs drivers or restarts audio services.
     args = p.parse_args()
     here = Path(__file__).resolve().parent
     repo = next((d for d in here.parents if (d / 'CMakeLists.txt').is_file() and (d / 'plugin').is_dir()), here)

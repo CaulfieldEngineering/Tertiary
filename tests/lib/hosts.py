@@ -370,7 +370,7 @@ def logic(r, args):
 
 def microphone(r, args):
     # [Claude 2026-10-31] Every run resets Tertiary's own microphone decision so the prompt always appears.
-    # The loopback input is used only when the Mac has no audio input (see microphone_test.py for why).
+    # It uses the Mac's existing audio input; it never installs drivers or restarts audio services.
     runner = mac_host_runner(r)
     if not runner:
         return
@@ -378,9 +378,6 @@ def microphone(r, args):
     options = ['--source', ROOT, '--build', r.build_dir, '--build-id', expected]
     if os.environ.get('WLA_TEST_CMAKE'):
         options += ['--cmake', os.environ['WLA_TEST_CMAKE']]
-    driver = Path(os.environ.get('WLA_MIC_LOOPBACK_DRIVER') or '~/.wla-test/mic/BlackHole2ch.driver').expanduser()
-    if driver.exists():
-        options += ['--loopback-driver', driver]
     mac_host_result(r, 'microphone', runner, options, timeout=1200)
 
 
