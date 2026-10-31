@@ -51,8 +51,14 @@ def mapped(pid):
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
         return paths
-    maps = subprocess.check_output(['vmmap', '-w', str(pid)], text=True, stderr=subprocess.STDOUT, timeout=30)
-    return [line[line.index(' /') + 1:].strip() for line in maps.splitlines() if ' /' in line]
+    # [Claude 2026-10-31] lsof, not vmmap. vmmap suspends the process while it reads its memory map, and REAPER's
+    # audio thread stalled with it: every run that inspected the binary got exactly one audio xrun about 0.03 s
+    # after play, and only those runs. The same bare JUCE example plug-in got it with vmmap and 0 without; Tertiary
+    # got 0 without (Mac M1, REAPER 7.84, 1 instance, 10 s, two runs each). lsof lists the same mapped files (its
+    # "n" lines) without stopping the process, so the check that REAPER loaded the tested binary is unchanged.
+    out = subprocess.run(['lsof', '-n', '-P', '-F', 'n', '-p', str(pid)], capture_output=True, text=True,
+                         timeout=30).stdout   # lsof exits 1 on harmless per-file warnings; the list is still complete
+    return [line[1:].strip() for line in out.splitlines() if line.startswith('n/')]
 
 
 def main():

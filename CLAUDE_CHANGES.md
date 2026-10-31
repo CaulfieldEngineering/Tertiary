@@ -347,3 +347,19 @@ The separate fix-first-block worktree is untouched.
 
 Undo: revert this layout commit; the older combined wrappers and workflows return together. Ignored result
 artifacts preserve per-run evidence and binary hashes.
+
+
+## T2-03 REAPER 30-instance test: the binary check no longer suspends REAPER (Claude, 2026-10-31)
+
+- `plugin/tests/reaper/run_reaper_instances.py`, `mapped()`: on the Mac, lists REAPER's mapped files with
+  `lsof` instead of `vmmap`. vmmap suspends the process it reads, and the check ran just before play, so REAPER's
+  audio thread stalled: every Tertiary run (VST3 and AU, 1 to 30 instances, bypassed too) logged exactly one audio
+  xrun about 0.03 s after the first play. Control runs skip the binary check, which is why ReaEQ and Apple's AUs
+  never showed it.
+- Evidence (Mac M1, REAPER 7.84, 48 kHz / 128, 1 instance, 10 s): a diagnostic Tertiary build with timing logs
+  showed no host calls into the processor around play and first blocks of about 15 us; an empty processBlock, no
+  preset list and no license thread all still gave the xrun. The bare JUCE example plug-in (same JUCE 8.0.8) gave
+  1 xrun with the vmmap check and 0 without; shipping Tertiary gave 0 without it. With lsof: 0 xruns, and the
+  check still proves the tested binary (same path and SHA-256). No plug-in code and no pass criterion changed.
+
+Undo: revert the commit containing this entry.
