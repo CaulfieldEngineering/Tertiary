@@ -12,7 +12,7 @@ import sys
 import traceback
 from urllib.parse import quote
 
-from common import CODES, PLATFORM, ROOT, Report, host_lock, now, running, write_json
+from common import CODES, PLATFORM, ROOT, Report, config, host_lock, now, running, write_json
 
 
 def sequence():
@@ -48,6 +48,8 @@ def result_folder(value):
 def excluded(row, args, native=True):
     if PLATFORM not in row['scripts']:
         return 'other platform'
+    if row.get('requires_format') and row['requires_format'] not in config()['wFORMATS'].split():
+        return row['requires_format'] + ' is not enabled in config.cmake'
     if args.profile == 'ci':
         if not row['ci_ok']:
             return 'GitHub checkbox is off'

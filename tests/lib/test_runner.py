@@ -162,6 +162,14 @@ class Contracts(unittest.TestCase):
         web = next(r for r in rows if r['id'] == 'WEB-01')
         self.assertIsNone(run.excluded(web, args, native=False))
 
+    def test_au_eligibility_follows_product_formats(self):
+        row = {'id':'M-01', 'scripts':{common.PLATFORM:'unused'}, 'ci_ok':True, 'requires_format':'AU'}
+        args = argparse.Namespace(profile='ci')
+        with patch('run.config', return_value={'wFORMATS':'VST3 Standalone'}):
+            self.assertIn('AU is not enabled', run.excluded(row, args))
+        with patch('run.config', return_value={'wFORMATS':'VST3 AU Standalone'}):
+            self.assertIsNone(run.excluded(row, args))
+
     def test_product_discovery_runs_unregistered_files_and_fails_visibly(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

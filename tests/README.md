@@ -100,7 +100,7 @@ bash tests/web/test-web.sh --profile ci --engine chromium --results-dir tests/re
 ```
 
 The `ci` profile selects checked rows, excludes DAWs/humans/Mac-day-only rows, and delegates WEB-01 to the
-separate web job. M-05/06/07 retain checked GitHub flags but need a real Mac desktop/Retina/microphone session;
+separate web job. M-01 also requires AU in `config.cmake`; a VST3-only template records it as not applicable. M-05/06/07 retain checked GitHub flags but need a real Mac desktop/Retina/microphone session;
 they are explicitly listed as excluded, not silently marked passed. T2-03 is local-only as before and its
 original 30-instance deadline failure is not suppressed. ASan without an instrumented build remains
 PLANNED; it has never been part of the prior CI baseline. Missing prerequisites for selected implemented

@@ -245,7 +245,8 @@
     "scripts": {
       "mac": "mac/test-auval.sh"
     },
-    "handler": "auval"
+    "handler": "auval",
+    "requires_format": "AU"
   },
   {
     "id": "M-02",

@@ -13,9 +13,9 @@ def metric(r, name, actual):
     import json
     baseline = json.loads((ROOT / 'tests/ci-baseline.json').read_text(encoding='utf-8'))
     minimum = baseline.get(PLATFORM, {}).get(name, 0)
-    r.data.setdefault('metrics', {})[name] = {'before': minimum, 'after': actual}
-    r.check('coverage-' + name, 'PASS' if actual >= minimum else 'FAIL',
-            f'{actual} executed; pre-layout baseline {minimum}')
+    r.data.setdefault('metrics', {})[name] = {'before': minimum or 'not recorded', 'after': actual}
+    r.check('coverage-' + name, 'PASS' if actual >= max(1, minimum) else 'FAIL',
+            f'{actual} executed; pre-layout baseline {minimum or "not recorded"}')
 
 
 def unit(r, args):
@@ -83,7 +83,7 @@ def hosttest(r, args):
             command = [exe, *(['--vst3', path] if fmt == 'VST3' else ['--au'])]
             if args.expect_demo:
                 command.append('--expect-demo')
-            _, text = r.command('hosttest-' + fmt.lower(), command, timeout=360)
+            _, text = r.command('hosttest-' + fmt.lower(), command, timeout=360, required_text=('HostTest ' + ('AudioUnit' if fmt == 'AU' else fmt) + ':',))
             match = re.search(r'HostTest .*?: (\d+) passed, (\d+) failed, (\d+) skipped', text)
             metric(r, 'host_' + fmt.lower() + '_pass', int(match[1]) if match else 0)
             if match:
