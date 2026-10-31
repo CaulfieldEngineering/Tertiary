@@ -251,3 +251,10 @@ Undo: revert the commit. The plugin's own code changes are the one-line friends,
 11. **Small, harmless**: `FrequencyResponse::makeAttachments` makes `lowMidAttachment` twice; `getPlayPosition()` returns an `std::atomic` by value; the meters read `LinearSmoothedValue` across threads (fine in practice).
 12. **Deploy workflow**: the Mac "Sign" steps skip silently if secrets are missing, so an unsigned installer can be uploaded. A tag build could fail instead.
 13. **JUCE 8.0.8 use-after-free in its Windows accessibility code** (found by the UI tests under the address sanitiser, 2026-10-29): `AccessibilityNativeHandle::get_ProviderOptions` uses its element without checking it is still valid, so a screen reader or another UI Automation client asking about a pop-up menu that has just closed reads freed memory. Rare, and in JUCE, not Tertiary; a newer JUCE may have fixed it. `run_all.ps1 -Asan` lists these reports without failing on them.
+
+
+## Codex 2026-10-30: Logic and microphone harnesses
+
+`plugin/tests/daw/logic/` adds the saved two-track Logic project and local scripted M-09 / M-07 (V-08) runners. Logic stages the selected AU with backup/restore, runs strict auval, bounces 24 seconds, checks the editor/About build ID and compares exact float PCM. The microphone runner builds fix `25b0a55`, captures/accepts the app's real consent prompt and verifies its TCC grant read-only. See that folder's README for requirements, output contract, layout migration and the physical-input limitation.
+
+Validation: RC1b `f24dc90` on M1 / macOS 26.6 / Logic 12.4; two baseline bounces and two complete scripted regression runs matched with tolerance 0. Editor 750 x 478, About f24dc90. Microphone consent and hardened-runtime audio-input entitlement PASS with a temporary signed software input, removed afterward. No plug-in code changed. Undo by reverting the Logic/microphone harness commit.
