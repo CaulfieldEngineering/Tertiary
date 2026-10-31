@@ -59,7 +59,15 @@ def loaded_format(r, fmt):
     if path:
         r.select(path)
         if fmt == 'AU':
+            # Downloaded CI bundles may lose executable bits. Repair only this repo's build,
+            # before staging it; the previous installed component is restored byte-for-byte.
+            executable = path / 'Contents/MacOS' / r.product
+            before = executable.stat().st_mode & 0o777
+            executable.chmod(before | 0o111)
+            (r.work / 'au-preparation.log').write_text(
+                f'{executable}\nmode {oct(before)} -> {oct(executable.stat().st_mode & 0o777)}\n', encoding='utf-8')
             with staged(r, path, Path.home() / 'Library/Audio/Plug-Ins/Components' / path.name, au_reset) as copy:
+                r.command('au-registry', ['auval', '-a'], timeout=60, record=False)
                 yield copy
         else:
             yield path

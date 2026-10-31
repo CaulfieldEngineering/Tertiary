@@ -278,7 +278,8 @@ def host_version(path):
 
 def au_reset():
     # Invalidate this user's registrar only. auval -a repopulates it from the staged component.
-    subprocess.run(['killall', '-u', str(os.getuid()), 'AudioComponentRegistrar'], capture_output=True, timeout=15)
+    # Match the pre-layout CI's forced restart; TERM can leave the old registration cache in use.
+    subprocess.run(['killall', '-9', '-u', str(os.getuid()), 'AudioComponentRegistrar'], capture_output=True, timeout=15)
     subprocess.run(['auval', '-a'], capture_output=True, timeout=60)
 
 
