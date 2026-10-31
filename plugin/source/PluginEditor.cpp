@@ -167,6 +167,9 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
     // a quiet note if offline too long, and the "Version X is available" link
     //==============================================================================
     void AudioPluginAudioProcessorEditor::showLicenseCheckResult() {
+     #if JUCE_EMSCRIPTEN
+      return; // No activation popup or update/licence nag in the free browser demo.
+     #endif
       auto result = audioProcessor.licenseCheck.getResult();
 
       if (!result.finished)
@@ -356,7 +359,14 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
       // [Claude 2026-10-29] window size; the window can also be dragged to any size between 75 % and 250 %
       juce::PopupMenu size;
       for (int pct : { 100, 125, 150, 200 })
+       #if JUCE_EMSCRIPTEN
+        size.addItem(100 + pct, juce::String(pct) + " %", false, pct == 100);
+       #else
         size.addItem(100 + pct, juce::String(pct) + " %", true, std::abs(uiScale * 100.f - (float) pct) < 1.f);
+       #endif
+     #if JUCE_EMSCRIPTEN
+      size.addItem(999, "Resize your browser to change the size", false);
+     #endif
       menu.addSubMenu("Window size", size);
       menu.addSeparator();
       menu.addItem(4, "WonderlandAudio.com");
@@ -387,7 +397,9 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
 
     float AudioPluginAudioProcessorEditor::loadUiScale()
     {
-     #if WLA_REVIEW_RENDER_BUILD
+     #if JUCE_EMSCRIPTEN
+      return 1.f; // The web shell owns fitting; never restore a desktop window size.
+     #elif WLA_REVIEW_RENDER_BUILD
       // review renders are laid out at 100 % (their --scale sets the picture's size); WLA_UISCALE tries a window size
       if (const char* v = std::getenv("WLA_UISCALE")) return juce::jlimit(0.75f, 2.5f, juce::String(v).getFloatValue());
       return 1.f;
@@ -405,7 +417,7 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
 
     void AudioPluginAudioProcessorEditor::saveUiScale()
     {
-     #if ! WLA_REVIEW_RENDER_BUILD
+     #if ! WLA_REVIEW_RENDER_BUILD && ! JUCE_EMSCRIPTEN
       juce::PropertiesFile props(tertiarySettings());
       props.setValue("uiScale", (double) uiScale);
       props.saveIfNeeded();
@@ -414,6 +426,9 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudi
 
     void AudioPluginAudioProcessorEditor::setUiScale(float scale)
     {
+     #if JUCE_EMSCRIPTEN
+      return; // Defence in depth: disabled menu fields cannot change the canvas size.
+     #endif
       uiScale = scale;   // [Claude 2026-10-30] was read back from the window's width in resized()
       setSize(wantedSize().getWidth(), wantedSize().getHeight());
       saveUiScale();

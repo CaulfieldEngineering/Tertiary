@@ -5,7 +5,7 @@
 # Runs on a push to any work branch (everything except staging and production, which have their own pipeline in
 # workflow.yml, and claude/installer-test*, which run installer-test.yml), and by hand (Actions tab, "Run workflow").
 # [Claude 2026-10-29] Was release-* and claude/* only, so pushes to ui-house-style and ui-tests ran nothing.
-# It never signs, never uploads to a server and needs no secrets. The deploy pipeline is
+# It never signs or deploys. The web check needs CE_GITHUB_PAT to read Wonderlab. The deploy pipeline is
 # workflow.yml (staging and v* tags) and is not touched by this file.
 #
 #   mac-build    Apple Silicon (macos-15): builds the universal VST3, AU, ReviewRender, the unit tests and the UI
@@ -22,8 +22,8 @@
 # display is needed. A failure prints each failing check with its scenario and test-plan IDs, and the failing lines
 # also go in the run's summary page.
 #   compare      compares the renders of all three: they should sound the same
-#   web          compiles the Wonderlab web demo like workflow.yml does, but deploys nothing
-#                (skipped if the CE_GITHUB_PAT secret, used to read the Wonderlab repo, isn't available)
+#   web          compiles the Wonderlab web demo and runs the Playwright audio, control and screenshot tests
+#                (a missing CE_GITHUB_PAT fails clearly; the check never silently skips or deploys)
 #
 # Mac minutes count 10x on private repos, so the Intel job reuses the Apple Silicon build.
 # ==========================================================================================
@@ -37,9 +37,8 @@ on:
       - '!staging'                  # workflow.yml (the deploy pipeline)
       - '!production'
       - '!claude/installer-test*'   # those run installer-test.yml instead
-    paths-ignore:
-      - '**.md'
-      - 'promo/**'
+    # [Codex 2026-10-30] Every work-branch push runs the browser regression suite, including docs-only pushes.
+    # Specifying branches without tags means tag pushes do not run this workflow.
   workflow_dispatch:
 
 # A newer push to the same branch cancels the run still going
@@ -258,65 +257,172 @@ jobs:
         path: compare-*.txt
 
 
-  # Job: Web demo compiles (Wonderlab), nothing is deployed
+  # Job: Web demo builds and Playwright tests (Wonderlab), nothing is deployed
+  # [Codex 2026-10-30] Same pinned SDK as the deploy pipeline; local and CI use the same build/test scripts.
+  # Windows matches the locally reviewed Chromium screenshot references (font rendering varies by OS).
   # ==========================================================================================
   web:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
     env:
-      PAT: ${{ secrets.CE_GITHUB_PAT }}
+      WONDERLAB_DIR: ${{ github.workspace }}/Wonderlab
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Check Wonderlab access
+      env:
+        PAT: ${{ secrets.CE_GITHUB_PAT }}
+      run: |
+        mkdir -p plugin/tests/web/out
+        if [ -z "$PAT" ]; then
+          echo "::error::CE_GITHUB_PAT is required to build and test the private Wonderlab dependency."
+          echo "Web tests could not run: CE_GITHUB_PAT is missing." > plugin/tests/web/out/build.log
+          exit 1
+        fi
+
     - name: Checkout Wonderlab
-      if: env.PAT != ''
       uses: actions/checkout@v4
       with:
         repository: CaulfieldEngineering/Wonderlab
+        ref: 5248a157cfdf472caf1fafc7b9b71dec09485947
         path: Wonderlab
         token: ${{ secrets.CE_GITHUB_PAT }}
+        persist-credentials: false
+
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: npm
+        cache-dependency-path: plugin/tests/web/package-lock.json
 
     - name: Install Emscripten SDK
-      if: env.PAT != ''
       uses: mymindstorm/setup-emsdk@v14
       with:
         version: 5.0.3
 
-    - name: Install build dependencies
-      if: env.PAT != ''
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ninja-build libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxcomposite-dev           libfreetype-dev libfontconfig1-dev libasound2-dev libgl-dev libcurl4-openssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
 
-    - name: Build the web demo (same steps as workflow.yml)
-      if: env.PAT != ''
+    - name: Install build dependencies
+      run: |
+        python -m pip install ninja
+        choco install ffmpeg --no-progress -y
+
+    - name: Build the web demo
       shell: bash
       run: |
-        set -e
-        cmake -S . -B build -DBUILD_DEMO=OFF
-        cmake --build build --target TertiaryBinaryData
-        BINARY_DATA_DIR=$(dirname "$(find build -name 'BinaryData.h' -type f | head -1)")
-        mkdir -p build/web && cd build/web
-        {
-          echo 'cmake_minimum_required(VERSION 3.15)'
-          echo 'project(TertiaryWeb LANGUAGES C CXX)'
-          echo 'set(CMAKE_CXX_STANDARD 20)'
-          echo 'set(CMAKE_CXX_STANDARD_REQUIRED ON)'
-          echo 'set(PLUGIN_NAME "Tertiary")'
-          echo 'set(PLUGIN_VERSION "1.1.0")'
-          echo "set(PLUGIN_SRC_DIR \"${GITHUB_WORKSPACE}/plugin/source\")"
-          echo "set(WONDERLAB_DIR \"${GITHUB_WORKSPACE}/Wonderlab\")"
-          echo 'set(PLUGIN_PROCESSOR_HEADER "PluginProcessor.h")'
-          echo 'set(PLUGIN_PROCESSOR_CLASS audio_plugin::AudioPluginAudioProcessor)'
-          echo "set(PLUGIN_EXTRA_INCLUDE_DIRS \"${GITHUB_WORKSPACE}/${BINARY_DATA_DIR}\")"
-          echo "set(PLUGIN_EXTRA_SOURCE_DIRS \"${GITHUB_WORKSPACE}/${BINARY_DATA_DIR}\")"
-          echo 'include(${WONDERLAB_DIR}/cmake/WonderlabBuild.cmake)'
-        } > CMakeLists.txt
-        emcmake cmake -G Ninja -S . -B . -DCMAKE_BUILD_TYPE=Release
-        emmake ninja
-        ls -la TertiaryWeb.*
+        set -euo pipefail
+        node plugin/tests/web/build.mjs 2>&1 | tee plugin/tests/web/out/build.log
 
-    - name: No Wonderlab access
-      if: env.PAT == ''
-      run: echo "CE_GITHUB_PAT is not available to this run; the web build check was skipped."
+    - name: Install browser tests
+      working-directory: plugin/tests/web
+      run: |
+        npm ci
+        npx playwright install chromium
+
+    - name: Test the browser demo
+      working-directory: plugin/tests/web
+      run: |
+        npm run test:harness
+        npm test -- --no-ai --engine=chromium
+
+    - name: Upload browser test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: web-test-results
+        path: plugin/tests/web/out/
+
+  # Windows WebKit has no Web Audio. Build the same sources on macOS for iPhones.
+  # Independent builds also avoid making test execution depend on artifact storage.
+  web-mobile:
+    runs-on: macos-15
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    env:
+      WONDERLAB_DIR: ${{ github.workspace }}/Wonderlab
+    steps:
+    - uses: actions/checkout@v4
+    - name: Check Wonderlab access
+      env:
+        PAT: ${{ secrets.CE_GITHUB_PAT }}
+      run: |
+        mkdir -p plugin/tests/web/out
+        if [ -z "$PAT" ]; then
+          echo "::error::CE_GITHUB_PAT is required to build and test the private Wonderlab dependency."
+          echo "Web tests could not run: CE_GITHUB_PAT is missing." > plugin/tests/web/out/build.log
+          exit 1
+        fi
+
+    - name: Checkout Wonderlab
+      uses: actions/checkout@v4
+      with:
+        repository: CaulfieldEngineering/Wonderlab
+        ref: 5248a157cfdf472caf1fafc7b9b71dec09485947
+        path: Wonderlab
+        token: ${{ secrets.CE_GITHUB_PAT }}
+        persist-credentials: false
+
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: npm
+        cache-dependency-path: plugin/tests/web/package-lock.json
+
+    - name: Install Emscripten SDK
+      uses: mymindstorm/setup-emsdk@v14
+      with:
+        version: 5.0.3
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install build dependencies
+      run: |
+        python -m pip install ninja
+        brew install ffmpeg
+
+    - name: Build the web demo
+      shell: bash
+      run: |
+        set -euo pipefail
+        node plugin/tests/web/build.mjs 2>&1 | tee plugin/tests/web/out/build.log
+
+    - name: Install WebKit
+      working-directory: plugin/tests/web
+      run: |
+        npm ci
+        npx playwright install webkit
+    - name: Test iPhone portrait and landscape with real Web Audio
+      working-directory: plugin/tests/web
+      run: npm test -- --no-ai --engine=webkit
+    - name: Upload iPhone results and screenshots
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: web-mobile-results
+        path: plugin/tests/web/out/
+
+  # One work-branch gate, including the mobile WebKit/Chromium checks in web.
+  ci-ok:
+    if: always()
+    needs: [mac-build, mac-intel, windows, compare, web, web-mobile]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Require every test job
+      env:
+        RESULTS: ${{ toJSON(needs) }}
+      run: |
+        python3 -c 'import json, os; jobs=json.loads(os.environ["RESULTS"]); assert all(j["result"] == "success" for j in jobs.values()), jobs'

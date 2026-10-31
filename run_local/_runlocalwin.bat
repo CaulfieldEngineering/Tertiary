@@ -277,7 +277,7 @@ echo set(PLUGIN_PROCESSOR_CLASS audio_plugin::AudioPluginAudioProcessor^)
 echo set(PLUGIN_EXTRA_INCLUDE_DIRS "%BINARY_DATA_FWD%"^)
 echo set(PLUGIN_EXTRA_SOURCE_DIRS "%BINARY_DATA_FWD%"^)
 echo.
-echo include(%WONDERLAB_FWD%/cmake/WonderlabBuild.cmake^)
+echo include("%PLUGIN_SRC_FWD%/../web/wonderlab.cmake"^)
 ) > CMakeLists.txt
 
 :: -- Configure with Emscripten --
@@ -317,7 +317,7 @@ echo.
 :: [Claude 2026-10-27] Assembly now runs Wonderlab\scripts\assemble-web.js, the same script
 :: CI uses: index.html, the tracks (plus MP3 copies if ffmpeg is installed), durations, a
 :: build id, and the phone zoom regions from plugin\web_demo.json, into plugin-config.js.
-"!NODE_EXE!" "%WONDERLAB_DIR%\scripts\assemble-web.js" --name "!REPOSITORY_NAME!" --build "%WEB_BUILD_DIR%" --samples "%cd%\plugin\sample_audio" --extra "%cd%\plugin\web_demo.json"
+"!NODE_EXE!" "%cd%\plugin\web\assemble.mjs" --wonderlab "%WONDERLAB_DIR%" --name "!REPOSITORY_NAME!" --build "%WEB_BUILD_DIR%" --samples "%cd%\plugin\sample_audio" --extra "%cd%\plugin\web_demo.json"
 if errorlevel 1 (
     echo  ERROR: Assembling the web app failed.
     pause

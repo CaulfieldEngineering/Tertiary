@@ -22,3 +22,4 @@ plugin/sample_audio/Test Signal.wav
 
 # Address-sanitiser build of the UI tests (plugin/tests/run_all.ps1 -Asan, 2026-10-29)
 build-asan/
+plugin/tests/web/out/

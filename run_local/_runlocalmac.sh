@@ -244,7 +244,7 @@ set(PLUGIN_PROCESSOR_CLASS audio_plugin::AudioPluginAudioProcessor)
 set(PLUGIN_EXTRA_INCLUDE_DIRS "${BINARY_DATA_DIR}")
 set(PLUGIN_EXTRA_SOURCE_DIRS "${BINARY_DATA_DIR}")
 
-include(\${WONDERLAB_DIR}/cmake/WonderlabBuild.cmake)
+include("\${PLUGIN_SRC_DIR}/../web/wonderlab.cmake")
 EOF
 
 # -- Configure with Emscripten --
@@ -272,7 +272,7 @@ echo ""
 # [Claude 2026-10-27] Assembly now runs Wonderlab/scripts/assemble-web.js, the same script
 # CI uses: index.html, the tracks (plus MP3 copies if ffmpeg is installed), durations, a
 # build id, and the phone zoom regions from plugin/web_demo.json, into plugin-config.js.
-node "${WONDERLAB_DIR}/scripts/assemble-web.js" --name "${REPOSITORY_NAME}" --build "${WEB_BUILD_DIR}" \
+node "${PROJECT_ROOT}/plugin/web/assemble.mjs" --wonderlab "${WONDERLAB_DIR}" --name "${REPOSITORY_NAME}" --build "${WEB_BUILD_DIR}" \
     --samples "${PROJECT_ROOT}/plugin/sample_audio" --extra "${PROJECT_ROOT}/plugin/web_demo.json"
 
 echo ""

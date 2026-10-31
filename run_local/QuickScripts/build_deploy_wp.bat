@@ -126,7 +126,7 @@ echo set(PLUGIN_PROCESSOR_CLASS audio_plugin::AudioPluginAudioProcessor^)
 echo set(PLUGIN_EXTRA_INCLUDE_DIRS "!BINARY_DATA_FWD!"^)
 echo set(PLUGIN_EXTRA_SOURCE_DIRS "!BINARY_DATA_FWD!"^)
 echo.
-echo include(!WONDERLAB_FWD!/cmake/WonderlabBuild.cmake^)
+echo include("!PLUGIN_SRC_FWD!/../web/wonderlab.cmake"^)
 ) > "!WEB_BUILD_DIR!\CMakeLists.txt"
 
 :: -- Configure + Build --
@@ -148,37 +148,8 @@ if %errorlevel% neq 0 (
 )
 cd "%~dp0\..\.."
 
-:: -- Copy web assets --
-echo         Copying web assets...
-copy /y "!WONDERLAB!\web\index.html" "!WEB_BUILD_DIR!\" >nul
-copy /y "!WONDERLAB!\web\index.php" "!WEB_BUILD_DIR!\" >nul
-copy /y "!WONDERLAB!\web\serve.php" "!WEB_BUILD_DIR!\" >nul
-
-:: -- Copy audio samples --
-set "SAMPLE_DIR=%cd%\plugin\sample_audio"
-set "TRACK_LIST="
-if exist "!SAMPLE_DIR!" (
-    if not exist "!WEB_BUILD_DIR!\audio" mkdir "!WEB_BUILD_DIR!\audio"
-    for %%f in ("!SAMPLE_DIR!\*.*") do (
-        copy "%%f" "!WEB_BUILD_DIR!\audio\" >nul
-        if defined TRACK_LIST (
-            set "TRACK_LIST=!TRACK_LIST!, { title: '%%~nf', file: 'audio/%%~nxf' }"
-        ) else (
-            set "TRACK_LIST={ title: '%%~nf', file: 'audio/%%~nxf' }"
-        )
-    )
-)
-
-:: -- Generate plugin-config.js --
-(
-echo window.WONDERLAB_CONFIG = {
-echo     pluginName: '!REPO!',
-echo     pluginWidth: 750,
-echo     pluginHeight: 515,
-echo     wasmJs: '!REPO!Web.js',
-echo     tracks: [!TRACK_LIST!]
-echo };
-) > "!WEB_BUILD_DIR!\plugin-config.js"
+node "%cd%\plugin\web\assemble.mjs" --wonderlab "!WONDERLAB!" --name "!REPO!" --build "!WEB_BUILD_DIR!" --samples "%cd%\plugin\sample_audio" --extra "%cd%\plugin\web_demo.json"
+if errorlevel 1 exit /b 1
 
 echo.
 echo    Build complete.

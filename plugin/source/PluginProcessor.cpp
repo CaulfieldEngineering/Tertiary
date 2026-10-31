@@ -157,6 +157,11 @@ namespace audio_plugin {
 	/* Checking the Activation Status */
     //==============================================================================
     void AudioPluginAudioProcessor::checkActivationStatusOnStartup() {
+     #if JUCE_EMSCRIPTEN
+        // The browser demo is free: no stored licence, checks, or demo bypass cycle.
+        mIsDemoVersion = false;
+        return;
+     #endif
       juce::PropertiesFile::Options options;
 		options.applicationName = "Tertiary";
 		options.filenameSuffix = "settings";
@@ -184,10 +189,15 @@ namespace audio_plugin {
 	//                      Called by the editor, so nothing goes on the network during host scans or offline renders.
 	//==============================================================================
 	void AudioPluginAudioProcessor::startLicenseCheck() {
+       #if ! JUCE_EMSCRIPTEN
 		licenseCheck.start(*this);
+       #endif
 	}
 
 	void AudioPluginAudioProcessor::setDemoState(bool demoState) {
+       #if JUCE_EMSCRIPTEN
+        demoState = false;
+       #endif
 		mIsDemoVersion = demoState;
 
 		if (mIsDemoVersion) {

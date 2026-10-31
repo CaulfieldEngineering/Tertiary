@@ -85,6 +85,7 @@ struct UiTestAccess
     static juce::Colour stroke (ScopeChannel& s)        { return s.strokeColor; }
     static double drawnBpm (ScopeChannel& s)            { return s.mHostBpm; }
     static float drawnZoom (ScopeChannel& s)            { return s.scrollZoom; }
+    static float targetZoom (ScopeChannel& s)           { return s.targetZoom; }   // [Codex 2026-10-30] wait for the scroll message before testing animation
     static float drawnCentre (ScopeChannel& s)          { return s.scrollCenter; }
     static const juce::Path& path (ScopeChannel& s)     { return s.lfoPath; }
 
@@ -910,11 +911,25 @@ void smoothZoom()
     for (size_t i = 1; i < smallMoves.size(); ++i) if (smallMoves[i] == smallMoves[i - 1]) everyMove = false;
     check (everyMove, "every small move changes the zoom (no stuck steps)");
 
+    // [Codex 2026-10-30] SCROLLBAR arrives asynchronously; 10 ms was not enough on the Intel CI runner.
+    // Wait up to 1 s for the actual target, failing if it never arrives. Finish the preceding zoom before
+    // reversing it, so the animation starts away from its destination even when no real timer frame ran.
+    auto waitForZoomTarget = [&]
+    {
+        check (waitFor ([&] { return A::targetZoom (scope) == pad.getScrollZoom(); }, 1000),
+               "the scope receives the scroll bar's zoom target",
+               "scope " + fmt (A::targetZoom (scope), 3) + ", scroll bar " + fmt (pad.getScrollZoom(), 3),
+               "the scroll message did not arrive within 1 s");
+    };
+    waitForZoomTarget();
+    for (int i = 0; i < 60; ++i) A::tick (scope);
+
     // the view eases to it: a frame after a big change, the scope is part of the way there, then arrives
     zoomAfterMoves (-6.f, 8);   // zoom back in
+    waitForZoomTarget();
     const float target = pad.getScrollZoom();
     const float shownBefore = A::drawnZoom (scope);
-    pump (10);
+    // [Codex 2026-10-30] Measure exactly one frame after delivery, without dispatching more timers in between.
     A::tick (scope);
     const float oneFrame = A::drawnZoom (scope);
     for (int i = 0; i < 60; ++i) A::tick (scope);

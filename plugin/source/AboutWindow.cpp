@@ -109,6 +109,19 @@ void AboutWindow::applyLook()
 	}
 	mActionButton.getProperties().set("primary", mIsDemoVersion);
 	mActionButton.setButtonText(mIsDemoVersion ? "Activate" : "Deactivate this computer");
+   #if JUCE_EMSCRIPTEN
+    // Keep the desktop panel and its house styling, with inactive licence fields.
+    for (auto* field : { &mTextEditorEmailAddress, &mTextEditorSerialKey })
+    {
+        field->setEnabled(false);
+        field->setReadOnly(true);
+        field->setAlpha(0.5f);
+    }
+    mActionButton.setButtonText("Activate");
+    mActionButton.setEnabled(false);
+    mActionButton.setAlpha(0.5f);
+    mLabelStatus.setText("Activation is not needed in the browser demo", juce::dontSendNotification);
+   #endif
 
 	mButtonWebsiteLink.setFont(juce::Font(12.f), false, juce::Justification::centred);
 	mButtonWebsiteLink.setColour(juce::HyperlinkButton::textColourId, juce::Colour(0xff8b8e97));
@@ -217,6 +230,11 @@ void AboutWindow::paint(juce::Graphics& g)
 
     // the licence state
     auto line = juce::Rectangle<float>(x, 86.f, r.getWidth() - x * 2.f, 18.f);
+   #if JUCE_EMSCRIPTEN
+    g.setColour(juce::Colour(0xffa9abb3));
+    g.setFont(juce::Font(12.5f));
+    drawTextOnPixels(g, grid, "Browser demo", line, juce::Justification::centredLeft);
+   #else
     if (mIsDemoVersion)
     {
         g.setColour(juce::Colour(0xffc886dd));
@@ -241,6 +259,7 @@ void AboutWindow::paint(juce::Graphics& g)
         g.setFont(juce::Font(12.5f));
         drawTextOnPixels(g, grid, "Thank you for your purchase!", line.translated(0.f, 20.f), juce::Justification::centredLeft);
     }
+   #endif
 }
 
 void AboutWindow::resized()
@@ -265,6 +284,9 @@ void AboutWindow::resized()
 void AboutWindow::setUpSerialKeyEditor()
 {
     addAndMakeVisible(mTextEditorSerialKey);
+   #if JUCE_EMSCRIPTEN
+    return; // No licence files in the browser; applyLook supplies the disabled style.
+   #endif
 
     mTextEditorSerialKey.setMultiLine(false);
     mTextEditorSerialKey.setTextToShowWhenEmpty("Enter Serial Key...", juce::Colours::darkgrey);
@@ -310,6 +332,9 @@ void AboutWindow::setUpSerialKeyEditor()
 void AboutWindow::setUpEmailEditor()
 {
     addAndMakeVisible(mTextEditorEmailAddress);
+   #if JUCE_EMSCRIPTEN
+    return;
+   #endif
 
     mTextEditorEmailAddress.setMultiLine(false);
     mTextEditorEmailAddress.setTextToShowWhenEmpty("Enter Email Address...", juce::Colours::darkgrey);
@@ -354,6 +379,11 @@ void AboutWindow::setUpEmailEditor()
 void AboutWindow::setUpActionButton()
 {
     addAndMakeVisible(mActionButton);
+   #if JUCE_EMSCRIPTEN
+    mActionButton.setEnabled(false);
+    mActionButton.onClick = nullptr;
+    return;
+   #endif
 
     // Custom green: #409963 = RGB(64, 153, 99)
     juce::Colour customGreen(0xff409963);
