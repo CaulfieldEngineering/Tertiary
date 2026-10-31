@@ -20,7 +20,9 @@ on:
 #   build       Mac and Windows: build, unit tests and pluginval on the release build, sign, package,
 #               notarize, staple, then verify the final installers are signed (and stapled) before upload.
 #   publish     tag only, after BOTH builds passed: uploads both verified installers to WordPress, then
-#               points the download redirects at them, then removes the old copies.
+#               points the download redirects at them, then removes the old copies of the same version, then
+#               publishes the changelog page and the home page's version line from CHANGELOG.md, then sets the
+#               store's Software version.
 #   web-build   the web demo. On staging it goes only to a private preview (CaulfieldEngineering.com
 #               /plug-ins/{repo}/web-staging/, noindex). On a tag, only after publish succeeded, it promotes
 #               that preview's exact files to the live demos (see the note above its deploy steps).
@@ -93,7 +95,7 @@ jobs:
 
         if [ $RC -eq 0 ]; then
           echo "tag_check=done" >> "$GITHUB_OUTPUT"
-          echo "✓ Tag commit $TAG_COMMIT is part of the production branch history."
+          echo "âœ“ Tag commit $TAG_COMMIT is part of the production branch history."
         elif [ $RC -eq 1 ]; then
           echo "tag_check=done" >> "$GITHUB_OUTPUT"
           echo "::error::Tag commit $TAG_COMMIT is NOT on the production branch. Merge to production first, then tag. Aborting."
@@ -119,7 +121,7 @@ jobs:
           exit 1
         fi
 
-        echo "✓ Tag and config.cmake versions match"
+        echo "âœ“ Tag and config.cmake versions match"
 
 
     # Confirm New Tag is Greater than Previous tags - Tags Only
@@ -134,7 +136,7 @@ jobs:
 
         OTHER_TAGS=$(git tag -l "v*" | sed 's/^v//' | grep -v -x -F "$NEW_VERSION" | sort -V || true)
         if [ -z "$OTHER_TAGS" ]; then
-          echo "✓ This is the first tag in the repository"
+          echo "âœ“ This is the first tag in the repository"
           exit 0
         fi
 
@@ -146,7 +148,7 @@ jobs:
           exit 1
         fi
 
-        echo "✓ New version is greater than all previous tags"
+        echo "âœ“ New version is greater than all previous tags"
 
 
     # Check every secret the release needs - All Cases
@@ -204,6 +206,8 @@ jobs:
         if [ -z "${wWOO_PRODUCT_ID:-}" ]; then
           RELEASE_MISSING=$(printf '%s\n' "$RELEASE_MISSING" "WooCommerce product (config.cmake, not a secret): wWOO_PRODUCT_ID" | sed '/^$/d')
         fi
+        # [Claude 2026-10-30] The public changelog page (config.cmake). Empty means this plugin has no changelog page.
+        if [ -z "${wCHANGELOG_PAGE_ID:-}" ]; then echo "::warning::wCHANGELOG_PAGE_ID is not set in config.cmake, so a release updates no changelog page."; fi
 
         if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
           if [ -n "$SIGNING_MISSING$RELEASE_MISSING" ]; then
@@ -213,7 +217,7 @@ jobs:
             done
             exit 1
           fi
-          echo "✓ All release secrets are set"
+          echo "âœ“ All release secrets are set"
         else
           if [ -z "${wWOO_PRODUCT_ID:-}" ]; then echo "::warning::wWOO_PRODUCT_ID is not set in config.cmake; a release tag would stop here."; fi
           if [ -n "$SIGNING_MISSING" ]; then
@@ -221,7 +225,7 @@ jobs:
               echo "::warning::Staging build: missing secret(s) for $line. That step is skipped, so this build's installers are NOT signed or notarized."
             done
           else
-            echo "✓ All signing and notarization secrets are set"
+            echo "âœ“ All signing and notarization secrets are set"
           fi
         fi
 
@@ -239,6 +243,29 @@ jobs:
       run: |
         python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --quiet pyyaml
         bash .github/scripts/test_publish_steps.sh
+
+    # The changelog - All Cases (a warning on staging, a stop on a tag)
+    # [Claude 2026-10-30] Joe: "Ideally the changelog gets auto-pushed and it's not Claude or Joe updating each time."
+    # CHANGELOG.md is the one source of the public changelog page. A tag stops here, before anything is built, if
+    # CHANGELOG.md has no entry for the tag's version or the entry still has its "<!-- draft" line (Joe deletes
+    # that line to approve the words; scripts/draft-changelog.mjs writes the draft).
+    # ==========================================================================================
+    - name: Test the Changelog Step (fake site, no network)
+      shell: bash
+      run: python3 .github/scripts/test_changelog.py
+
+    - name: Check CHANGELOG.md Has an Approved Entry for This Version
+      shell: bash
+      run: |
+        if [ -z "${wCHANGELOG_PAGE_ID:-}" ]; then
+          echo "::warning::wCHANGELOG_PAGE_ID is not set in config.cmake: no changelog page, so CHANGELOG.md is not checked."
+        elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          python3 .github/scripts/changelog.py check "${GITHUB_REF#refs/tags/v}"
+        elif ! out=$(python3 .github/scripts/changelog.py check "$wPROJECT_VERSION"); then
+          echo "::warning::Staging: ${out#::error::} A v${wPROJECT_VERSION} tag would stop here."
+        else
+          echo "$out"
+        fi
 
     - name: Check the WooCommerce Product Has a Working Key Source
       shell: bash
@@ -365,7 +392,7 @@ jobs:
 
         echo "pluginval (strictness $STRICTNESS) on the VST3..."
         "$PV" --strictness-level "$STRICTNESS" --validate-in-process           --validate "$A/${wPLUGIN_NAME}_artefacts/Release/VST3/${wPLUGIN_NAME}.vst3"
-        echo "✓ Tests passed"
+        echo "âœ“ Tests passed"
 
 
     # Debug; print project variables - All Cases
@@ -593,7 +620,7 @@ jobs:
           exit 1
         fi
 
-        echo "✓ Found standalone app at: $APP_PATH"
+        echo "âœ“ Found standalone app at: $APP_PATH"
         echo "Creating standalone package..."
 
         # [Claude 2026-10-27] Not relocatable: otherwise, if macOS knows another copy of this bundle anywhere
@@ -621,7 +648,7 @@ jobs:
           exit 1
         fi
 
-        echo "✓ Successfully created standalone package at: $PKG_PATH"
+        echo "âœ“ Successfully created standalone package at: $PKG_PATH"
         
 
     # Package: VST3 (Mac) - All Cases
@@ -655,7 +682,7 @@ jobs:
           exit 1
         fi
 
-        echo "✓ Found VST3 bundle at: $VST3_PATH"
+        echo "âœ“ Found VST3 bundle at: $VST3_PATH"
         echo "Creating VST3 package..."
 
         # [Claude 2026-10-27] Not relocatable: otherwise, if macOS knows another copy of this bundle anywhere
@@ -683,7 +710,7 @@ jobs:
           exit 1
         fi
 
-        echo "✓ Successfully created VST3 package at: $PKG_PATH"
+        echo "âœ“ Successfully created VST3 package at: $PKG_PATH"
 
 
     # Package: AU (Mac) - All Cases
@@ -718,7 +745,7 @@ jobs:
           exit 1
         fi
 
-        echo "✓ Found AU bundle at: $AU_PATH"
+        echo "âœ“ Found AU bundle at: $AU_PATH"
         echo "Creating AU package..."
 
         # [Claude 2026-10-27] Not relocatable: otherwise, if macOS knows another copy of this bundle anywhere
@@ -741,7 +768,7 @@ jobs:
           exit 1
         fi
 
-        echo "✓ Successfully created AU package at: $PKG_PATH"
+        echo "âœ“ Successfully created AU package at: $PKG_PATH"
           
 
     # Sign Individual Packages (Mac) - 2024.10.25 CLAUDE - All Cases
@@ -869,7 +896,7 @@ jobs:
           echo "ERROR: Failed to copy distribution file"
           exit 1
         fi
-        echo "✓ Distribution file copied successfully"
+        echo "âœ“ Distribution file copied successfully"
 
         # Verify package path contains our packages
         echo "Checking for component packages..."
@@ -887,7 +914,7 @@ jobs:
           exit 1
         fi
         
-        echo "✓ Distribution package created successfully"
+        echo "âœ“ Distribution package created successfully"
         
       shell: bash
 
@@ -1130,11 +1157,11 @@ jobs:
             /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "$FOUND/Contents/Info.plist" >/dev/null \
               || { echo "::error::$FOUND has no microphone permission text (NSMicrophoneUsageDescription)"; exit 1; }
           fi
-          echo "✓ $(basename "$FOUND")"
+          echo "âœ“ $(basename "$FOUND")"
         done
 
         shasum -a 256 "$PKG" | awk '{print $1}' > "$PKG.sha256"
-        echo "✓ Mac installer verified: $(basename "$PKG")  sha256 $(cat "$PKG.sha256")"
+        echo "âœ“ Mac installer verified: $(basename "$PKG")  sha256 $(cat "$PKG.sha256")"
 
 
     - name: Verify Windows Installer and Binaries Are Signed
@@ -1270,11 +1297,11 @@ jobs:
         fi
 
         if [ -n "$INSTALLER_PATH" ] && [ -f "$INSTALLER_PATH" ]; then
-          echo "✓ Found installer: $INSTALLER_NAME"
+          echo "âœ“ Found installer: $INSTALLER_NAME"
           echo "Uploading installer to: $SERVER:$DEST_PATH"
           
           if scp "$INSTALLER_PATH" "$SERVER:$DEST_PATH$INSTALLER_NAME"; then
-            echo "✓ Installer uploaded successfully: $INSTALLER_NAME"
+            echo "âœ“ Installer uploaded successfully: $INSTALLER_NAME"
           else
             echo "ERROR: Installer upload failed with exit code $?"
             exit 1
@@ -1318,8 +1345,12 @@ jobs:
       WORDPRESS_SITE: ${{ secrets.WORDPRESS_SITE }}
 
     steps:
-    - name: Checkout code (for config.cmake)
+    # [Claude 2026-10-30] Full history and every tag: the changelog step dates an entry headed "(release date)"
+    # from its v* tag.
+    - name: Checkout code (for config.cmake, CHANGELOG.md and the tags)
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
 
     - name: Extract and Set Configuration Variables
@@ -1353,7 +1384,7 @@ jobs:
         for f in "${MAC[0]}" "${WIN[0]}"; do
           [ -s "$f.sha256" ] || { echo "::error::$f has no .sha256, so it was never verified as signed. Nothing was published."; exit 1; }
           [ "$(sha256sum "$f" | awk '{print $1}')" = "$(tr -d '[:space:]' < "$f.sha256")" ] || { echo "::error::$f changed after it was verified. Nothing was published."; exit 1; }
-          echo "✓ $f matches its verified hash"
+          echo "âœ“ $f matches its verified hash"
         done
         echo "MAC_FILE=${GITHUB_WORKSPACE}/dist/${MAC[0]}" >> "$GITHUB_ENV"
         echo "WIN_FILE=${GITHUB_WORKSPACE}/dist/${WIN[0]}" >> "$GITHUB_ENV"
@@ -1370,7 +1401,7 @@ jobs:
           echo "::error::v$NEWEST was tagged after this run started, so v$THIS is no longer the newest release. Nothing was published."
           exit 1
         fi
-        echo "✓ v$THIS is still the newest release tag"
+        echo "âœ“ v$THIS is still the newest release tag"
 
 
     - name: Check the WooCommerce Product Has a Working Key Source (before anything is uploaded)
@@ -1416,7 +1447,7 @@ jobs:
             echo "::error::The file WordPress serves at $url is not the verified installer."
             exit 1
           fi
-          echo "✓ $url (media id $id)"
+          echo "âœ“ $url (media id $id)"
           echo "${key}_URL=$url" >> "$GITHUB_ENV"
           echo "${key}_OLD_IDS=$old" >> "$GITHUB_ENV"
         }
@@ -1473,7 +1504,7 @@ jobs:
             echo "::error::${source_url} reads back as '${now}', not '${target_url}'"
             return 1
           fi
-          echo "✓ ${source_url} (read back)"
+          echo "âœ“ ${source_url} (read back)"
         }
 
         MAC_SOURCE="/${REPO_NAME_LOWER}-download-mac"
@@ -1514,11 +1545,31 @@ jobs:
         AUTH="$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD"
         for id in $MAC_OLD_IDS $WIN_OLD_IDS; do
           if curl -fsS -X DELETE -u "$AUTH" "${WORDPRESS_SITE}/wp-json/wp/v2/media/${id}?force=true" | jq -e '.deleted == true' >/dev/null; then
-            echo "✓ Removed older copy, media id $id"
+            echo "âœ“ Removed older copy, media id $id"
           else
             echo "::warning::Could not remove older copy, media id $id (the new installers are live; remove it by hand)"
           fi
         done
+
+
+    # The public changelog page and the home page's version line - Tag Only
+    # [Claude 2026-10-30] Joe: "Ideally the changelog gets auto-pushed and it's not Claude or Joe updating each time."
+    # .github/scripts/changelog.py publish: checks the entry again, finds the previous version's installers in the
+    # media library (titled as the upload step titles them; older versions are never deleted), writes every entry up
+    # to this version into the changelog page's one block (the Text Editor widget with CSS class wla-changelog; the
+    # rest of the page is Joe's and is never changed), sets "x.y.z, released <date>" in the home page's wla-version
+    # widget, clears Elementor's cache, reads both back and checks them live. Any mismatch fails the job. The new
+    # installers are already live by then; the store's Software version (next step) waits until this passes.
+    # ==========================================================================================
+    - name: Publish the Changelog Page and the Home Page Version Line
+      shell: bash
+      run: |
+        if [ -z "${wCHANGELOG_PAGE_ID:-}" ]; then
+          echo "::warning::wCHANGELOG_PAGE_ID is not set in config.cmake: no changelog page to update."
+          exit 0
+        fi
+        python3 .github/scripts/changelog.py publish "${GITHUB_REF#refs/tags/v}" \
+          --page-id "$wCHANGELOG_PAGE_ID" --plugin-name "$wPLUGIN_NAME"
 
 
     # Tell existing users about the new version - Tag Only, last
