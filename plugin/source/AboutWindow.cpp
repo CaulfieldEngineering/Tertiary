@@ -186,7 +186,11 @@ void AboutWindow::paint(juce::Graphics& g)
     g.setFont(juce::Font(12.5f));
     g.setColour(juce::Colour(0xff8b8e97));
     drawTextOnPixels(g, grid, "Multiband Tremolo", juce::Rectangle<float>(x, 44.f, 200.f, 16.f), juce::Justification::centredLeft);
-    drawTextOnPixels(g, grid, mShowBuildId ? juce::String(juce::CharPointer_UTF8("Build " WLA_BUILD_ID)) : "Version " + juce::String(JucePlugin_VersionString), juce::Rectangle<float>(x + 150.f, 44.f, r.getWidth() - x * 2.f - 150.f, 16.f),
+    // [Claude 2026-10-30] a click on the build line copies it (Joe: "it'd be nice to be able to copy that build line
+    // directly"); "Copied" shows in its place for a moment
+    const bool copiedNow = mShowBuildId && mCopiedAt != 0 && juce::Time::getMillisecondCounter() - mCopiedAt < copiedHintMs;
+    if (copiedNow) g.setColour(juce::Colour(0xffc9cbd1));
+    drawTextOnPixels(g, grid, copiedNow ? juce::String("Copied") : mShowBuildId ? juce::String(juce::CharPointer_UTF8("Build " WLA_BUILD_ID)) : "Version " + juce::String(JucePlugin_VersionString), juce::Rectangle<float>(x + 150.f, 44.f, r.getWidth() - x * 2.f - 150.f, 16.f),
                      juce::Justification::centredRight);
 
     // the logo, small, at the top right beside the close key
@@ -499,7 +503,23 @@ void AboutWindow::mouseUp(const juce::MouseEvent& event)
     {
         mLastBuildIdClick = event.eventTime;
         mShowBuildId = ! mShowBuildId;
+        mCopiedAt = 0;
         repaint();
+    }
+    else if (onVersion && mShowBuildId)
+    {
+        // [Claude 2026-10-30] a plain click on the shown build line copies the build id, as plain text
+        mLastBuildIdClick = event.eventTime;
+        const juce::String buildId(juce::CharPointer_UTF8(WLA_BUILD_ID));
+       #if WLA_UI_TEST_BUILD
+        TestHooks::copied() = buildId;   // UI tests: recorded, the clipboard is left alone
+       #else
+        juce::SystemClipboard::copyTextToClipboard(buildId);
+       #endif
+        mCopiedAt = juce::jmax((juce::uint32) 1, juce::Time::getMillisecondCounter());
+        repaint();
+        juce::Component::SafePointer<AboutWindow> safe(this);
+        juce::Timer::callAfterDelay((int) copiedHintMs + 50, [safe] { if (safe != nullptr) safe->repaint(); });
     }
 }
 

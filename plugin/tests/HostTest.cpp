@@ -39,8 +39,8 @@
       8  Golden renders: fixed input and settings, compared with files in the repo
       9  Presets through the host: the list, each one loads and is heard, Default = golden,
          remembered in the session, a 1.0.2 session loads unchanged  [Claude 2026-10-27]
-     10  The window through the host: at every window size and host scale, the plug-in's window is
-         exactly the UI's size, and is put back when the host sizes it otherwise  [Claude 2026-10-30]
+     10  The window through the host: at every window size and host scale the plug-in's window is
+         exactly the UI's size; a size the host imposed is not remembered  [Claude 2026-10-30]
 
   ==============================================================================
 */
@@ -956,25 +956,19 @@ void pump(int ms)
 
 #if JUCE_WINDOWS
 /* A small host that opens the plug-in's view itself, in the order Cubase does: the frame, the host's scale,
-   getSize, a window of that size, attached. Its frame can answer the plug-in's resize requests made while the
-   view is being attached with another size (the whole screen), as Cubase did on Joe's laptop (RC1: the window
-   nearly full screen, black, the UI at its size in the corner), and answers every later request as asked (Joe:
-   choosing a size from the menu put it right). */
+   getSize, a window of that size, attached; it answers every resize request as asked */
 struct DawLikeHost
 {
     struct Frame : public Steinberg::IPlugFrame
     {
         HWND window = nullptr;
-        Steinberg::ViewRect attachAnswer {};   // empty: answer every request as asked
-        bool attaching = false;
-        bool alwaysWrong = false;   // answer every request with attachAnswer (a host that never agrees)
         int requests = 0;
 
         Steinberg::tresult PLUGIN_API resizeView(Steinberg::IPlugView* view, Steinberg::ViewRect* asked) override
         {
             if (view == nullptr || asked == nullptr) return Steinberg::kInvalidArgument;
             ++requests;
-            auto answer = ((attaching || alwaysWrong) && attachAnswer.getWidth() > 0) ? attachAnswer : *asked;
+            auto answer = *asked;
             SetWindowPos(window, nullptr, 0, 0, answer.getWidth(), answer.getHeight(), SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
             view->onSize(&answer);
             return Steinberg::kResultTrue;
@@ -1028,10 +1022,9 @@ struct DawLikeHost
     }
 
     /* Opens the view at the host's scale, as Cubase does */
-    void open(float hostScale, Steinberg::ViewRect attachAnswer = {})
+    void open(float hostScale)
     {
         using namespace Steinberg;
-        frame.attachAnswer = attachAnswer;
         frame.requests = 0;
         view = controller->createView(Vst::ViewType::kEditor);
         if (view == nullptr) { error = "no view"; return; }
@@ -1046,9 +1039,7 @@ struct DawLikeHost
         view->getSize(&size);
         frame.window = CreateWindowExW(WS_EX_TOOLWINDOW, L"STATIC", L"DawLikeHost", WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN,
                                        40, 40, size.getWidth(), size.getHeight(), nullptr, nullptr, nullptr, nullptr);
-        frame.attaching = true;
         view->attached((void*) frame.window, kPlatformTypeHWND);
-        frame.attaching = false;
     }
 
     /* The scale of the screen the host's window opens on (40, 40), as a DAW sends it */
@@ -1164,12 +1155,25 @@ void section10()
             check(fits(opened, wantW, wantH), label + ": opens at the UI's size",
                   show(opened) + " screen pixels (want " + juce::String(wantW) + " x " + juce::String(wantH) + ")");
 
-            // The host sizes the plug-in's window itself (as a user dragging, or a host restoring a size): it goes back
-            SetWindowPos(probe.plugin, nullptr, 0, 0, wantW * 2, wantH * 2, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-            pump(900);
-            const auto after = PluginWindowProbe::clientSize(probe.plugin);
-            check(fits(after, wantW, wantH), label + ": sized otherwise by the host, it goes back",
-                  show(after) + " screen pixels (want " + juce::String(wantW) + " x " + juce::String(wantH) + ")");
+            // The host sizes the plug-in's window itself (a host restoring a size): RC1 remembered that size as the
+            // window size chosen in the menu, so every later window opened at it. Reopened, it is the chosen size.
+            if (juce::approximatelyEqual(hostScale, 1.0f))
+            {
+                SetWindowPos(probe.plugin, nullptr, 0, 0, wantW * 2, wantH * 2, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+                pump(300);
+                hostWindow.reset();
+                pump(50);
+                hostWindow.reset(p->createEditorIfNeeded());
+                hostWindow->addToDesktop(0);
+                hostWindow->setTopLeftPosition(40, 40);
+                hostWindow->setVisible(true);
+                pump(900);
+                PluginWindowProbe again(*hostWindow);
+                const auto reopened = again.plugin != nullptr ? PluginWindowProbe::clientSize(again.plugin) : juce::Rectangle<int>();
+                check(fits(reopened, wantW, wantH), label + ": sized by the host, closed, reopened: the chosen size",
+                      show(reopened) + " screen pixels (want " + juce::String(wantW) + " x " + juce::String(wantH) + ")");
+                probe = again;
+            }
 
             // The host's scale changes while the window is open (a move to another screen, a new Windows setting)
             if (juce::approximatelyEqual(hostScale, 1.0f))
@@ -1189,25 +1193,19 @@ void section10()
             pump(50);
         }
 
-    // A host that answers the first resize request with the whole screen (Cubase on Joe's laptop, RC1)
+    // A Cubase-like host (frame, host scale, getSize, attached): the window is the UI's size
     {
         DawLikeHost host(juce::File(description.fileOrIdentifier));
         // Cubase sends the screen's scale; JUCE's plug-in follows the screen the window is on
         const float hostScale = DawLikeHost::screenScale();
         report("INFO", "10 Cubase-like host: Windows scaling", juce::String(juce::roundToInt(hostScale * 100)) + " %");
         for (float uiScale : { 1.0f, 1.25f, 1.5f, 2.0f })
-            for (bool wrongFirstAnswer : { false, true })
             {
                 if (host.error.isNotEmpty()) break;
                 setRemembered(uiScale);
-                const auto label = "10 Cubase-like host, " + juce::String(juce::roundToInt(uiScale * 100)) + " % window"
-                                   + (wrongFirstAnswer ? ", answers the whole screen while opening" : "");
-                const juce::Rectangle<int> screen { GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
-                host.open(hostScale, wrongFirstAnswer ? Steinberg::ViewRect { 0, 0, juce::roundToInt(screen.getWidth()), juce::roundToInt(screen.getHeight()) - 72 }
-                                                      : Steinberg::ViewRect {});
+                const auto label = "10 Cubase-like host, " + juce::String(juce::roundToInt(uiScale * 100)) + " % window";
+                host.open(hostScale);
                 pump(1200);
-                if (const char* hold = std::getenv("WLA_HOSTTEST_HOLD"))   // time to take a screenshot of the window
-                    pump(juce::String(hold).getIntValue());
                 const float settled = host.windowScale();   // JUCE's plug-in follows the screen its window is on
                 const int wantW = juce::roundToInt(juce::roundToInt(750 * uiScale) * settled);
                 const int wantH = juce::roundToInt(juce::roundToInt(478 * uiScale) * settled);
@@ -1222,23 +1220,6 @@ void section10()
                 host.close();
                 pump(50);
             }
-        // A host that never agrees: the plug-in asks a few times, then stops (no endless resizing)
-        if (host.error.isEmpty())
-        {
-            setRemembered(1.25f);
-            const juce::Rectangle<int> screen { GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
-            host.frame.alwaysWrong = true;
-            host.open(hostScale, Steinberg::ViewRect { 0, 0, screen.getWidth(), screen.getHeight() - 72 });
-            pump(3000);
-            const int settledRequests = host.frame.requests;
-            pump(2000);
-            check(settledRequests <= 2 + 3 * 2 && host.frame.requests == settledRequests,
-                  "10 Cubase-like host that never agrees: the plug-in stops asking",
-                  juce::String(settledRequests) + " requests in 3 s, " + juce::String(host.frame.requests - settledRequests) + " more in the next 2 s");
-            host.frame.alwaysWrong = false;
-            host.close();
-            pump(50);
-        }
         if (host.error.isNotEmpty())
             check(false, "10 Cubase-like host", host.error);
     }

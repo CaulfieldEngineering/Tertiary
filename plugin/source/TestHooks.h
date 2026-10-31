@@ -58,6 +58,14 @@ namespace TestHooks
        #endif
     }
 
+    /* [Claude 2026-10-30] What the About window's build line would have put on the clipboard (UI tests: recorded,
+       the real clipboard is left alone; see AboutWindow::mouseUp) */
+    inline juce::String& copied()
+    {
+        static juce::String text;
+        return text;
+    }
+
     inline void openFolder (const juce::File& folder)
     {
        #if WLA_UI_TEST_BUILD
