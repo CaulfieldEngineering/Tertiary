@@ -27,8 +27,8 @@ function Fail($text) { Say "FAIL: $text"; exit 1 }
 # 1. Commit and dashboard ----------------------------------------------------------------------------
 $commit = (git rev-parse HEAD).Trim()
 if (git status --porcelain --untracked-files=no) { Fail 'this checkout has uncommitted changes; commit first' }
-$cfg = & $Python -c "import sys;sys.path.insert(0,'tests/lib');from common import config;c=config();print(c.get('wTEST_DASHBOARD_MAC',''));print(c.get('wTEST_DASHBOARD_MAC_REPO',''))"
-$macHost, $macRepo = $cfg[0].Trim(), $cfg[1].Trim()
+$cfg = & $Python -c "import sys;sys.path.insert(0,'tests/lib');from common import config;c=config();print(c.get('wTEST_DASHBOARD_MAC',''));print(c.get('wTEST_DASHBOARD_MAC_REPO',''));print(c['wPLUGIN_NAME'])"
+$macHost, $macRepo, $product = $cfg[0].Trim(), $cfg[1].Trim(), $cfg[2].Trim()
 $stamp = (Get-Date -Format 'yyyy-MM-dd_HHmm') + '-release'
 Say "Release check of $commit as $Report; results tests/results/$stamp"
 if (-not (Get-NetTCPConnection -LocalPort 4120 -State Listen -ErrorAction SilentlyContinue)) {
@@ -101,7 +101,7 @@ for ($i = 0; $i -lt 240; $i++) {
 }
 if (-not $runId) { Fail "no GitHub test run appeared for $commit on $Branch" }
 Say "GitHub run $runId finished"
-& $Python tests/lib/combine.py @runs --github-run $runId --out "tests/results/$stamp/release" --report "tests/reports/$Report.md" --title "Tertiary $Report test report"
+& $Python tests/lib/combine.py @runs --github-run $runId --out "tests/results/$stamp/release" --report "tests/reports/$Report.md" --title "$product $Report test report"
 $code = $LASTEXITCODE
 Say $(if ($code) { "FAIL. Report: tests/reports/$Report.md and .html" } else { "PASS. Report: tests/reports/$Report.md and .html" })
 exit $code
