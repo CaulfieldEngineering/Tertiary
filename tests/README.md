@@ -247,6 +247,20 @@ installed plugin.
 
 ## One test run, one report (2026-10-31)
 
+**One command** (Joe approved, 2026-10-31), from a clean checkout of the commit to release:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\Run-Release-Check.ps1 -Report rc-1.1.0
+```
+
+It records the commit, starts or reuses the live dashboard, brings the Mac (config.cmake `wTEST_DASHBOARD_MAC`) to
+the same commit, builds and runs both machines at once (Windows Run-All with web; Mac
+`tests/mac/release-check.sh`, Run-All with Logic and the microphone), and only if both are green pushes the
+commit to `development`. It waits for that push's GitHub run and writes `tests/reports/<rc>.md` and `.html`
+(the dashboard view, frozen). A local failure pushes nothing. Machine settings live outside the repo in
+`$HOME\.wla-test\env.ps1` and `~/.wla-test/env.sh` (which may define `wla_release_pause` / `wla_release_resume`
+hooks around the Mac run). The steps it automates:
+
 The work branch is `development`; `test.yml` runs on every push to it.
 
 Joe: "when we go to release in a normal process, I'm expecting one test run/GitHub run which yields a passing
@@ -290,3 +304,18 @@ running, or was cut off if `run-end` has been written.
 {"v": 1, "time": "2026-10-31T12:33:02-04:00", "event": "test-finish", "id": "W-01", "status": "PASS", "counts": {"PASS": 6, "FAIL": 0, "SKIP": 0, "PLANNED": 0}, "seconds": 37.1}
 {"v": 1, "time": "2026-10-31T13:31:40-04:00", "event": "run-end", "run": "all", "status": "PASS", "counts": {"PASS": 225, "FAIL": 0, "SKIP": 0, "PLANNED": 13}, "seconds": 3555.0}
 ```
+
+## Live dashboard (2026-10-31)
+
+Joe: watch the whole run live, local and GitHub; "reports and screenshots and statuses print here"; the final
+report is the same view. `tests/dashboard/serve.ps1` (or `serve.sh`) starts it on http://127.0.0.1:4120/;
+`-BindHost`/`--host` takes this machine's tailnet address instead (100.64.0.0/10 only; never public).
+`Run-All -Dashboard` / `run-all.sh --dashboard` and the release check start it too.
+
+It reads only what runs write: each machine's newest `tests/results/<run>/progress.jsonl` and `<ID>.json`
+(the Mac over SSH, from `wTEST_DASHBOARD_MAC` / `wTEST_DASHBOARD_MAC_REPO` in config.cmake), and the GitHub
+Actions jobs for that commit (token from `git credential`, kept in the server, never sent to the page). One row
+per test ID, grouped by machine, web rows in their own group; a row expands to its checks, log tails and
+screenshots (thumbnails, click to enlarge). `--run MACHINE=DIR` pins a run; `--export FILE.html` writes the same
+view as one self-contained file with screenshots embedded (JPEG, at most 1600 px, when Pillow is present).
+
