@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import config from './config.mjs';
-import {snapshot,until,point,clickControl,toneWav,audioSummary} from './browser.mjs';
+import {snapshot,until,point,clickControl,toneWav} from './browser.mjs';
 import {tapControl} from './window-tests.mjs';
 
 export async function noActivation(page) {
@@ -45,17 +45,48 @@ export async function disabledActivation(page,touch=false) {
 export async function waitPastNagCycle(page) {
   // Known looping input lets the audio check detect a mid-cycle interruption,
   // not just audio which happens to have resumed when the wait finishes.
-  if(await page.locator('#btn-loop').getAttribute('aria-pressed')!=='true')await page.locator('#btn-loop').click();
+  if(await page.locator('#btn-loop').getAttribute('aria-pressed')!=='true') {
+    const loop=page.locator('#btn-loop');
+    if(await page.evaluate(()=>matchMedia('(pointer: coarse)').matches))await loop.tap();else await loop.click();
+  }
   await page.locator('#file-upload').setInputFiles({name:'activation-wait-tone.wav',mimeType:'audio/wav',buffer:toneWav(2)});
   await page.waitForFunction(()=>playing&&audioBuffer?.duration===2&&audioCtx?.state==='running');
-  const start=Date.now(),audio=[];let samples=0;
-  while(Date.now()-start<65000) {
-    await noActivation(page);samples++;
-    const measured=await audioSummary(page,900);
-    assert.ok(measured.mean>.0001,`Audio interrupted during nag interval at ${Date.now()-start}ms: ${JSON.stringify(measured)}`);
-    audio.push(measured.mean);
-    await page.waitForTimeout(100);
+  const monitor=page.evaluate(async()=>{
+    const analyser=audioCtx.createAnalyser();analyser.fftSize=256;masterGain.connect(analyser);
+    const data=new Float32Array(analyser.fftSize),start=performance.now();
+    window._webAudioMonitorStop=false;
+    let samples=0,maxSilenceMs=0,silentSince=null,minRms=Infinity,maxRms=0,last=start,maxPollGapMs=0;
+    const analyserWindowMs=1000*analyser.fftSize/audioCtx.sampleRate;
+    try {
+      while(!window._webAudioMonitorStop&&performance.now()-start<65000) {
+        analyser.getFloatTimeDomainData(data);
+        const rms=Math.sqrt(data.reduce((sum,x)=>sum+x*x,0)/data.length),now=performance.now();
+        // Allow only analyser startup, then measure consecutive silence continuously.
+        if(now-start>150) {
+          minRms=Math.min(minRms,rms);maxRms=Math.max(maxRms,rms);samples++;
+          maxPollGapMs=Math.max(maxPollGapMs,now-last);
+          if(rms<.0001){silentSince??=last-analyserWindowMs;maxSilenceMs=Math.max(maxSilenceMs,now-silentSince+maxPollGapMs);}else silentSince=null;
+        }
+        last=now;
+        await new Promise(resolve=>setTimeout(resolve,20));
+      }
+      return {samples,minRms,maxRms,maxSilenceMs,analyserWindowMs,maxPollGapMs};
+    } finally {masterGain.disconnect(analyser);analyser.disconnect();delete window._webAudioMonitorStop;}
+  }).then(value=>({value}),error=>({error})); // Handle rejection immediately, even if a UI assertion fails.
+  const start=Date.now();let samples=0;
+  let observed;
+  try {
+    while(Date.now()-start<65000) {
+      await noActivation(page);samples++;
+      await page.waitForTimeout(250);
+    }
+  } finally {
+    await page.evaluate(()=>window._webAudioMonitorStop=true).catch(()=>{});
+    observed=await monitor;
   }
+  if(observed.error)throw observed.error;
+  const audio=observed.value;
+  assert.ok(audio.maxRms>.0001&&audio.maxSilenceMs<200,`Audio interrupted during nag interval: ${JSON.stringify(audio)}`);
   await noActivation(page);
-  return {elapsedMs:Date.now()-start,samples,audioRms:audio};
+  return {elapsedMs:Date.now()-start,samples,audio};
 }

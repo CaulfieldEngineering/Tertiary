@@ -8,8 +8,7 @@ import {snapshot,until,point,audioSummary,parameterChanges} from './browser.mjs'
 import {fitAudit,disabledSizes,tapControl} from './window-tests.mjs';
 import {noActivation,disabledActivation,waitPastNagCycle} from './activation-tests.mjs';
 
-// Playwright supplies trusted taps. It has no cross-browser swipe API, so continuous
-// drags use DOM Touch events (never a mouse drag) through JUCE's normal touch handlers.
+// Trusted taps on both engines; native Chromium drags and WebKit handler-only drags.
 export async function touchDrag(page,control) {
   const p=await point(page,control.x+control.width/2,control.y+control.height/2);
   const horizontal=control.width>control.height*2;
@@ -30,10 +29,16 @@ export async function touchDrag(page,control) {
     const target=document.elementFromPoint(p.x,p.y);let moves=0;
     const emit=(type,distance)=>{
       const x=p.x+(horizontal?distance:0),y=p.y-(horizontal?0:distance);
-      const touch=new Touch({identifier:1,target,clientX:x,clientY:y,pageX:x+scrollX,pageY:y+scrollY,
-        screenX:x,screenY:y,radiusX:8,radiusY:8,force:type==='touchend'?0:1});
-      target.dispatchEvent(new TouchEvent(type,{bubbles:true,cancelable:true,
-        touches:type==='touchend'?[]:[touch],targetTouches:type==='touchend'?[]:[touch],changedTouches:[touch]}));
+      // WebKit exposes Touch but deliberately makes its constructor illegal.
+      // Populate the lists on a DOM TouchEvent for this explicitly handler-only check.
+      const touch={identifier:1,target,clientX:x,clientY:y,pageX:x+scrollX,pageY:y+scrollY,
+        screenX:x,screenY:y,radiusX:8,radiusY:8,force:type==='touchend'?0:1};
+      const event=document.createEvent('TouchEvent');event.initEvent(type,true,true);
+      Object.defineProperties(event,{
+        touches:{value:type==='touchend'?[]:[touch]},targetTouches:{value:type==='touchend'?[]:[touch]},
+        changedTouches:{value:[touch]}
+      });
+      target.dispatchEvent(event);
     };
     emit('touchstart',0);
     for(let i=1;i<=16;i++){emit('touchmove',i*2);moves++;await new Promise(r=>setTimeout(r,16));}
@@ -86,7 +91,9 @@ export async function testMobile({context,check,shot,outDir,meta,engine}) {
         assert.equal(state.compiledBuildId.split(' · ')[0].replace(/\+$/,''),meta.shortCommit);return state.compiledBuildId;
       });
       if(config.adapter==='tertiary') {
-        await check(`M-06-${id}`,'Knob drag and menu choice respond to touch without hovering',async()=>{
+        await check(`M-06-${id}`,devices[profile].defaultBrowserType==='webkit'
+          ? 'Touch drag handler coverage and trusted menu taps (WebKit swipe limitation)'
+          : 'Native knob drag and menu choice respond to touch without hovering',async()=>{
           const zoom=page.getByRole('button',{name:'Low',exact:true});
           try {
           if(await zoom.isVisible()) {await zoom.tap();await page.waitForTimeout(350);await page.evaluate(()=>scrollTo(0,0));}
@@ -97,6 +104,13 @@ export async function testMobile({context,check,shot,outDir,meta,engine}) {
           const combo=dragged.controls.find(c=>c.kind==='combo'&&c.visible&&c.x>108&&c.x<310);assert.ok(combo);
           await tapControl(page,combo);
           const menu=await until(()=>snapshot(page),s=>s.controls.some(c=>c.visible&&c.key.startsWith('popup/')),'Touch did not open the menu');
+          const popupBounds=await page.locator('body > canvas[data-peer]').evaluateAll(cs=>cs.map(c=>{
+            const r=c.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,
+              visibleWidth:visualViewport.width,visibleHeight:visualViewport.height};
+          }));
+          assert.ok(popupBounds.length);
+          for(const r of popupBounds)assert.ok(r.left>=-1&&r.top>=-1&&r.right<=r.visibleWidth+1&&r.bottom<=r.visibleHeight+1,
+            `Touch menu outside the screen: ${JSON.stringify(r)}`);
           const item=menu.controls.find(c=>c.visible&&c.key.startsWith('popup/')&&combo.items.includes(c.title)&&c.title!==combo.text);assert.ok(item);
           await page.waitForTimeout(250);await tapControl(page,item);
           const after=await until(()=>snapshot(page),s=>s.controls.find(c=>c.key===combo.key)?.text===item.title,'Touch menu did not select the item');

@@ -37,6 +37,15 @@ window.addEventListener('orientationchange', () => requestAnimationFrame(refitVi
                 }`);
   replace('    _decoded.set(track, buf);', '    if (TRACKS.includes(track)) _decoded.set(track, buf);');
   replace('        TRACKS[idx].duration = audioBuffer.duration;', '        track.duration = audioBuffer.duration;');
+  replace('                const origLeft = parseInt(c.style.left) || 0;', `                // Native menu placement knows the full editor, not the phone zoom crop.
+                // Constrain the JUCE peer itself so drawing and touch coordinates agree.
+                const viewport = window.visualViewport;
+                const left = viewport?.offsetLeft || 0, top = viewport?.offsetTop || 0;
+                Module._wonderlab_fitPopup?.(Number(c.dataset.peer),
+                    Math.ceil((left - rect.left) / scale), Math.ceil((top - rect.top) / scale),
+                    Math.floor((viewport?.width || innerWidth) / scale),
+                    Math.floor((viewport?.height || innerHeight) / scale));
+                const origLeft = parseInt(c.style.left) || 0;`);
   replace('    </style>', `        /* Touch targets in the host stay usable in both orientations. */
         @media (pointer: coarse) {
             .zoom-btn, #upload-btn, .playlist-track__delete { min-width: 40px; min-height: 40px; }

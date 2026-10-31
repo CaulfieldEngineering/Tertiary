@@ -186,6 +186,36 @@ export async function testPlayer({ page, check }) {
     assert.equal(await page.locator('#track-name').innerText(), '', 'A stale load restored the filename');
     return { count: before - 1, state: await read() };
   });
+  await check('W-29-remove-during-load', 'A removed upload cannot return when its pending file read completes', async () => {
+    // Hold only timing: bytes and decoding still come from the real File/Web Audio APIs.
+    await page.evaluate(()=>{
+      const original=File.prototype.arrayBuffer;
+      let release;const gate=new Promise(resolve=>release=resolve);
+      window._pendingUploadTest={release,restore:()=>File.prototype.arrayBuffer=original};
+      File.prototype.arrayBuffer=async function(){
+        if(this.name==='pending-removal.wav') {
+          window._pendingUploadTest.track=TRACKS.find(t=>t._file===this);
+          window._pendingUploadTest.waiting=true;await gate;
+        }
+        return original.call(this);
+      };
+    });
+    try {
+      await page.locator('#file-upload').setInputFiles({name:'pending-removal.wav',mimeType:'audio/wav',buffer:toneWav(2)});
+      await page.waitForFunction(()=>window._pendingUploadTest.waiting);
+      await page.locator('#track-list .playlist-track').filter({hasText:'pending-removal'}).locator('.playlist-track__delete').click();
+      await page.evaluate(()=>window._pendingUploadTest.release());
+      await page.waitForFunction(()=>!window._pendingUploadTest.track._loading);
+      const state=await page.evaluate(()=>({playing,index:currentTrackIdx,name:trackName.textContent,
+        buffer:audioBuffer!==null,source:sourceNode!==null,cached:_decoded.has(window._pendingUploadTest.track)}));
+      assert.deepEqual(state,{playing:false,index:-1,name:'',buffer:false,source:false,cached:false});
+      assert.equal(await page.locator('#track-list [aria-current="true"]').count(),0);
+      assert.equal(await page.locator('#btn-play').isDisabled(),true);
+      return state;
+    } finally {
+      await page.evaluate(()=>{window._pendingUploadTest.release();window._pendingUploadTest.restore();delete window._pendingUploadTest;});
+    }
+  });
   await check('W-29-restore-player', 'Player returns to its first built-in track, stopped', async () => {
     assert.ok(initial.tracks.length > 0, 'No first built-in track to restore');
     await selectTrack(initial.tracks[0]);

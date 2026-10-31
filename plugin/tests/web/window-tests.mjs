@@ -21,11 +21,14 @@ export async function fitAudit(page) {
       if (['hidden','clip','scroll','auto'].includes(r.overflowY) && (drawn.top<r.top-1||drawn.bottom>r.bottom+1)) clipped.push(`${name}: vertical`);
     }
     return {canvas:drawn, stage:rect(document.getElementById('stage')), width:innerWidth,
-      height:visualViewport?.height||innerHeight, scrollWidth:document.documentElement.scrollWidth, clipped};
+      viewport:{left:visualViewport?.offsetLeft||0,top:visualViewport?.offsetTop||0,
+        width:visualViewport?.width||innerWidth,height:visualViewport?.height||innerHeight},
+      scrollWidth:document.documentElement.scrollWidth, clipped};
   });
   assert.deepEqual(audit.clipped, [], JSON.stringify(audit));
   assert.ok(audit.scrollWidth<=audit.width+1, `Horizontal page scroll: ${JSON.stringify(audit)}`);
-  assert.ok(audit.canvas.left>=-1 && audit.canvas.right<=audit.width+1 && audit.canvas.top>=-1 && audit.canvas.bottom<=audit.height+1,
+  const v=audit.viewport;
+  assert.ok(audit.canvas.left>=v.left-1 && audit.canvas.right<=v.left+v.width+1 && audit.canvas.top>=v.top-1 && audit.canvas.bottom<=v.top+v.height+1,
     `Canvas exceeds the visible browser area: ${JSON.stringify(audit)}`);
   return audit;
 }

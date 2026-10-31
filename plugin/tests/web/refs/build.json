@@ -1,7 +1,9 @@
 {
   "name": "Tertiary",
   "version": "1.1.0",
-  "commit": "77601378b2cec94d1b6e4cde4cddd3100e1d0ef7",
+  "commit": "036c8d5b7fa560f00fbd2ce03f33f7a53140edb8",
+  "shortCommit": "036c8d5",
+  "buildId": "036c8d5 · 2026-10-30 21:28",
   "wonderlab": "5248a157cfdf472caf1fafc7b9b71dec09485947",
   "emsdk": "5.0.3",
   "inspector": true,

@@ -406,18 +406,6 @@ jobs:
     - name: Test iPhone portrait and landscape with real Web Audio
       working-directory: plugin/tests/web
       run: npm test -- --no-ai --engine=webkit
-    - name: Export missing screenshot candidates for manual review
-      if: failure()
-      run: |
-        node --input-type=module - <<'JS'
-        import fs from 'node:fs';
-        const dir='plugin/tests/web/out';
-        for(const name of fs.readdirSync(dir).filter(n=>/^iphone-.*-baseline\.png$/.test(n))) {
-          if(fs.existsSync('plugin/tests/web/refs/'+name))continue;
-          const data=fs.readFileSync(dir+'/'+name).toString('base64');
-          for(let i=0;i<data.length;i+=8000)console.log('WEB_REF '+name+' '+i+' '+data.slice(i,i+8000));
-        }
-        JS
     - name: Upload iPhone results and screenshots
       if: always()
       uses: actions/upload-artifact@v4
