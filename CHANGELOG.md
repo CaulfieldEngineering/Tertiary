@@ -24,6 +24,7 @@
 - Activating your serial key during the demo's 10-second pause left the effect and the band controls off until the plugin was reopened. Fixed.
 - Closing the plugin window while an activation was in progress could crash the host. Fixed.
 - Automating the scope's display options from the host could crash the plugin window. Fixed.
+- Mac standalone app: macOS gave it no sound from the audio interface (it never asked for permission to use the audio input). It now asks the first time it opens an input.
 - Mac installer: if another copy of Tertiary was on the Mac (an old download, a copied plug-in), the installer could update that copy instead of installing into Applications and the plug-in folders. It now always installs into the standard folders.
 - Windows installer: a silent install (/VERYSILENT, for managed or scripted installs) waited forever on the final message. Fixed.
 - Email addresses with capital letters were refused at activation. Fixed.

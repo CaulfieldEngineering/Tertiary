@@ -5,6 +5,8 @@
 #   bash mac_checks.sh <folder with the built files> <pluginval executable> <name for the results>
 #
 # 1. Both chip types (arm64, x86_64) in every binary, and the oldest macOS is 11.0
+# 1b. [Claude 2026-10-30] V-08: the standalone has its microphone text, the entitlements file is valid, and the
+#     standalone signed with workflow.yml's command (ad-hoc identity here) holds the audio-input entitlement
 # 2. The unit tests (TertiaryTests)
 # 2b. [Claude 2026-10-29] The UI tests (UiTest): the real editor off screen, driven by mouse and keyboard events. A
 #     failure doesn't stop the checks below; it fails the script at the end.
@@ -49,6 +51,47 @@ check_binary "$OUT/ReviewRender"
 check_binary "$OUT/TertiaryTests"
 check_binary "$OUT/HostTest"
 check_binary "$OUT/UiTest"
+check_binary "$OUT/Tertiary.app/Contents/MacOS/Tertiary"
+
+# 1b. [Claude 2026-10-30] V-08, the standalone's audio input. macOS gives the standalone silence from the audio
+#     interface unless its Info.plist has the microphone text (NSMicrophoneUsageDescription, from
+#     MICROPHONE_PERMISSION_TEXT in plugin/CMakeLists.txt) and, signed with the hardened runtime, it holds the
+#     audio-input entitlement (package_config/mac/standalone.entitlements). Real signing only runs on staging and tags
+#     (workflow.yml, "Sign Mac Binaries"), so here a copy is signed with that same command and an ad-hoc identity
+#     ("-", no timestamp), and the result is checked.
+# ==========================================================================================
+APP_ENTITLEMENTS=package_config/mac/standalone.entitlements
+mic_fail() {
+    local message="FAIL V-08 standalone audio input ($NAME): $1"
+    echo "$message"
+    [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "$message" >> "$GITHUB_STEP_SUMMARY"
+    exit 1
+}
+MIC_TEXT=$(/usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "$OUT/Tertiary.app/Contents/Info.plist" 2>/dev/null) \
+    || mic_fail "Tertiary.app's Info.plist has no NSMicrophoneUsageDescription (MICROPHONE_PERMISSION_ENABLED in plugin/CMakeLists.txt)"
+[ -n "$MIC_TEXT" ] || mic_fail "Tertiary.app's NSMicrophoneUsageDescription is empty"
+echo "Standalone microphone text: $MIC_TEXT" | tee results/standalone-mic.log
+plutil -lint "$APP_ENTITLEMENTS" | tee -a results/standalone-mic.log || mic_fail "$APP_ENTITLEMENTS is not a valid plist"
+[ "$(/usr/libexec/PlistBuddy -c "Print :com.apple.security.device.audio-input" "$APP_ENTITLEMENTS" 2>/dev/null)" = "true" ] \
+    || mic_fail "$APP_ENTITLEMENTS does not set com.apple.security.device.audio-input to true"
+# The signing command in workflow.yml must still pass the entitlements file to the standalone (and only to it)
+SIGN_STEP=$(awk '/- name: Sign Mac Binaries/{on=1} on&&/- name: Create Standalone Package/{exit} on' .github/workflows/workflow.yml)
+[ "$(grep -c -- '--entitlements "\$APP_ENTITLEMENTS"' <<< "$SIGN_STEP")" = "1" ] \
+    || mic_fail "workflow.yml's Sign Mac Binaries step should pass --entitlements \"\$APP_ENTITLEMENTS\" exactly once (to the standalone)"
+grep -q 'APP_ENTITLEMENTS="${GITHUB_WORKSPACE}/'"$APP_ENTITLEMENTS"'"' <<< "$SIGN_STEP" \
+    || mic_fail "workflow.yml's Sign Mac Binaries step doesn't point APP_ENTITLEMENTS at $APP_ENTITLEMENTS"
+SIGN_DIR=$(mktemp -d)
+cp -R "$OUT/Tertiary.app" "$SIGN_DIR/"
+codesign --force --sign - --verbose --deep --strict --options=runtime --timestamp=none \
+    --entitlements "$APP_ENTITLEMENTS" "$SIGN_DIR/Tertiary.app" 2>&1 | tee -a results/standalone-mic.log
+codesign --verify --deep --strict --verbose=2 "$SIGN_DIR/Tertiary.app" 2>&1 | tee -a results/standalone-mic.log
+SIGN_INFO=$(codesign -dv --verbose=2 "$SIGN_DIR/Tertiary.app" 2>&1)
+grep -q "runtime" <<< "$SIGN_INFO" || mic_fail "the test signature has no hardened runtime"
+SIGN_ENT=$(codesign --display --entitlements - --xml "$SIGN_DIR/Tertiary.app" 2>/dev/null)
+echo "$SIGN_ENT" >> results/standalone-mic.log
+grep -q "com.apple.security.device.audio-input" <<< "$SIGN_ENT" || mic_fail "the test signature has no audio-input entitlement"
+rm -rf "$SIGN_DIR"
+echo "PASS V-08 standalone microphone text, entitlements file and signing command ($NAME)"
 
 # 2. Unit tests
 # ==========================================================================================
