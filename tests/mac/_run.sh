@@ -9,6 +9,9 @@ if [ "$(uname -s)" = Darwin ] && [ "$(launchctl managername)" != Aqua ]; then
     exec sudo -n launchctl asuser "$(id -u)" sudo -n -u "$(id -un)" \
       env "PATH=$PATH" "WLA_NO_LOGIC=${WLA_NO_LOGIC:-0}" \
       "WLA_TEST_BUILD_DIR=${WLA_TEST_BUILD_DIR:-}" "WLA_PLUGINVAL=${WLA_PLUGINVAL:-}" \
+      "WLA_TEST_REFERENCE=${WLA_TEST_REFERENCE:-}" "WLA_LOGIC_MEDIA=${WLA_LOGIC_MEDIA:-}" \
+      "WLA_RESET_MIC=${WLA_RESET_MIC:-0}" "WLA_MIC_LOOPBACK_DRIVER=${WLA_MIC_LOOPBACK_DRIVER:-}" \
+      "WLA_TEST_CMAKE=${WLA_TEST_CMAKE:-}" \
       "$PYTHON" "$HERE/../lib/run.py" "$@"
   fi
   echo "No logged-in desktop session; GUI checks will report SKIP."

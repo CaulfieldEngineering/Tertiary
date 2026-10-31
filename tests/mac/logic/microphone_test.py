@@ -5,7 +5,7 @@ import plistlib
 import shutil
 import sqlite3
 import time
-from host_common import Stop, plist, run, sha
+from host_common import Stop, embedded_build, plist, run, sha
 
 BUNDLE = 'com.WonderlandAudio.Tertiary'
 USAGE = 'Tertiary uses your audio input to process it through the tremolo.'
@@ -53,28 +53,44 @@ def test(args, ui, result, here, repo):
                          'Temporary signed loopback input removed; existing HAL drivers and output settings retained; no reboot')
 
 
+def source_from_cache(build):
+    """[Codex 2026-10-31] An existing build tree must actually belong to the selected checkout."""
+    for line in (build / 'CMakeCache.txt').read_text(encoding='utf-8').splitlines():
+        if line.startswith('CMAKE_HOME_DIRECTORY:INTERNAL='):
+            return Path(line.split('=', 1)[1]).resolve()
+    raise Stop('CMake cache has no source-directory provenance: ' + str(build))
+
+
 def _test(args, ui, result, here, repo):
-    source = Path(args.source or Path.home() / 'macday/mic/src').expanduser().resolve()
-    build = Path(args.build or Path.home() / 'macday/mic/build').expanduser().resolve()
-    cmake = Path(args.cmake or Path.home() / 'Library/Python/3.9/bin/cmake').expanduser()
+    source = Path(args.source or repo).expanduser().resolve()
+    build = Path(args.build or repo / 'build-tests').expanduser().resolve()
+    cmake = Path(args.cmake or shutil.which('cmake') or Path.home() / 'Library/Python/3.9/bin/cmake').expanduser()
     if run(['pgrep', '-x', 'Tertiary'], check=False).returncode == 0:
         raise Stop('Close Tertiary before this test; existing application was not touched', 2)
     commit = run(['git', '-C', source, 'rev-parse', 'HEAD']).stdout.decode().strip()
-    result.check('M-07-source', commit.startswith('25b0a55'), 'Microphone fix commit ' + commit)
+    expected = args.build_id or run(['git', '-C', source, 'rev-parse', '--short', 'HEAD']).stdout.decode().strip()
+    result.check('M-07-source', commit.startswith(expected.rstrip('+')), 'Selected source ' + str(source) + '; commit ' + commit)
     if not (build / 'CMakeCache.txt').is_file():
+        options = ['-DCPM_JUCE_SOURCE=' + str(Path(args.juce).expanduser())] if args.juce else []
         configure = run([cmake, '-S', source, '-B', build, '-DCMAKE_BUILD_TYPE=Release',
-                         '-DCPM_JUCE_SOURCE=' + str(Path(args.juce or Path.home() / 'macday/in/juce').expanduser()),
-                         '-DWLA_COPY_PLUGIN_AFTER_BUILD=OFF'], timeout=120, check=False)
+                         '-DWLA_COPY_PLUGIN_AFTER_BUILD=OFF', *options], timeout=120, check=False)
         (result.out / 'configure.log').write_bytes(configure.stdout + configure.stderr)
         result.artifact(result.out / 'configure.log')
         result.check('M-07-configure', configure.returncode == 0, 'Standalone-only Release configuration')
+    result.check('M-07-build-source', source_from_cache(build) == source,
+                 'CMake build directory belongs to the selected source checkout: ' + str(build))
     p = run([cmake, '--build', build, '--target', 'Tertiary_Standalone', '--config', 'Release', '-j', '2'], timeout=450, check=False)
     (result.out / 'build.log').write_bytes(p.stdout + p.stderr)
     result.artifact(result.out / 'build.log')
     result.check('M-07-build', p.returncode == 0, 'cmake Tertiary_Standalone Release; exit ' + str(p.returncode))
     app = build / 'plugin/Tertiary_artefacts/Release/Standalone/Tertiary.app'
     info = plist(app / 'Contents/Info.plist')
-    result.data['build'] = dict(path=str(app), id=commit, sha256=sha(app / 'Contents/MacOS/Tertiary'))
+    binary = app / 'Contents/MacOS/Tertiary'
+    actual, build_label = embedded_build(binary)
+    after = run(['git', '-C', source, 'rev-parse', 'HEAD']).stdout.decode().strip()
+    result.data['build'] = dict(path=str(app), id=build_label, source_commit=commit, sha256=sha(binary))
+    result.check('M-07-build-identity', commit == after and commit.startswith(actual.rstrip('+')),
+                 'Executable embeds ' + build_label + '; source HEAD stayed at ' + commit)
     result.data['host'] = dict(name='macOS standalone', version=run(['sw_vers', '-productVersion']).stdout.decode().strip())
     result.check('V-08-usage-description', info.get('NSMicrophoneUsageDescription') == USAGE and info.get('CFBundleIdentifier') == BUNDLE,
                  'NSMicrophoneUsageDescription: ' + str(info.get('NSMicrophoneUsageDescription')))

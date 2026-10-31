@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import re
 import struct
 import subprocess
 import time
@@ -25,6 +26,14 @@ def utc():
 
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def embedded_build(path):
+    """[Codex 2026-10-31] Read the About build ID from the actual executable, including dirty marker."""
+    match = re.search(rb'Build ([0-9a-f]{7,40}\+?) \xc2\xb7 (20[0-9-]+ [0-9:]+)', Path(path).read_bytes())
+    if not match:
+        raise Stop('Executable has no embedded About build identity: ' + str(path))
+    return match.group(1).decode(), match.group(0).decode().removeprefix('Build ')
 
 
 def plist(path):

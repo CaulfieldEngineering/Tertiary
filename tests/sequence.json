@@ -339,7 +339,7 @@
     "scripts": {
       "mac": "mac/test-microphone.sh"
     },
-    "planned": true,
+    "handler": "microphone",
     "mac_day_only": true
   },
   {

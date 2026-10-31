@@ -286,57 +286,102 @@ def asan(r, args):
         r.check('sanitizer-reports', 'FAIL', 'AddressSanitizer reported a memory error; see asan.log')
 
 
-def logic(r, args):
-    project = local_path(r.cfg.get('wTEST_LOGIC_PROJECT', 'tests/mac/logic/' + r.product + ' harness.logicx'))
-    if not project.exists():
-        planned(r, 'logic-harness', 'no Logic harness project yet; AU validation is covered by test-auval.sh')
+def mac_host_result(r, name, runner, options, timeout):
+    """[Codex 2026-10-31] Import the verified host harness's checks, not just its exit code.
+
+    Nested automation exit 3 means FAIL, unlike the shared runner's PLANNED 3.
+    A consent-only pass retains its explicit physical-input SKIP in the aggregate.
+    """
+    output = r.work / 'host-result'
+    output.mkdir()  # Never accept an earlier result when this invocation did not run.
+    code, _ = r.command(name, [sys.executable, runner, name, *options, '--out', output],
+                        timeout=timeout, record=False)
+    result_path = output / 'result.json'
+    if not result_path.is_file():
+        r.check(name + '-runner', 'FAIL', f'exit {code}; host harness produced no result.json')
         return
+    r.artifact(result_path)
+    try:
+        data = json.loads(result_path.read_text(encoding='utf-8'))
+        expected = {0: 'PASS', 1: 'FAIL', 2: 'SKIP', 3: 'FAIL'}.get(code)
+        if not expected or data.get('status') != expected or data.get('platform') != 'mac':
+            raise ValueError('nested result status/platform does not match exit ' + str(code))
+        if not data.get('started') or not data.get('finished') or not data.get('checks'):
+            raise ValueError('nested result is incomplete')
+        for check in data['checks']:
+            if check.get('status') not in ('PASS', 'FAIL', 'SKIP') or not check.get('id') or 'detail' not in check:
+                raise ValueError('invalid nested check: ' + repr(check))
+        statuses = {c['status'] for c in data['checks']}
+        if expected == 'PASS' and ('FAIL' in statuses or 'PASS' not in statuses):
+            raise ValueError('nested PASS has no passing checks or contains a failure')
+        if expected in ('FAIL', 'SKIP') and expected not in statuses:
+            raise ValueError('nested ' + expected + ' has no corresponding check')
+        for field in ('build', 'host'):
+            if not isinstance(data.get(field), dict):
+                raise ValueError('missing nested ' + field)
+        artifacts = [Path(p).resolve() for p in data.get('artifacts', [])]
+        if any(output.resolve() not in p.parents or not p.is_file() for p in artifacts):
+            raise ValueError('nested artifact is missing or outside this run')
+    except (ValueError, KeyError, TypeError) as error:
+        r.check(name + '-contract', 'FAIL', str(error))
+        return
+    if data['build'].get('path'):
+        r.data['build'] = dict(data['build'])
+        if data['build'].get('sha256'):
+            r.data['build']['id'] += '; sha256:' + data['build']['sha256']
+    if data['host'].get('name'):
+        r.data['host'] = data['host']
+    for check in data['checks']:
+        r.check(check['id'], check['status'], check['detail'])
+    for artifact in artifacts:
+        r.artifact(artifact)
+
+
+def mac_host_runner(r):
+    runner = r.cfg.get('wTEST_MAC_HOST_RUNNER')
+    if not runner or not local_path(runner).is_file():
+        planned(r, 'mac-host-harness', 'Configure this product\'s verified Mac host harness')
+        return None
+    return local_path(runner)
+
+
+def logic(r, args):
+    # [Codex 2026-10-31] The real harness owns staging, strict auval, editor and exact PCM checks.
     if args.no_logic or os.environ.get('WLA_NO_LOGIC') == '1':
         r.check('logic-harness', 'SKIP', 'Logic opening disabled for this run')
         return
-    app = host(r, 'Logic Pro', ['/Applications/Logic Pro.app', '/Applications/Logic Pro Creator Studio.app'])
-    if not app:
+    runner = mac_host_runner(r)
+    if not runner:
         return
-    if running('Logic Pro') or running('Logic Pro Creator Studio'):
-        r.check('logic-harness', 'SKIP', 'Logic is already running; leaving that session untouched')
+    project = local_path(r.cfg['wTEST_LOGIC_PROJECT'])
+    if not project.exists():
+        planned(r, 'logic-harness', 'No saved Logic harness project for this product')
         return
     au = r.built('AU')
-    golden = Path(r.cfg['wTEST_GOLDEN_DIR']).expanduser() / 'logic/harness.wav'
-    if not golden.exists():
-        r.check('logic-golden', 'SKIP', 'Logic golden missing: ' + str(golden))
-        return
     if not au:
         return
     r.select(au)
-    with staged(r, au, Path.home() / 'Library/Audio/Plug-Ins/Components' / au.name, au_reset):
-        code, _ = r.command('logic-auval', ['auval', '-strict', '-v', r.cfg.get('wTEST_AU_TYPE', 'aufx'),
-                r.cfg['wPLUGIN_CODE'], r.cfg['wPLUGIN_MANUFACTURER_CODE']], timeout=180, required_text=('AU VALIDATION SUCCEEDED',))
-        if code:
-            return
-        # A copied project owns its bounce and save prompts; the source project stays untouched.
-        copy = r.work / project.name
-        shutil.copytree(project, copy)
-        output = r.work / 'bounce'
-        output.mkdir()
-        try:
-            r.command('logic-bounce', ['osascript', ROOT / 'tests/mac/logic-bounce.applescript', app, copy, output], timeout=240)
-            r.command('logic-compare', [sys.executable, ROOT / 'plugin/tests/regression/compare_renders.py', golden.parent,
-                                      output, '--tolerance', '1e-5'], timeout=30)
-        finally:
-            # Both names were absent before launch; never close a pre-existing Logic session.
-            for process_name in ('Logic Pro', 'Logic Pro Creator Studio'):
-                for pid in running(process_name):
-                    try:
-                        quit_mac(app, pid)
-                    except subprocess.TimeoutExpired:
-                        pass
-                    deadline = time.monotonic() + 10
-                    while pid in running(process_name) and time.monotonic() < deadline:
-                        time.sleep(0.2)
-                    if pid in running(process_name):
-                        r.screenshot('logic-quit-timeout')
-                        os.kill(pid, signal.SIGKILL)
-                        r.check('logic-quit', 'FAIL', 'Logic Quit timed out; ended only the test session PID ' + str(pid))
+    expected = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', '--short', 'HEAD'], text=True).strip()
+    media = os.environ.get('WLA_LOGIC_MEDIA') or str(local_path(r.cfg['wTEST_LOGIC_MEDIA']))
+    golden = Path(r.cfg['wTEST_GOLDEN_DIR']).expanduser() / 'logic'
+    mac_host_result(r, 'logic', runner, ['--build', au, '--build-id', expected,
+                    '--media', Path(media).expanduser(), '--golden', golden], timeout=900)
+
+
+def microphone(r, args):
+    # [Codex 2026-10-31] Explicit per-run consent/driver options; neither action is a default.
+    runner = mac_host_runner(r)
+    if not runner:
+        return
+    expected = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', '--short', 'HEAD'], text=True).strip()
+    options = ['--source', ROOT, '--build', r.build_dir, '--build-id', expected]
+    if os.environ.get('WLA_TEST_CMAKE'):
+        options += ['--cmake', os.environ['WLA_TEST_CMAKE']]
+    if os.environ.get('WLA_RESET_MIC') == '1':
+        options += ['--reset-mic']
+    if os.environ.get('WLA_MIC_LOOPBACK_DRIVER'):
+        options += ['--loopback-driver', Path(os.environ['WLA_MIC_LOOPBACK_DRIVER']).expanduser()]
+    mac_host_result(r, 'microphone', runner, options, timeout=1200)
 
 
 def web(r, args):
@@ -424,4 +469,4 @@ def performance(r, args):
 
 
 HANDLERS = dict(standalone=standalone, reaper=reaper, cubase=cubase, isolation=isolation,
-                asan=asan, logic=logic, web=web, performance=performance)
+                asan=asan, logic=logic, microphone=microphone, web=web, performance=performance)

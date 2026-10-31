@@ -11,7 +11,7 @@ import pwd
 import signal
 import subprocess
 
-from host_common import Stop, compare, plist, run, sha, wave_data
+from host_common import Stop, compare, embedded_build, plist, run, sha, wave_data
 
 APP = Path('/Applications/Logic Pro Creator Studio.app')
 PROJECT_TITLES = ('Tertiary harness - Tracks', 'Tertiary harness.logicx - Tracks')
@@ -204,12 +204,12 @@ def test(args, ui, result, here, repo):
     binary = source / 'Contents/MacOS/Tertiary'
     if not binary.is_file():
         raise Stop('Built AU missing: ' + str(source), 2)
-    match = re.search(rb'Build ([0-9a-f]{7,40}) ', binary.read_bytes())
-    build_id = match.group(1).decode() if match else sha(binary)[:16]
-    result.data['build'] = dict(path=str(source), id=build_id, sha256=sha(binary))
+    build_id, build_label = embedded_build(binary)
+    result.data['build'] = dict(path=str(source), id=build_label, sha256=sha(binary))
     print('Testing AU %s, build %s, SHA256 %s' % (source, build_id, sha(binary)), flush=True)
     if args.build_id:
-        result.check('build-selection', build_id == args.build_id, 'Requested ' + args.build_id + '; actual ' + build_id)
+        result.check('build-selection', build_id.rstrip('+') == args.build_id.rstrip('+'),
+                     'Requested ' + args.build_id + '; actual ' + build_label)
     golden = Path(args.golden).expanduser().resolve()
     if not args.record_golden and not (golden / 'harness.wav').is_file():
         raise Stop('No golden; use --record-golden --build-id <approved build> once', 2)
