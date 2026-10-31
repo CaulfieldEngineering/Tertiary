@@ -236,6 +236,30 @@ The real processor and editor in a window off the screen, used the way a person 
 
 Undo: revert the commit. The plugin's own code changes are the one-line friends, the accessible names, and the `TestHooks` calls (identical behaviour outside the UiTest build).
 
+## 10. Browser demo regression suite (Codex, 2026-10-30)
+
+The `web-tests` worktree starts at web-staging `7760137`, whose plugin code is the approved RC1b `f24dc90`. This change adds build and test infrastructure; it does not change shipping plugin sources or deploy a build.
+
+| File | Change and purpose |
+|---|---|
+| `plugin/tests/web/build.mjs`, `paths.mjs`, `config.mjs` | Read product identity from `config.cmake`; build native BinaryData and both Wonderlab targets with pinned Emscripten 5.0.3; assemble the demo and record commit/dependency provenance. Product-specific settings stay in config. |
+| `plugin/tests/web/inspect.cpp` | `webtest_snapshot` and `visit` expose read-only JUCE state in test builds only. No parameter setters, timer overrides or DSP replacements. |
+| `plugin/tests/web/browser.mjs`, `run.mjs` | Playwright user gestures, audio measurement, state and layout checks, viewport screenshots, build identity and JSON/HTML failure reports. Analytics hosts are explicitly stubbed; plugin requests are checked. |
+| `plugin/tests/web/tertiary-inspect.h`, `options-tests.mjs`, `window-tests.mjs`, `wrapper-tests.mjs` | Read scope/FFT state without changing it; exercise scope and FFT options, all Window size choices, and the host audio player. FFT Pre is checked against live input versus muted output. Window resize failures retain screenshots and exact geometry. |
+| `plugin/tests/web/serve.mjs` | Loopback-only server with COOP/COEP/CORP for SharedArrayBuffer. |
+| `plugin/tests/web/visual.mjs`, `refs/` | Pixel comparison and diff images; references require an explicit update and retain build provenance. A reference is visual history, not functional approval, and known product bugs still fail. |
+| `plugin/tests/web/ai-review.mjs` | Advisory `codex exec --sandbox read-only` review of reference/actual pairs, saved to `out/ai-review.md`; clean skips for CI or missing Codex. Its verdict never changes the deterministic result. |
+| `plugin/tests/web/harness.test.mjs`, `package.json`, `package-lock.json`, `README.md` | Harness negative checks, pinned Node dependencies and Windows setup/run/maintenance instructions. |
+| `.github/workflows/test.yml` | Windows `web` job builds and runs the browser suite on work branches, then uploads `out/` as `web-test-results`. AI review is excluded. Deployment routing in `workflow.yml` is unchanged. |
+
+Validation: run `npm run test:harness`, `npm run build` and `npm test` from `plugin/tests/web`; read `out/report.json` and inspect its screenshots. Successful build/test counts are recorded by the run, not asserted here. Report plugin defects with their screenshot paths instead of changing RC1b plugin code. See `plugin/tests/web/README.md` for environment variables and intentional reference updates.
+
+Known existing web defect: About reports `Build unknown` because the web build does not supply the generated `build_id.h`. The displayed-build-ID check remains a hard failure; `out/desktop-about-build-id.png` records the dialog when reached. The harness does not inject a replacement header. The page configuration's correct commit stamp does not waive this failure.
+
+Known existing web defect: selecting Window size resizes the canvas but leaves the web wrapper/stage at 750x478, cropping lower controls at 125% and additionally the right side at 150%/200%. Explicit 100% crops two border pixels. All four resize checks stay hard failures; `out/desktop-window-{100,125,150,200}.png` and matching JSON files record the evidence. Default phone/tablet/desktop layouts and their pixel references pass.
+
+Undo: revert the browser-test commit, removing its `web` job and `plugin/tests/web` files. No plugin behavior or deployment route needs restoring. Generated `build/` and `out/` files are local artifacts.
+
 ## Suggestions I did not change
 
 1. ~~Relative phase is twice what the knob says, in the audio.~~ Fixed after Joe's yes: section 2b.
