@@ -533,7 +533,7 @@
   {
     "id": "T2-03",
     "name": "Performance and 30-instance stress",
-    "description": "PerfTest DSP, live editor and unchanged 30-instance deadline test",
+    "description": "PerfTest DSP and live editor measurements; 30 instances playing 60 s in REAPER at 48 kHz / 128 with zero xruns (PerfTest 30-instance harness kept as a diagnostic)",
     "scope": "universal",
     "ci_ok": false,
     "suite_ids": [

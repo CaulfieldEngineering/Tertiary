@@ -453,6 +453,66 @@ def web(r, args):
             planned(r, browser, 'Add ' + browser + ' execution and its completion record to plugin/tests/web')
 
 
+def reaper_exe(r):
+    return host(r, 'REAPER', [os.environ.get('WLA_REAPER'),
+        r'C:\Program Files\REAPER (x64)\reaper.exe' if PLATFORM == 'win' else '/Applications/REAPER.app/Contents/MacOS/REAPER'],
+        'reaper.exe' if PLATFORM == 'win' else 'REAPER')
+
+
+def reaper_instances(r, vst):
+    """[Claude 2026-10-31] T2-03's pass criterion: 30 instances play without dropouts in REAPER.
+
+    Joe: "Can you do the 30 instance test inside of a DAW? Reaper?" REAPER runs an isolated profile at
+    48 kHz / 128 samples on the machine's real audio output (Windows WASAPI, the default output; Mac Core
+    Audio, the default output) with its normal processing settings, anticipative FX processing on. The master
+    is at -inf, so nothing is heard; all 30 tracks still process. VST3 on both machines, plus AU on the Mac.
+    PASS needs every instance on the tested binary, 60 s of real-time playback, zero audio and media xruns and
+    no lost time. See plugin/tests/reaper/run_reaper_instances.py.
+    """
+    exe = reaper_exe(r)
+    runner = ROOT / 'plugin/tests/reaper/run_reaper_instances.py'
+    ht = r.built('HostTest')
+    if not exe or not ht or not runner.exists():
+        return
+    if PLATFORM == 'win' and not py_module(r, 'psutil') or PLATFORM == 'win' and not py_module(r, 'pywinauto'):
+        return
+    profile = r.work / 'reaper-profile'
+    profile.mkdir(exist_ok=True)
+    if PLATFORM == 'win':
+        scan = ';'.join([r'%COMMONPROGRAMFILES%\VST3', r'%LOCALAPPDATA%\Programs\Common\VST3', str(vst.parent)])
+        cache = r.build_dir / 'reaper-scan-cache.ini'
+        if cache.exists():
+            lines = [x for x in cache.read_text(encoding='utf-8', errors='replace').splitlines() if r.product.casefold() not in x.casefold()]
+            (profile / 'reaper-vstplugins64.ini').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        device = '[audioconfig]\nmode=5\nwasapi_srate=48000\nwasapi_bs=128\n'   # WASAPI, default devices
+    else:
+        scan = ';'.join(['/Library/Audio/Plug-Ins/VST3', '~/Library/Audio/Plug-Ins/VST3', str(vst.parent)])
+        device = ('coreaudioindevnew=<default system devices>\ncoreaudiooutdevnew=<default system devices>\n'
+                  'coreaudiosrate=48000\ncoreaudiosrateuse=1\ncoreaudiobs=128\ncoreaudiobsuse=1\n')
+    ini = profile / 'reaper.ini'
+    ini.write_text('[reaper]\n' + ''.join(k + '=' + scan + '\n' for k in ('vstpath', 'vstpath64', 'vstpath_arm64'))
+                   + 'renderclosewhendone=4\n' + device, encoding='utf-8')
+    formats = ['VST3'] + (['AU'] if PLATFORM == 'mac' and r.built('AU', False) else [])
+    for fmt in formats:
+        source = r.built(fmt)
+        out = r.work / ('reaper-instances-' + fmt.lower() + '.json')
+        with contextlib.ExitStack() as stack:
+            if fmt == 'AU':
+                stack.enter_context(staged(r, source, Path.home() / 'Library/Audio/Plug-Ins/Components' / source.name, au_reset))
+            r.command('reaper-instances-' + fmt.lower(), [sys.executable, runner, ht, '--reaper', exe, '--reaper-config', ini,
+                      '--fx', fmt + ':' + r.product, '--prefix', 'instances_' + fmt.lower(), '--work-dir', r.work / ('reaper-' + fmt.lower()),
+                      '--expected-plugin', source, '--count', '30', '--seconds', '60', '--out', out], timeout=300, record=False)
+        if not out.exists():
+            r.check('reaper-instances-' + fmt.lower(), 'FAIL', 'the REAPER 30-instance driver wrote no result; see its log')
+            continue
+        r.artifact(out)
+        for c in json.loads(out.read_text(encoding='utf-8'))['checks']:
+            r.check('reaper-' + c['id'], c['status'], c['detail'])
+    if (profile / 'reaper.ini').exists():
+        shutil.copy2(profile / 'reaper.ini', r.work / 'reaper-profile-used.ini')
+    shutil.rmtree(profile, ignore_errors=True)
+
+
 def performance(r, args):
     exe, vst = r.built('PerfTest', False), r.built('VST3', False)
     if not (ROOT / 'plugin/tests/PerfTest.cpp').exists():
@@ -462,9 +522,22 @@ def performance(r, args):
         r.check('performance', 'SKIP', 'PerfTest or VST3 build missing')
         return
     r.select(vst)
-    r.data['host'] = dict(name='PerfTest', version=identity(exe)['id'])
-    for mode, options in [('dsp', []), ('live', ['--seconds', '120']), ('instances', ['--count', '30', '--seconds', '60'])]:
-        r.command('T2-03' if mode == 'instances' else 'performance-' + mode, [exe, '--vst3', vst, mode, *options, '--out', r.work / (mode + '.json')], timeout=430)
+    r.data['host'] = dict(name='PerfTest + REAPER', version=identity(exe)['id'])
+    for mode, options in [('dsp', []), ('live', ['--seconds', '120'])]:
+        r.command('performance-' + mode, [exe, '--vst3', vst, mode, *options, '--out', r.work / (mode + '.json')], timeout=430)
+    # [Claude 2026-10-31] The bare single-thread harness is a diagnostic now, not the pass criterion: it measures
+    # this machine's scheduler, not Tertiary. On the Windows mini PC a control load with no plugin, under the same
+    # MMCSS Pro Audio scheduling (even busy-waiting), also missed the 128-sample deadline. Its numbers are kept.
+    code, _ = r.command('perftest-instances', [exe, '--vst3', vst, 'instances', '--count', '30', '--seconds', '60',
+                        '--out', r.work / 'instances.json'], timeout=430, record=False)
+    try:
+        o = json.loads((r.work / 'instances.json').read_text(encoding='utf-8'))['instances_128']
+        r.check('perftest-diagnostic', 'PASS',
+                f"bare-thread harness ran (diagnostic, not the pass criterion; exit {code}): {o['dropouts']} of {o['blocks']} blocks "
+                f"late, mean {o['meanUs']:.0f} us, p99 {o['p99Us']:.0f} us, max {o['maxUs']:.0f} us per 2667 us block; {o.get('schedulingMode')}")
+    except (OSError, ValueError, KeyError) as error:
+        r.check('perftest-diagnostic', 'FAIL', 'PerfTest instances produced no measurements: ' + str(error))
+    reaper_instances(r, vst)
     r.check('performance-budget', 'PLANNED', 'Review the measured CPU/memory numbers against agreed release limits; exit zero alone is not a performance-budget pass')
 
 
