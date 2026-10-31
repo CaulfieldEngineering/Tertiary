@@ -1,0 +1,10 @@
+# [Codex 2026-10-30] Generated media, Logic previews, and machine-specific evidence.
+Runs/
+mac-ui
+*.pyc
+__pycache__/
+Tertiary harness.logicx/Media/
+Tertiary harness.logicx/Bounces/
+Tertiary harness.logicx/Alternatives/*/Project File Backups/
+Tertiary harness.logicx/Alternatives/*/PreviewMovie.mp4
+Tertiary harness.logicx/Alternatives/*/WindowImage.jpg
