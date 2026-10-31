@@ -1,0 +1,4 @@
+
+# [Codex 2026-10-30] Shell scripts must also run when copied from a Windows checkout.
+tests/** text=auto eol=lf
+plugin/tests/ci/ui_tests.sh text eol=lf

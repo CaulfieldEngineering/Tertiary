@@ -30,7 +30,8 @@
 # window; an unknown window means a screenshot, nothing clicked, and exit 2. Save, don't-save, overwrite and install
 # prompts are never answered. Exit 0 = pass, 1 = render differs, 2 = stopped on a window, 3 = could not start.
 param([string]$Vst3 = '', [switch]$MakeGolden, [double]$Tolerance = 1e-4, [switch]$NoInstall, [string]$Compare = '',
-      [string]$Tools = '', [string]$Golden = '')
+      [string]$Tools = '', [string]$Golden = '',
+      [string]$Cubase = 'C:\Program Files\Steinberg\Cubase 12\Cubase12.exe', [string]$RunDir = '')
 $ErrorActionPreference = 'Continue'
 if (-not $Tools) { $Tools = if ($env:WLA_CUBASE_TOOLS) { $env:WLA_CUBASE_TOOLS } else { Join-Path $env:USERPROFILE "Dropbox\Joe's Music\_Production\_PIPELINE\tools" } }
 $T = $Tools
@@ -41,11 +42,17 @@ $Cpr = Join-Path $H 'Tertiary harness.cpr'
 $Exports = @((Join-Path $H 'Mixdown\Tertiary harness.wav'), (Join-Path $H 'Tertiary harness.wav'))
 $Export = $Exports[0]
 if (-not $Golden) { $Golden = Join-Path $env:USERPROFILE '.wla-test\goldens\tertiary\cubase' }
-$Cubase = 'C:\Program Files\Steinberg\Cubase 12\Cubase12.exe'
 $UserVst3 = Join-Path $env:LOCALAPPDATA 'Programs\Common\VST3'
 $stamp = Get-Date -Format 'yyyy-MM-dd-HHmmss'
-$Run = Join-Path $H "Runs\$stamp"
+$Run = if ($RunDir) { $RunDir } else { Join-Path $H "Runs\$stamp" }
 New-Item -ItemType Directory -Force $Run | Out-Null
+# [Codex 2026-10-30] The CPR stores an absolute export path; root runs own their output.
+if ($RunDir) {
+  $ExportFolder = Join-Path $Run 'export'
+  New-Item -ItemType Directory -Force $ExportFolder | Out-Null
+  $Exports = @((Join-Path $ExportFolder 'Tertiary harness.wav'))
+  $Export = $Exports[0]
+}
 $Log = Join-Path $Run 'run.log'
 # Dropbox briefly locks files it is syncing: every log write retries instead of failing the run
 function Append($path, $text) { for ($k = 0; $k -lt 20; $k++) { try { [IO.File]::AppendAllText($path, $text + "`r`n"); return } catch { Start-Sleep -Milliseconds 250 } } }
@@ -53,7 +60,7 @@ function Say($m) { $line = "{0}  {1}" -f (Get-Date -Format 'HH:mm:ss'), $m; $lin
 function Windows { & powershell -NoProfile -ExecutionPolicy Bypass -File "$T\cubase_windows.ps1" }
 function Front { (Windows) | Where-Object { $_ -match '^\*' } | Select-Object -First 1 }
 function Shot($name) { $s = & powershell -NoProfile -ExecutionPolicy Bypass -File "$T\screen.ps1" shot "harness-$stamp-$name"; $p = ($s -replace '^shot ', ''); if (Test-Path $p) { Copy-Item $p (Join-Path $Run "$name.png") }; $p }
-function Result($verdict, $detail) { Append (Join-Path $H 'Runs\results.log') ("{0}  {1,-7} {2}" -f $stamp, $verdict, $detail) }
+function Result($verdict, $detail) { Append (Join-Path $Run 'results.log') ("{0}  {1,-7} {2}" -f $stamp, $verdict, $detail) }
 function Stop-Run($m, $code = 2) { Say "STOP: $m"; Say ("screenshot: " + (Shot 'stop')); Say 'Nothing was clicked after this. Cubase is left as it is (never killed).'; Result 'STOPPED' $m; exit $code }
 
 Say "Tertiary harness run $stamp"
@@ -96,16 +103,29 @@ foreach ($e in $Exports) { if (Test-Path -LiteralPath $e) { Move-Item -LiteralPa
 
 # 2. Open the harness
 $t0 = Get-Date
-Start-Process -FilePath $Cubase -ArgumentList ('"' + $Cpr + '"')
+# [Codex 2026-10-30] This is the interactive test host; its windows must be visible to the existing harness.
+$CubaseProcess = Start-Process -FilePath $Cubase -ArgumentList ('"' + $Cpr + '"') -PassThru
+# [Codex 2026-10-30] The root wrapper may clean up only this exact launched PID.
+$CubaseProcess.Id | Set-Content -Encoding ASCII (Join-Path $Run 'owned-cubase.pid')
 Say 'Cubase started with the harness'
-$w = & powershell -NoProfile -ExecutionPolicy Bypass -File "$T\cubase_wait.ps1" -Want '^Cubase Pro Project - Tertiary harness' -Timeout 180
+$w = & powershell -NoProfile -ExecutionPolicy Bypass -File "$T\cubase_wait.ps1" -Want '^Cubase Pro Project - Tertiary harness' -Timeout 180 -ProjectFolder $H -OwnedPid $CubaseProcess.Id
 $code = $LASTEXITCODE
 $w | ForEach-Object { Say "  $_" }
 if ($code -ne 0) { Stop-Run "the harness did not open cleanly (cubase_wait exit $code)" }
 Start-Sleep -Seconds 2
+# [Codex 2026-10-30] Cubase can focus its menu frame after the project loads.
+& powershell -NoProfile -ExecutionPolicy Bypass -File "$T\screen.ps1" focus '^Cubase Pro Project - Tertiary harness$' | ForEach-Object { Say "  $_" }
 $f = Front
-if ($f -notmatch '"Cubase Pro Project - Tertiary harness"') { Stop-Run "unexpected window in front after opening: $f" }
+if ($f -notmatch '"Cubase Pro Project - Tertiary harness"' -and $f -notmatch '"Cubase Pro"\s+SmtgMain') { Stop-Run "unexpected window in front after opening: $f" }
 Say ("project open after {0:N0} s" -f ((Get-Date) - $t0).TotalSeconds)
+
+# [Codex 2026-10-30] Prove which copy Cubase loaded, not only which copy we staged.
+$processName = [IO.Path]::GetFileNameWithoutExtension($Cubase)
+$loaded = @((Get-Process -Id $CubaseProcess.Id -ErrorAction Stop).Modules | Where-Object { [IO.Path]::GetFileName($_.FileName) -eq 'Tertiary.vst3' })
+if ($loaded.Count -ne 1) { Stop-Run "expected one loaded Tertiary VST3 module; found $($loaded.Count)" }
+$loadedHash = (Get-FileHash -LiteralPath $loaded[0].FileName -Algorithm SHA256).Hash.Substring(0, 16)
+Say "Cubase loaded: $($loaded[0].FileName); sha256 $loadedHash"
+if ($loadedHash -ne $hash) { Stop-Run "Cubase loaded a different build ($loadedHash, expected $hash)" }
 
 # 3. Export Audio Mixdown with the saved settings
 & powershell -NoProfile -ExecutionPolicy Bypass -File "$T\cubase_menu.ps1" run 'File>Export>Audio Mixdown...' | ForEach-Object { Say "  $_" }
@@ -120,6 +140,10 @@ for ($i = 0; $i -lt 30 -and -not $dlg; $i++) {
   if ($odd) { Stop-Run "unexpected window instead of Export Audio Mixdown: $odd" }
 }
 if (-not $dlg) { Stop-Run 'Export Audio Mixdown did not open' }
+if ($RunDir) {
+  & python "$T\cubase_export.py" $CubaseProcess.Id $Export | ForEach-Object { Say "  $_" }
+  if ($LASTEXITCODE -ne 0) { Stop-Run 'could not set and verify this run''s export directory' }
+}
 $x = [int]$dlg[1] + 819; $y = [int]$dlg[2] + 852          # "Export Audio" button, bottom right of the 935x905 dialog
 & powershell -NoProfile -ExecutionPolicy Bypass -File "$T\screen.ps1" focus '^Export Audio Mixdown$' | Out-Null
 $f = Front

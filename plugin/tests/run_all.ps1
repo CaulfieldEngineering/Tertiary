@@ -21,13 +21,17 @@ param(
     [string]$JuceDir = "",
     [string]$Reference = "",
     [switch]$SkipBuild,
-    [switch]$Asan
+    [switch]$Asan,
+    [switch]$SkipStandalone,
+    [string]$ResultsDir = "",
+    [int]$TimeoutSeconds = 1200
 )
 
 $ErrorActionPreference = "Continue"
 $Root = (Resolve-Path "$PSScriptRoot\..\..").Path
 Set-Location $Root
-$Results = Join-Path $BuildDir "results"
+# [Codex 2026-10-30] Root tests/ supplies a unique artifact directory.
+$Results = if ($ResultsDir) { $ResultsDir } else { Join-Path $BuildDir "results" }
 New-Item -ItemType Directory -Force $Results | Out-Null
 $Rows = @()
 $Start = Get-Date
@@ -38,17 +42,28 @@ function Record([string]$Name, [bool]$Ok, [string]$Detail, [datetime]$Since) {
     Write-Host ("{0,-5} {1}  ({2} s)  {3}" -f $(if ($Ok) { "PASS" } else { "FAIL" }), $Name, $secs, $Detail)
 }
 
+# [Codex 2026-10-30] Bound every child and preserve per-check results for tests/win/Test-Suite.ps1.
 function Run([string]$Name, [string]$Exe, [string[]]$Arguments, [string]$Log) {
     $t = Get-Date
-    # Start-Process -Wait: pluginval is a Windows GUI program, which PowerShell's & doesn't wait for
+    if (-not $Exe -or -not (Test-Path -LiteralPath $Exe)) {
+        $script:Rows += [pscustomobject]@{ Check=$Name; Result="SKIP"; Seconds=0; Detail="test executable missing: $Exe" }
+        return
+    }
     $quoted = $Arguments | ForEach-Object { if ($_ -match ' ') { "`"$_`"" } else { $_ } }
-    $options = @{ FilePath = $Exe; NoNewWindow = $true; Wait = $true; PassThru = $true
-                  RedirectStandardOutput = (Join-Path $Results $Log); RedirectStandardError = (Join-Path $Results "$Log.err") }
-    if ($quoted) { $options.ArgumentList = $quoted }   # Start-Process refuses an empty argument list
-    $p = Start-Process @options
-    $code = $p.ExitCode
-    $last = (Get-Content (Join-Path $Results $Log) -Tail 1)
-    Record $Name ($code -eq 0) "$last" $t
+    $options = @{ FilePath=$Exe; NoNewWindow=$true; PassThru=$true
+        RedirectStandardOutput=(Join-Path $Results $Log); RedirectStandardError=(Join-Path $Results "$Log.err") }
+    if ($quoted) { $options.ArgumentList = $quoted }
+    try {
+        $p = Start-Process @options
+        $null = $p.Handle  # Keep the native handle: Windows PowerShell otherwise loses ExitCode after exit.
+        if (-not $p.WaitForExit($TimeoutSeconds * 1000)) {
+            & taskkill /PID $p.Id /T /F | Out-Null
+            Record $Name $false "timeout after $TimeoutSeconds seconds; $Log" $t
+            return
+        }
+        $p.WaitForExit()
+        Record $Name ($p.ExitCode -eq 0) "exit $($p.ExitCode); $Log; $((Get-Content (Join-Path $Results $Log) -Tail 1))" $t
+    } catch { Record $Name $false "$_" $t }
 }
 
 $Art = Join-Path $BuildDir "plugin"
@@ -92,13 +107,13 @@ if ($Rows[-1].Result -eq "FAIL") { ShowFailures "ui-tests.log" }
 #     device it remembers are untouched.
 $pyw = (Get-Command python -ErrorAction SilentlyContinue).Source
 & $pyw -c "import pywinauto" 2>$null
-if ($LASTEXITCODE -eq 0) {
+if (-not $SkipStandalone -and $LASTEXITCODE -eq 0) {
     Run "standalone smoke test (UI Automation)" $pyw @("plugin\tests\ui\smoke_standalone.py", "$Art\Tertiary_artefacts\Release\Standalone\Tertiary.exe",
         "--toggle", "Low Sync", "--appears", "Low Rate", "--slider", "Low Depth", "--menu-at", "727,25.75", "--layout", "750x478",
         "--menu-item", "About Tertiary...|Activate Tertiary...", "--dialog-button", "Activate|Deactivate this computer", "--close-button", "X",
         "--protect", "%APPDATA%\Tertiary\Tertiary.settings") "smoke.log"
     if ($Rows[-1].Result -eq "FAIL") { ShowFailures "smoke.log" }
-} else {
+} elseif (-not $SkipStandalone) {
     Record "standalone smoke test (UI Automation)" $false "pywinauto is not installed: pip install pywinauto" (Get-Date)
 }
 
@@ -132,6 +147,7 @@ if ($Reference) {
 # Summary
 Write-Host ""
 Write-Host "=== Tertiary test summary ($([math]::Round(((Get-Date) - $Start).TotalMinutes, 1)) min) ==="
+$Rows | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $Results "checks.json")
 $Rows | Format-Table -AutoSize | Out-String | Write-Host
 $failed = @($Rows | Where-Object Result -eq "FAIL").Count
 Write-Host $(if ($failed -eq 0) { "ALL PASSED" } else { "$failed FAILED - logs in $Results" })

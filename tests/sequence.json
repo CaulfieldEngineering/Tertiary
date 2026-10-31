@@ -1,0 +1,172 @@
+[
+  {
+    "name": "suite",
+    "description": "Unit, HostTest, validation, renders, product regressions, UI robot and Mac screenshots",
+    "scripts": {
+      "win": "win/Test-Suite.ps1",
+      "mac": "mac/test-suite.sh"
+    },
+    "handler": "suite"
+  },
+  {
+    "name": "standalone",
+    "description": "Run the built standalone, exercise its UI and quit",
+    "scripts": {
+      "win": "win/Test-Standalone.ps1",
+      "mac": "mac/test-standalone.sh"
+    },
+    "handler": "standalone"
+  },
+  {
+    "name": "two-instance",
+    "description": "Two instances retain independent parameters and state",
+    "scripts": {
+      "win": "win/Test-TwoInstance.ps1",
+      "mac": "mac/test-two-instance.sh"
+    },
+    "handler": "isolation"
+  },
+  {
+    "name": "asan",
+    "description": "AddressSanitizer editor cycle",
+    "scripts": {
+      "win": "win/Test-ASan.ps1",
+      "mac": "mac/test-asan.sh"
+    },
+    "handler": "asan"
+  },
+  {
+    "name": "performance",
+    "description": "Measure DSP cost and CPU/memory with the editor open, closed and idle",
+    "scripts": {
+      "win": "win/Test-Performance.ps1",
+      "mac": "mac/test-performance.sh"
+    },
+    "handler": "performance"
+  },
+  {
+    "name": "cubase",
+    "description": "Cubase export compared with the machine golden",
+    "scripts": {
+      "win": "win/Test-Cubase.ps1"
+    },
+    "handler": "cubase"
+  },
+  {
+    "name": "reaper",
+    "description": "REAPER VST3 (and AU on Mac) against the matching HostTest transport reference",
+    "scripts": {
+      "win": "win/Test-Reaper.ps1",
+      "mac": "mac/test-reaper.sh"
+    },
+    "handler": "reaper"
+  },
+  {
+    "name": "logic",
+    "description": "Logic AU scan, harness bounce and golden comparison",
+    "scripts": {
+      "mac": "mac/test-logic.sh"
+    },
+    "handler": "logic"
+  },
+  {
+    "name": "flstudio",
+    "description": "FL Studio: scan local build, tempo/automation, save/reopen, offline bounce and golden comparison",
+    "scripts": {
+      "win": "win/Test-FLStudio.ps1"
+    },
+    "planned": true
+  },
+  {
+    "name": "ableton",
+    "description": "Ableton Live: scan local build, tempo/automation, save/reopen, offline bounce and golden comparison",
+    "scripts": {
+      "win": "win/Test-Ableton.ps1"
+    },
+    "planned": true
+  },
+  {
+    "name": "bitwig",
+    "description": "Bitwig Studio: scan local build, tempo/automation, save/reopen, offline bounce and golden comparison",
+    "scripts": {
+      "win": "win/Test-Bitwig.ps1"
+    },
+    "planned": true
+  },
+  {
+    "name": "studioone",
+    "description": "Studio One: scan local build, tempo/automation, save/reopen, offline bounce and golden comparison",
+    "scripts": {
+      "win": "win/Test-StudioOne.ps1"
+    },
+    "planned": true
+  },
+  {
+    "name": "installer-win",
+    "description": "Signed installer from staging: install, verify files and build id, upgrade and uninstall",
+    "scripts": {
+      "win": "win/Test-Installer.ps1"
+    },
+    "planned": true
+  },
+  {
+    "name": "installer-mac",
+    "description": "Signed staging pkg: signature, notarisation, Gatekeeper, installation and removal",
+    "scripts": {
+      "mac": "mac/test-installer.sh"
+    },
+    "planned": true
+  },
+  {
+    "name": "microphone",
+    "description": "V-08: standalone requests microphone access and receives real audio input",
+    "scripts": {
+      "mac": "mac/test-microphone.sh"
+    },
+    "planned": true
+  },
+  {
+    "name": "web",
+    "description": "Playwright: Chromium, Firefox and WebKit",
+    "scripts": {
+      "win": "web/test-web.ps1",
+      "mac": "web/test-web.sh"
+    },
+    "handler": "web"
+  },
+  {
+    "name": "safari",
+    "description": "Real Safari on macOS through safaridriver, separate from Playwright WebKit",
+    "scripts": {
+      "mac": "mac/test-safari.sh"
+    },
+    "planned": true
+  },
+  {
+    "name": "iphone-safari",
+    "description": "Manual: inspect and listen on a physical iPhone in Safari; record device, build and reviewer",
+    "scripts": {
+      "win": "web/test-iphone-safari.ps1",
+      "mac": "web/test-iphone-safari.sh"
+    },
+    "planned": true
+  },
+  {
+    "name": "staging-preview",
+    "description": "Verify the private web-staging address serves this exact build id",
+    "scripts": {
+      "win": "web/test-staging-preview.ps1",
+      "mac": "web/test-staging-preview.sh"
+    },
+    "planned": true
+  },
+  {
+    "name": "post-release",
+    "description": "After an approved tag: run npm run post-release in wla-site-tests and collect its report",
+    "scripts": {
+      "win": "web/test-post-release.ps1",
+      "mac": "web/test-post-release.sh"
+    },
+    "planned": true
+  }
+]

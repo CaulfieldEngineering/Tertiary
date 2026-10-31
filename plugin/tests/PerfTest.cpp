@@ -392,7 +392,13 @@ static int runLive (double seconds)
     if (p == nullptr) return 1;
     juce::Array<juce::var> rows;
     std::cout << "T2-02 CPU and memory, 48 kHz / 512, " << seconds << " s each (CPU in % of one core; memory = "
-              << (JUCE_WINDOWS ? "private bytes" : "resident") << ", MB)\n"
+              // [Codex 2026-10-30] JUCE_WINDOWS is undefined on Mac; use a preprocessor guard.
+             #if JUCE_WINDOWS
+              << "private bytes"
+             #else
+              << "resident"
+             #endif
+              << ", MB)\n"
               << "phase                 s     process CPU   audio thread  everything else  MB start MB end   MB max   MB/min(2nd half)  GUI objects\n"
               << "(audio thread and everything else: CPU time; in processBlock (elapsed): wall time, preemption included)\n";
 

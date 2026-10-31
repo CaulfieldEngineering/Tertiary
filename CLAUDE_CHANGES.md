@@ -251,3 +251,35 @@ Undo: revert the commit. The plugin's own code changes are the one-line friends,
 11. **Small, harmless**: `FrequencyResponse::makeAttachments` makes `lowMidAttachment` twice; `getPlayPosition()` returns an `std::atomic` by value; the meters read `LinearSmoothedValue` across threads (fine in practice).
 12. **Deploy workflow**: the Mac "Sign" steps skip silently if secrets are missing, so an unsigned installer can be uploaded. A tag build could fail instead.
 13. **JUCE 8.0.8 use-after-free in its Windows accessibility code** (found by the UI tests under the address sanitiser, 2026-10-29): `AccessibilityNativeHandle::get_ProviderOptions` uses its element without checking it is still valid, so a screen reader or another UI Automation client asking about a pop-up menu that has just closed reads freed memory. Rare, and in JUCE, not Tertiary; a newer JUCE may have fixed it. `run_all.ps1 -Asan` lists these reports without failing on them.
+
+
+## Repo-root release test layout (Codex, 2026-10-30)
+
+Joe asked for individually runnable scripts, a complete ordered release checklist, and evidence for AI review.
+The existing `test-layout` worktree was reused at merge `17b85ad` (web-staging plus mac-day-harness).
+The separate `web-tests` branch/worktree was left alone.
+
+- `tests/sequence.json`, `tests/win`, `tests/mac`, `tests/web`, `tests/lib`, `tests/README.md`: one configurable
+  runner and JSON contract, PASS/FAIL/SKIP/PLANNED, failure-first summaries, binary identities, bounded host
+  automation, backup/restore journals and visible future coverage. Product paths/codes/settings are in `config.cmake`.
+- Existing suites stay under `plugin/tests`. `run_all.ps1` now exports its rows and bounds subprocesses;
+  the standalone smoke accepts a screenshot destination. Mac validation/screenshots reuse HQ's Mac-day phases.
+- Cubase's export harness accepts the installed host/result paths, records its owned PID, opens the relocated
+  project and verifies its mapped plugin hash. Portable copies of the existing production helpers live in tests/win.
+  Root cleanup uses the host's Quit before its documented owned-PID fallback. Goldens are never rewritten.
+- REAPER's Python/Lua harness adds isolated artifacts/profile, a loaded-module path/hash handshake and bounded
+  Windows startup/quit handling. Both Intel and ARM path keys retain the repo build after standard folders;
+  old installed copies cannot silently produce a PASS. Render assertions are unchanged.
+- `plugin/tests/HostTest.cpp`: reuses section 11 from `fix-instance-isolation`, with its original attribution.
+  `PerfTest.cpp`: guards the Windows-only JUCE macro so the existing performance tool compiles on Mac.
+  `.gitattributes` preserves shell LF endings when the checkout is copied from Windows.
+- The generic skeleton and native-suite adapter are also ported to NewPluginTemplate's `pipeline-sync`, with
+  empty product-specific controls/harness paths explicitly PLANNED. No other agent's web changes are included.
+
+Validation: real full Windows and M1 sequences, followed by targeted retries after runner fixes; original
+attempts remain in each report's history. Eleven contract/restoration checks pass in both repositories and
+on the M1. PowerShell/Python/Bash syntax and the future Logic AppleScript compile were checked. See
+`tests/verification-2026-10-30.md` for final outcomes and evidence locations. Logic's existing session was left open.
+
+Undo: revert the commit containing this entry. Test output/build folders are ignored; no runtime DSP change
+is included. Restore journals retain recovery paths if a future host prevents restoration.

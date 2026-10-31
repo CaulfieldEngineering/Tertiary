@@ -34,6 +34,7 @@ def main():
     ap.add_argument("--close-button", default="X")
     ap.add_argument("--protect", action="append", default=[])
     ap.add_argument("--timeout", type=float, default=120)
+    ap.add_argument("--screenshots", help="[Codex 2026-10-30] Save a failure image before closing the app")
     a = ap.parse_args()
 
     from pywinauto import Application, Desktop
@@ -166,12 +167,20 @@ def main():
         win.close()
         try:
             proc.wait(timeout=15)
-            check(True, "quit", "exit code %s" % proc.returncode)
+            check(proc.returncode == 0, "quit", "exit code %s" % proc.returncode)
         except subprocess.TimeoutExpired:
             check(False, "quit: the app didn't close within 15 s (killed)")
     except Exception as e:
         check(False, "unexpected error: %r" % (e,))
     finally:
+        # [Codex 2026-10-30] Capture while the failing app is still visible, before cleanup.
+        if failures and a.screenshots:
+            try:
+                from PIL import ImageGrab
+                os.makedirs(a.screenshots, exist_ok=True)
+                ImageGrab.grab(all_screens=True).save(os.path.join(a.screenshots, "standalone-failure.png"))
+            except Exception as error:
+                print("Screenshot unavailable: %r" % error, flush=True)
         killed.set()
         if proc.poll() is None:
             proc.kill()
