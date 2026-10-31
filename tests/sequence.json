@@ -1,0 +1,549 @@
+[
+  {
+    "id": "W-01",
+    "name": "Unit tests",
+    "description": "Unit tests",
+    "scope": "product",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-01",
+      "SU-02",
+      "SU-06"
+    ],
+    "scripts": {
+      "win": "win/product/Test-Unit.ps1",
+      "mac": "mac/product/test-unit.sh"
+    },
+    "handler": "unit"
+  },
+  {
+    "id": "W-02",
+    "name": "Host test",
+    "description": "Host test",
+    "scope": "universal",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-01",
+      "SU-06"
+    ],
+    "scripts": {
+      "win": "win/Test-HostTest.ps1"
+    },
+    "handler": "hosttest"
+  },
+  {
+    "id": "W-03",
+    "name": "pluginval",
+    "description": "pluginval",
+    "scope": "universal",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-01",
+      "SU-06"
+    ],
+    "scripts": {
+      "win": "win/Test-Pluginval.ps1"
+    },
+    "handler": "pluginval"
+  },
+  {
+    "id": "W-04",
+    "name": "Sound matches last release",
+    "description": "Sound matches last release",
+    "scope": "universal",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-01",
+      "SU-06"
+    ],
+    "scripts": {
+      "win": "win/Test-Renders.ps1",
+      "mac": "mac/test-renders.sh"
+    },
+    "handler": "renders"
+  },
+  {
+    "id": "W-05",
+    "name": "LFO checks",
+    "description": "LFO checks",
+    "scope": "product",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-01",
+      "SU-02",
+      "SU-06"
+    ],
+    "scripts": {
+      "win": "win/product/Test-LFO.ps1",
+      "mac": "mac/product/test-lfo.sh"
+    },
+    "handler": "lfo"
+  },
+  {
+    "id": "W-06",
+    "name": "UI robot",
+    "description": "UI robot",
+    "scope": "product",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-01",
+      "SU-02",
+      "SU-06"
+    ],
+    "scripts": {
+      "win": "win/product/Test-UIRobot.ps1"
+    },
+    "handler": "uirobot"
+  },
+  {
+    "id": "W-07",
+    "name": "Standalone",
+    "description": "Standalone",
+    "scope": "universal",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-01",
+      "SU-06"
+    ],
+    "scripts": {
+      "win": "win/Test-Standalone.ps1"
+    },
+    "handler": "standalone"
+  },
+  {
+    "id": "W-08",
+    "name": "Cubase 12",
+    "description": "Cubase 12",
+    "scope": "universal",
+    "ci_ok": false,
+    "suite_ids": [
+      "SU-01"
+    ],
+    "scripts": {
+      "win": "win/Test-Cubase.ps1"
+    },
+    "handler": "cubase",
+    "daw": true
+  },
+  {
+    "id": "W-09",
+    "name": "REAPER",
+    "description": "REAPER",
+    "scope": "universal",
+    "ci_ok": false,
+    "suite_ids": [
+      "SU-01"
+    ],
+    "scripts": {
+      "win": "win/Test-Reaper.ps1"
+    },
+    "handler": "reaper",
+    "daw": true
+  },
+  {
+    "id": "W-10",
+    "name": "FL Studio",
+    "description": "FL Studio",
+    "scope": "universal",
+    "ci_ok": false,
+    "suite_ids": [
+      "SU-01"
+    ],
+    "scripts": {
+      "win": "win/Test-FLStudio.ps1"
+    },
+    "planned": true,
+    "daw": true
+  },
+  {
+    "id": "W-11",
+    "name": "Ableton",
+    "description": "Ableton",
+    "scope": "universal",
+    "ci_ok": false,
+    "suite_ids": [
+      "SU-01"
+    ],
+    "scripts": {
+      "win": "win/Test-Ableton.ps1"
+    },
+    "planned": true,
+    "daw": true
+  },
+  {
+    "id": "W-12",
+    "name": "Bitwig",
+    "description": "Bitwig",
+    "scope": "universal",
+    "ci_ok": false,
+    "suite_ids": [
+      "SU-01"
+    ],
+    "scripts": {
+      "win": "win/Test-Bitwig.ps1"
+    },
+    "planned": true,
+    "daw": true
+  },
+  {
+    "id": "W-13",
+    "name": "Studio One",
+    "description": "Studio One",
+    "scope": "universal",
+    "ci_ok": false,
+    "suite_ids": [
+      "SU-01"
+    ],
+    "scripts": {
+      "win": "win/Test-StudioOne.ps1"
+    },
+    "planned": true,
+    "daw": true
+  },
+  {
+    "id": "W-14",
+    "name": "Two instances stay independent",
+    "description": "Two instances stay independent",
+    "scope": "universal",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-01",
+      "SU-06"
+    ],
+    "scripts": {
+      "win": "win/Test-TwoInstance.ps1",
+      "mac": "mac/test-two-instance.sh"
+    },
+    "handler": "isolation"
+  },
+  {
+    "id": "W-15",
+    "name": "Memory-safety build (ASan)",
+    "description": "Memory-safety build (ASan)",
+    "scope": "universal",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-01",
+      "SU-06"
+    ],
+    "scripts": {
+      "win": "win/Test-ASan.ps1",
+      "mac": "mac/test-asan.sh"
+    },
+    "handler": "asan"
+  },
+  {
+    "id": "M-01",
+    "name": "auval",
+    "description": "auval",
+    "scope": "universal",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-03",
+      "SU-06"
+    ],
+    "scripts": {
+      "mac": "mac/test-auval.sh"
+    },
+    "handler": "auval",
+    "requires_format": "AU"
+  },
+  {
+    "id": "M-02",
+    "name": "pluginval with GUI checks",
+    "description": "pluginval with GUI checks",
+    "scope": "universal",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-03",
+      "SU-06"
+    ],
+    "scripts": {
+      "mac": "mac/test-pluginval.sh"
+    },
+    "handler": "pluginval"
+  },
+  {
+    "id": "M-03",
+    "name": "Host test, VST3 and AU",
+    "description": "Host test, VST3 and AU",
+    "scope": "universal",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-03",
+      "SU-06"
+    ],
+    "scripts": {
+      "mac": "mac/test-hosttest.sh"
+    },
+    "handler": "hosttest"
+  },
+  {
+    "id": "M-04",
+    "name": "UI robot",
+    "description": "UI robot",
+    "scope": "product",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-03",
+      "SU-04",
+      "SU-06"
+    ],
+    "scripts": {
+      "mac": "mac/product/test-uirobot.sh"
+    },
+    "handler": "uirobot"
+  },
+  {
+    "id": "M-05",
+    "name": "Screenshots, every size and Retina",
+    "description": "Screenshots, every size and Retina",
+    "scope": "universal",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-03",
+      "SU-06"
+    ],
+    "scripts": {
+      "mac": "mac/test-screenshots.sh"
+    },
+    "handler": "screenshots",
+    "mac_day_only": true
+  },
+  {
+    "id": "M-06",
+    "name": "Standalone",
+    "description": "Standalone",
+    "scope": "universal",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-03",
+      "SU-06"
+    ],
+    "scripts": {
+      "mac": "mac/test-standalone.sh"
+    },
+    "handler": "standalone",
+    "mac_day_only": true
+  },
+  {
+    "id": "M-07",
+    "name": "Microphone permission",
+    "description": "Microphone permission",
+    "scope": "universal",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-03",
+      "SU-06"
+    ],
+    "scripts": {
+      "mac": "mac/test-microphone.sh"
+    },
+    "planned": true,
+    "mac_day_only": true
+  },
+  {
+    "id": "M-08",
+    "name": "REAPER, VST3 and AU",
+    "description": "REAPER, VST3 and AU",
+    "scope": "universal",
+    "ci_ok": false,
+    "suite_ids": [
+      "SU-03"
+    ],
+    "scripts": {
+      "mac": "mac/test-reaper.sh"
+    },
+    "handler": "reaper",
+    "daw": true
+  },
+  {
+    "id": "M-09",
+    "name": "Logic Pro",
+    "description": "Logic Pro",
+    "scope": "universal",
+    "ci_ok": false,
+    "suite_ids": [
+      "SU-03"
+    ],
+    "scripts": {
+      "mac": "mac/test-logic.sh"
+    },
+    "handler": "logic",
+    "daw": true
+  },
+  {
+    "id": "WEB-01",
+    "name": "Web demo suite (Chrome, Firefox, Safari engine)",
+    "description": "Web demo suite (Chrome, Firefox, Safari engine)",
+    "scope": "universal",
+    "ci_ok": true,
+    "suite_ids": [
+      "SU-05",
+      "SU-01",
+      "SU-03",
+      "SU-06"
+    ],
+    "scripts": {
+      "win": "web/test-web.ps1",
+      "mac": "web/test-web.sh",
+      "linux": "web/test-web.sh"
+    },
+    "handler": "web",
+    "ci_job": "web"
+  },
+  {
+    "id": "WEB-02",
+    "name": "Real Safari on the Mac",
+    "description": "Real Safari on the Mac",
+    "scope": "universal",
+    "ci_ok": false,
+    "suite_ids": [
+      "SU-03"
+    ],
+    "scripts": {
+      "mac": "mac/test-safari.sh"
+    },
+    "planned": true,
+    "mac_day_only": true
+  },
+  {
+    "id": "WEB-03",
+    "name": "iPhone Safari look",
+    "description": "iPhone Safari look",
+    "scope": "universal",
+    "ci_ok": false,
+    "suite_ids": [],
+    "scripts": {
+      "win": "web/test-iphone-safari.ps1",
+      "mac": "web/test-iphone-safari.sh",
+      "linux": "web/test-iphone-safari.sh"
+    },
+    "planned": true,
+    "human": true
+  },
+  {
+    "id": "WEB-04",
+    "name": "AI review of changed screenshots",
+    "description": "AI review of changed screenshots",
+    "scope": "universal",
+    "ci_ok": false,
+    "suite_ids": [
+      "SU-05"
+    ],
+    "scripts": {
+      "win": "web/test-screenshot-review.ps1",
+      "mac": "web/test-screenshot-review.sh",
+      "linux": "web/test-screenshot-review.sh"
+    },
+    "planned": true
+  },
+  {
+    "id": "H-01",
+    "name": "Hands-on, Windows (Cubase harness)",
+    "description": "Hands-on, Windows (Cubase harness)",
+    "scope": "release",
+    "ci_ok": false,
+    "suite_ids": [],
+    "scripts": {
+      "win": "win/Test-HandsOn.ps1"
+    },
+    "planned": true,
+    "human": true
+  },
+  {
+    "id": "H-02",
+    "name": "Hands-on, Mac (Logic)",
+    "description": "Hands-on, Mac (Logic)",
+    "scope": "release",
+    "ci_ok": false,
+    "suite_ids": [],
+    "scripts": {
+      "mac": "mac/test-hands-on.sh"
+    },
+    "planned": true,
+    "human": true
+  },
+  {
+    "id": "GH-01",
+    "name": "GitHub Actions, all machines plus web build",
+    "description": "GitHub Actions, all machines plus web build",
+    "scope": "release",
+    "ci_ok": false,
+    "suite_ids": [],
+    "scripts": {
+      "win": "web/test-github.ps1",
+      "mac": "web/test-github.sh",
+      "linux": "web/test-github.sh"
+    },
+    "planned": true
+  },
+  {
+    "id": "S-01",
+    "name": "Private web preview serves this build",
+    "description": "Private web preview serves this build",
+    "scope": "release",
+    "ci_ok": false,
+    "suite_ids": [],
+    "scripts": {
+      "win": "web/test-staging-preview.ps1",
+      "mac": "web/test-staging-preview.sh",
+      "linux": "web/test-staging-preview.sh"
+    },
+    "planned": true
+  },
+  {
+    "id": "S-02",
+    "name": "Signed Windows installer",
+    "description": "Signed Windows installer",
+    "scope": "release",
+    "ci_ok": false,
+    "suite_ids": [],
+    "scripts": {
+      "win": "win/Test-Installer.ps1"
+    },
+    "planned": true
+  },
+  {
+    "id": "S-03",
+    "name": "Signed Mac installer, notarised",
+    "description": "Signed Mac installer, notarised",
+    "scope": "release",
+    "ci_ok": false,
+    "suite_ids": [],
+    "scripts": {
+      "mac": "mac/test-installer.sh"
+    },
+    "planned": true
+  },
+  {
+    "id": "P-01",
+    "name": "Website, store, downloads, checksums",
+    "description": "Website, store, downloads, checksums",
+    "scope": "release",
+    "ci_ok": false,
+    "suite_ids": [],
+    "scripts": {
+      "win": "web/test-post-release.ps1",
+      "mac": "web/test-post-release.sh",
+      "linux": "web/test-post-release.sh"
+    },
+    "planned": true
+  },
+  {
+    "id": "T2-03",
+    "name": "Performance and 30-instance stress",
+    "description": "PerfTest DSP, live editor and unchanged 30-instance deadline test",
+    "scope": "universal",
+    "ci_ok": false,
+    "suite_ids": [
+      "SU-01",
+      "SU-03"
+    ],
+    "scripts": {
+      "win": "win/Test-Performance.ps1",
+      "mac": "mac/test-performance.sh"
+    },
+    "handler": "performance"
+  }
+]

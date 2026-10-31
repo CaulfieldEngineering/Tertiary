@@ -289,3 +289,61 @@ Undo: revert the browser-test commit, removing its `web` job and `plugin/tests/w
 `plugin/tests/daw/logic/` adds the saved two-track Logic project and local scripted M-09 / M-07 (V-08) runners. Logic stages the selected AU with backup/restore, runs strict auval, bounces 24 seconds, checks the editor/About build ID and compares exact float PCM. The microphone runner builds fix `25b0a55`, captures/accepts the app's real consent prompt and verifies its TCC grant read-only. See that folder's README for requirements, output contract, layout migration and the physical-input limitation.
 
 Validation: RC1b `f24dc90` on M1 / macOS 26.6 / Logic 12.4; two baseline bounces and two complete scripted regression runs matched with tolerance 0. Editor 750 x 478, About f24dc90. Microphone consent and hardened-runtime audio-input entitlement PASS with a temporary signed software input, removed afterward. No plug-in code changed. Undo by reverting the Logic/microphone harness commit.
+
+## Repo-root release test layout (Codex, 2026-10-30)
+
+Joe asked for individually runnable scripts, a complete ordered release checklist, and evidence for AI review.
+The existing `test-layout` worktree was reused at merge `17b85ad` (web-staging plus mac-day-harness).
+The separate `web-tests` branch/worktree was left alone.
+
+- `tests/sequence.json`, `tests/win`, `tests/mac`, `tests/web`, `tests/lib`, `tests/README.md`: one configurable
+  runner and JSON contract, PASS/FAIL/SKIP/PLANNED, failure-first summaries, binary identities, bounded host
+  automation, backup/restore journals and visible future coverage. Product paths/codes/settings are in `config.cmake`.
+- Existing suites stay under `plugin/tests`. `run_all.ps1` now exports its rows and bounds subprocesses;
+  the standalone smoke accepts a screenshot destination. Mac validation/screenshots reuse HQ's Mac-day phases.
+- Cubase's export harness accepts the installed host/result paths, records its owned PID, opens the relocated
+  project and verifies its mapped plugin hash. Portable copies of the existing production helpers live in tests/win.
+  Root cleanup uses the host's Quit before its documented owned-PID fallback. Goldens are never rewritten.
+- REAPER's Python/Lua harness adds isolated artifacts/profile, a loaded-module path/hash handshake and bounded
+  Windows startup/quit handling. Both Intel and ARM path keys retain the repo build after standard folders;
+  old installed copies cannot silently produce a PASS. Render assertions are unchanged.
+- `plugin/tests/HostTest.cpp`: reuses section 11 from `fix-instance-isolation`, with its original attribution.
+  `PerfTest.cpp`: guards the Windows-only JUCE macro so the existing performance tool compiles on Mac.
+  `.gitattributes` preserves shell LF endings when the checkout is copied from Windows.
+- The generic skeleton and native-suite adapter are also ported to NewPluginTemplate's `pipeline-sync`, with
+  empty product-specific controls/harness paths explicitly PLANNED. No other agent's web changes are included.
+
+Validation: real full Windows and M1 sequences, followed by targeted retries after runner fixes; original
+attempts remain in each report's history. Eleven contract/restoration checks pass in both repositories and
+on the M1. PowerShell/Python/Bash syntax and the future Logic AppleScript compile were checked. See
+`tests/verification-2026-10-30.md` for final outcomes and evidence locations. Logic's existing session was left open.
+
+Undo: revert the commit containing this entry. Test output/build folders are ignored; no runtime DSP change
+is included. Restore journals retain recovery paths if a future host prevents restoration.
+
+
+## Test layout follow-up (Codex, 2026-10-30)
+
+- `tests/sequence.json`: all 35 Blocks test IDs, GitHub checkboxes and suite relations; retained local T2-03.
+- `tests/win`, `tests/mac`, `tests/web`: independent row scripts; platform product folders and discovery runners.
+- `tests/lib/native.py`: splits unit, LFO, UI robot, host, validator, render, AU and screenshot phases without
+  changing their assertions. Mac architecture/minimum-OS checks and pre-layout CI counts remain enforced.
+- `tests/lib/run.py`, `common.py`, `hosts.py`: IDs in JSON/summary checks, CI selection, product aggregation,
+  explicit coverage gaps, and protection against another worktree's active test processes. UI tests receive
+  an isolated temporary settings directory; another worktree's UiTest can otherwise overwrite saved-size assertions.
+- Both workflows call the same scripts; test summaries print before upload. Seven-day test/staging artifacts;
+  release installer retention unchanged. Original build/sign/deploy steps unchanged; release tests additionally
+  build the ReviewRender test tool. No plug-in code or T2-03 threshold changed.
+- Windows Run-All forwards its browser selection and defaults to Chromium; Mac WebKit stays in its
+  existing job. Copied Mac AUs regain executable permission and use the old CI's forced registrar refresh.
+
+Validation: 19 runner/restoration tests on Windows and Mac, syntax checks, exact Blocks metadata and workflow
+retention checks. Windows main: 16 PASS, expected T2-03 FAIL, 14 PLANNED, 2 SKIP; independent product runner
+passed all three scripts. Physical Mac main: 30 PASS, expected T2-03 FAIL, 13 PLANNED, 1 SKIP. All five Tertiary
+CI jobs passed at e0e1319, including both Macs and cross-platform audio comparison. Template Windows: 62 PASS,
+no failures; hosted template CI is blocked before execution by GitHub billing/spending restrictions.
+See `tests/verification-layout-2026-10-30.md` for counts, build provenance and remaining coverage.
+The separate fix-first-block worktree is untouched.
+
+Undo: revert this layout commit; the older combined wrappers and workflows return together. Ignored result
+artifacts preserve per-run evidence and binary hashes.

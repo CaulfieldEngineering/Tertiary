@@ -95,7 +95,7 @@ jobs:
 
         if [ $RC -eq 0 ]; then
           echo "tag_check=done" >> "$GITHUB_OUTPUT"
-          echo "âœ“ Tag commit $TAG_COMMIT is part of the production branch history."
+          echo "Ã¢Å“â€œ Tag commit $TAG_COMMIT is part of the production branch history."
         elif [ $RC -eq 1 ]; then
           echo "tag_check=done" >> "$GITHUB_OUTPUT"
           echo "::error::Tag commit $TAG_COMMIT is NOT on the production branch. Merge to production first, then tag. Aborting."
@@ -121,7 +121,7 @@ jobs:
           exit 1
         fi
 
-        echo "âœ“ Tag and config.cmake versions match"
+        echo "Ã¢Å“â€œ Tag and config.cmake versions match"
 
 
     # Confirm New Tag is Greater than Previous tags - Tags Only
@@ -136,7 +136,7 @@ jobs:
 
         OTHER_TAGS=$(git tag -l "v*" | sed 's/^v//' | grep -v -x -F "$NEW_VERSION" | sort -V || true)
         if [ -z "$OTHER_TAGS" ]; then
-          echo "âœ“ This is the first tag in the repository"
+          echo "Ã¢Å“â€œ This is the first tag in the repository"
           exit 0
         fi
 
@@ -148,7 +148,7 @@ jobs:
           exit 1
         fi
 
-        echo "âœ“ New version is greater than all previous tags"
+        echo "Ã¢Å“â€œ New version is greater than all previous tags"
 
 
     # Check every secret the release needs - All Cases
@@ -217,7 +217,7 @@ jobs:
             done
             exit 1
           fi
-          echo "âœ“ All release secrets are set"
+          echo "Ã¢Å“â€œ All release secrets are set"
         else
           if [ -z "${wWOO_PRODUCT_ID:-}" ]; then echo "::warning::wWOO_PRODUCT_ID is not set in config.cmake; a release tag would stop here."; fi
           if [ -n "$SIGNING_MISSING" ]; then
@@ -225,7 +225,7 @@ jobs:
               echo "::warning::Staging build: missing secret(s) for $line. That step is skipped, so this build's installers are NOT signed or notarized."
             done
           else
-            echo "âœ“ All signing and notarization secrets are set"
+            echo "Ã¢Å“â€œ All signing and notarization secrets are set"
           fi
         fi
 
@@ -371,32 +371,52 @@ jobs:
     # the plug-in this job is about to sign and ship; a failure stops the build before anything is signed.
     # The full suite (renders, auval, the Intel Mac, the host test) is test.yml, run on the work branches.
     # ==========================================================================================
-    - name: Run Tests (unit tests and pluginval on this build)
+    # [Codex 2026-10-30] Same test entry points as local/work-branch CI; signing/deploy steps follow unchanged.
+    - name: Prepare test tools
       shell: bash
       env:
         PLUGINVAL_TAG: v1.0.4
-        STRICTNESS: 10
       run: |
-        set -o pipefail
-        A="build/plugin"
-        if [ "$RUNNER_OS" = "Windows" ]; then
-          T=$(cygpath -m "$RUNNER_TEMP"); EXE=".exe"; PV_ZIP="pluginval_Windows.zip"; PV="$T/pv/pluginval.exe"
+        if [ "$RUNNER_OS" = Windows ]; then
+          T=$(cygpath -m "$RUNNER_TEMP"); PV_ZIP=pluginval_Windows.zip; PV="$T/pv/pluginval.exe"
+          python -m pip install --quiet pywinauto pillow
         else
-          T="$RUNNER_TEMP"; EXE=""; PV_ZIP="pluginval_macOS.zip"; PV="$T/pv/pluginval.app/Contents/MacOS/pluginval"
+          T="$RUNNER_TEMP"; PV_ZIP=pluginval_macOS.zip; PV="$T/pv/pluginval.app/Contents/MacOS/pluginval"
         fi
         curl -fsSL -o "$T/pv.zip" "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_TAG/$PV_ZIP"
         unzip -q -o "$T/pv.zip" -d "$T/pv"
+        echo "WLA_PLUGINVAL=$PV" >> "$GITHUB_ENV"
+        # ReviewRender was not a release target before. Build the additional test tool separately.
+        cmake -S . -B build -DWLA_REVIEW_RENDER=ON
+        cmake --build build --config Release --target ReviewRender
 
-        echo "Unit tests..."
-        "$A/${wPLUGIN_NAME}Tests_artefacts/Release/${wPLUGIN_NAME}Tests$EXE"
+    - name: Run Windows test scripts
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: pwsh tests/win/Run-All.ps1 -Profile ci -BuildDir build -ResultsDir tests/results/ci -ExpectDemo
 
-        echo "pluginval (strictness $STRICTNESS) on the VST3..."
-        "$PV" --strictness-level "$STRICTNESS" --validate-in-process           --validate "$A/${wPLUGIN_NAME}_artefacts/Release/VST3/${wPLUGIN_NAME}.vst3"
-        echo "âœ“ Tests passed"
+    - name: Run Mac test scripts
+      if: runner.os == 'macOS'
+      run: bash tests/mac/run-all.sh --profile ci --build-dir build --results-dir tests/results/ci --expect-demo
 
+    - name: Print test summary
+      if: always()
+      shell: bash
+      run: |
+        if [ -f tests/results/ci/summary.md ]; then
+          cat tests/results/ci/summary.md | tee -a "$GITHUB_STEP_SUMMARY"
+        else
+          echo "Tests did not produce a summary; see the failed build/test step." | tee -a "$GITHUB_STEP_SUMMARY"
+        fi
 
-    # Debug; print project variables - All Cases
-    # ==========================================================================================
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.os }}
+        retention-days: 7
+        path: tests/results/
+
     - name: Use Variables
       run: |
         echo "Plugin Name: $wPLUGIN_NAME"
@@ -620,7 +640,7 @@ jobs:
           exit 1
         fi
 
-        echo "âœ“ Found standalone app at: $APP_PATH"
+        echo "Ã¢Å“â€œ Found standalone app at: $APP_PATH"
         echo "Creating standalone package..."
 
         # [Claude 2026-10-27] Not relocatable: otherwise, if macOS knows another copy of this bundle anywhere
@@ -648,7 +668,7 @@ jobs:
           exit 1
         fi
 
-        echo "âœ“ Successfully created standalone package at: $PKG_PATH"
+        echo "Ã¢Å“â€œ Successfully created standalone package at: $PKG_PATH"
         
 
     # Package: VST3 (Mac) - All Cases
@@ -682,7 +702,7 @@ jobs:
           exit 1
         fi
 
-        echo "âœ“ Found VST3 bundle at: $VST3_PATH"
+        echo "Ã¢Å“â€œ Found VST3 bundle at: $VST3_PATH"
         echo "Creating VST3 package..."
 
         # [Claude 2026-10-27] Not relocatable: otherwise, if macOS knows another copy of this bundle anywhere
@@ -710,7 +730,7 @@ jobs:
           exit 1
         fi
 
-        echo "âœ“ Successfully created VST3 package at: $PKG_PATH"
+        echo "Ã¢Å“â€œ Successfully created VST3 package at: $PKG_PATH"
 
 
     # Package: AU (Mac) - All Cases
@@ -745,7 +765,7 @@ jobs:
           exit 1
         fi
 
-        echo "âœ“ Found AU bundle at: $AU_PATH"
+        echo "Ã¢Å“â€œ Found AU bundle at: $AU_PATH"
         echo "Creating AU package..."
 
         # [Claude 2026-10-27] Not relocatable: otherwise, if macOS knows another copy of this bundle anywhere
@@ -768,7 +788,7 @@ jobs:
           exit 1
         fi
 
-        echo "âœ“ Successfully created AU package at: $PKG_PATH"
+        echo "Ã¢Å“â€œ Successfully created AU package at: $PKG_PATH"
           
 
     # Sign Individual Packages (Mac) - 2024.10.25 CLAUDE - All Cases
@@ -896,7 +916,7 @@ jobs:
           echo "ERROR: Failed to copy distribution file"
           exit 1
         fi
-        echo "âœ“ Distribution file copied successfully"
+        echo "Ã¢Å“â€œ Distribution file copied successfully"
 
         # Verify package path contains our packages
         echo "Checking for component packages..."
@@ -914,7 +934,7 @@ jobs:
           exit 1
         fi
         
-        echo "âœ“ Distribution package created successfully"
+        echo "Ã¢Å“â€œ Distribution package created successfully"
         
       shell: bash
 
@@ -1157,11 +1177,11 @@ jobs:
             /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "$FOUND/Contents/Info.plist" >/dev/null \
               || { echo "::error::$FOUND has no microphone permission text (NSMicrophoneUsageDescription)"; exit 1; }
           fi
-          echo "âœ“ $(basename "$FOUND")"
+          echo "Ã¢Å“â€œ $(basename "$FOUND")"
         done
 
         shasum -a 256 "$PKG" | awk '{print $1}' > "$PKG.sha256"
-        echo "âœ“ Mac installer verified: $(basename "$PKG")  sha256 $(cat "$PKG.sha256")"
+        echo "Ã¢Å“â€œ Mac installer verified: $(basename "$PKG")  sha256 $(cat "$PKG.sha256")"
 
 
     - name: Verify Windows Installer and Binaries Are Signed
@@ -1186,7 +1206,20 @@ jobs:
 
     # UPLOAD ARTIFACTS - All Cases
     # ==========================================================================================
+    - name: Upload Final Installer Artifact (staging)
+      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      uses: actions/upload-artifact@v4
+      with:
+        retention-days: 7
+        name: ${{ matrix.os }}-installer
+        if-no-files-found: error
+        path: |
+          build/*Installer_*.pkg
+          build/*Installer_*.exe
+          build/*Installer_*.sha256
+
     - name: Upload Final Installer Artifact
+      if: startsWith(github.ref, 'refs/tags/')
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.os }}-installer
@@ -1297,11 +1330,11 @@ jobs:
         fi
 
         if [ -n "$INSTALLER_PATH" ] && [ -f "$INSTALLER_PATH" ]; then
-          echo "âœ“ Found installer: $INSTALLER_NAME"
+          echo "Ã¢Å“â€œ Found installer: $INSTALLER_NAME"
           echo "Uploading installer to: $SERVER:$DEST_PATH"
           
           if scp "$INSTALLER_PATH" "$SERVER:$DEST_PATH$INSTALLER_NAME"; then
-            echo "âœ“ Installer uploaded successfully: $INSTALLER_NAME"
+            echo "Ã¢Å“â€œ Installer uploaded successfully: $INSTALLER_NAME"
           else
             echo "ERROR: Installer upload failed with exit code $?"
             exit 1
@@ -1384,7 +1417,7 @@ jobs:
         for f in "${MAC[0]}" "${WIN[0]}"; do
           [ -s "$f.sha256" ] || { echo "::error::$f has no .sha256, so it was never verified as signed. Nothing was published."; exit 1; }
           [ "$(sha256sum "$f" | awk '{print $1}')" = "$(tr -d '[:space:]' < "$f.sha256")" ] || { echo "::error::$f changed after it was verified. Nothing was published."; exit 1; }
-          echo "âœ“ $f matches its verified hash"
+          echo "Ã¢Å“â€œ $f matches its verified hash"
         done
         echo "MAC_FILE=${GITHUB_WORKSPACE}/dist/${MAC[0]}" >> "$GITHUB_ENV"
         echo "WIN_FILE=${GITHUB_WORKSPACE}/dist/${WIN[0]}" >> "$GITHUB_ENV"
@@ -1401,7 +1434,7 @@ jobs:
           echo "::error::v$NEWEST was tagged after this run started, so v$THIS is no longer the newest release. Nothing was published."
           exit 1
         fi
-        echo "âœ“ v$THIS is still the newest release tag"
+        echo "Ã¢Å“â€œ v$THIS is still the newest release tag"
 
 
     - name: Check the WooCommerce Product Has a Working Key Source (before anything is uploaded)
@@ -1447,7 +1480,7 @@ jobs:
             echo "::error::The file WordPress serves at $url is not the verified installer."
             exit 1
           fi
-          echo "âœ“ $url (media id $id)"
+          echo "Ã¢Å“â€œ $url (media id $id)"
           echo "${key}_URL=$url" >> "$GITHUB_ENV"
           echo "${key}_OLD_IDS=$old" >> "$GITHUB_ENV"
         }
@@ -1504,7 +1537,7 @@ jobs:
             echo "::error::${source_url} reads back as '${now}', not '${target_url}'"
             return 1
           fi
-          echo "âœ“ ${source_url} (read back)"
+          echo "Ã¢Å“â€œ ${source_url} (read back)"
         }
 
         MAC_SOURCE="/${REPO_NAME_LOWER}-download-mac"
@@ -1545,7 +1578,7 @@ jobs:
         AUTH="$WORDPRESS_USERNAME:$WORDPRESS_APPLICATION_PASSWORD"
         for id in $MAC_OLD_IDS $WIN_OLD_IDS; do
           if curl -fsS -X DELETE -u "$AUTH" "${WORDPRESS_SITE}/wp-json/wp/v2/media/${id}?force=true" | jq -e '.deleted == true' >/dev/null; then
-            echo "âœ“ Removed older copy, media id $id"
+            echo "Ã¢Å“â€œ Removed older copy, media id $id"
           else
             echo "::warning::Could not remove older copy, media id $id (the new installers are live; remove it by hand)"
           fi

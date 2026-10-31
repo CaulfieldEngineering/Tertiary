@@ -475,6 +475,7 @@ static int runLive (double seconds)
     if (p == nullptr) return 1;
     juce::Array<juce::var> rows;
     std::cout << "T2-02 CPU and memory, 48 kHz / 512, " << seconds << " s each (CPU in % of one core; memory = "
+              // [Codex 2026-10-30] JUCE_WINDOWS is undefined on Mac; use a preprocessor guard.
              #if JUCE_WINDOWS
               << "private bytes"
              #else
