@@ -308,7 +308,10 @@ running, or was cut off if `run-end` has been written.
 ## Live dashboard (2026-10-31)
 
 Joe: watch the whole run live, local and GitHub; "reports and screenshots and statuses print here"; the final
-report is the same view. `tests/dashboard/serve.ps1` (or `serve.sh`) starts it on http://127.0.0.1:4120/;
+report is the same view. Double-click `tests/dashboard/Dashboard-On.bat` (Mac: `Dashboard-On.command`) to start it
+in the background on this machine's tailnet address, port 4120, and open it; `Dashboard-Off.bat` / `.command` stops it
+(its pid file, else whatever dashboard listens on 4120). It is not left running. `tests/dashboard/serve.ps1` (or
+`serve.sh`) runs it in the foreground on http://127.0.0.1:4120/;
 `-BindHost`/`--host` takes this machine's tailnet address instead (100.64.0.0/10 only; never public).
 `Run-All -Dashboard` / `run-all.sh --dashboard` and the release check start it too.
 
