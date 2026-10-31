@@ -297,11 +297,16 @@ is included. Restore journals retain recovery paths if a future host prevents re
 - Both workflows call the same scripts; test summaries print before upload. Seven-day test/staging artifacts;
   release installer retention unchanged. Original build/sign/deploy steps unchanged; release tests additionally
   build the ReviewRender test tool. No plug-in code or T2-03 threshold changed.
+- Windows Run-All forwards its browser selection and defaults to Chromium; Mac WebKit stays in its
+  existing job. Copied Mac AUs regain executable permission and use the old CI's forced registrar refresh.
 
-Validation so far: 19 runner contract/restoration tests, PowerShell/Bash/Python syntax, exact Blocks metadata
-comparison and workflow structure/retention checks. Windows product: 43 unit sections, two LFO regressions,
-493 UI assertions; HostTest: 96 passes. Full local and post-push CI outcomes are recorded in the follow-up
-verification note. The separate fix-first-block worktree is untouched.
+Validation: 19 runner/restoration tests on Windows and Mac, syntax checks, exact Blocks metadata and workflow
+retention checks. Windows main: 16 PASS, expected T2-03 FAIL, 14 PLANNED, 2 SKIP; independent product runner
+passed all three scripts. Physical Mac main: 30 PASS, expected T2-03 FAIL, 13 PLANNED, 1 SKIP. All five Tertiary
+CI jobs passed at e0e1319, including both Macs and cross-platform audio comparison. Template Windows: 62 PASS,
+no failures; hosted template CI is blocked before execution by GitHub billing/spending restrictions.
+See `tests/verification-layout-2026-10-30.md` for counts, build provenance and remaining coverage.
+The separate fix-first-block worktree is untouched.
 
 Undo: revert this layout commit; the older combined wrappers and workflows return together. Ignored result
 artifacts preserve per-run evidence and binary hashes.
