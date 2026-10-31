@@ -5,14 +5,76 @@ import datetime as dt
 import json
 import os
 from pathlib import Path
+import platform
 import shutil
 import signal
 import subprocess
 import sys
+import time
 import traceback
 from urllib.parse import quote
 
-from common import CODES, PLATFORM, ROOT, Report, config, host_lock, now, running, write_json
+from common import CODES, PLATFORM, ROOT, Report, config, host_lock, now, running, write_json, local_path
+
+
+# [Claude 2026-10-31] Live progress (Joe: watch the whole sequence live; the final report is what he watched).
+# Every Run-All appends one JSON object per line to <results>/progress.jsonl as it goes. Format version 1,
+# documented in tests/README.md. Writers only append; a reader may tail the file while the run is going.
+PROGRESS_VERSION = 1
+NESTED = 'WLA_PROGRESS_NESTED'
+
+
+def progress(results, event, **fields):
+    line = json.dumps(dict(v=PROGRESS_VERSION, time=now(), event=event, **fields), ensure_ascii=False)
+    with open(Path(results) / 'progress.jsonl', 'a', encoding='utf-8') as f:
+        f.write(line + '\n')
+        f.flush()
+
+
+def git_state():
+    """Commit and uncommitted tracked files. Popen, not subprocess.run: the contract tests patch run()."""
+    git = lambda *a: subprocess.Popen(['git', '-C', str(ROOT), *a], stdout=subprocess.PIPE,
+                                      stderr=subprocess.DEVNULL, text=True).communicate()[0].rstrip()
+    return git('rev-parse', 'HEAD').strip(), [line[3:] for line in git('status', '--porcelain', '--untracked-files=no').splitlines()]
+
+
+def build_id(args):
+    """The product build this run tests: the VST3's embedded build id and hash, else the web manifest's id."""
+    try:
+        cfg = config()
+        folder = local_path(args.build_dir or os.environ.get('WLA_TEST_BUILD_DIR') or cfg.get('wTEST_BUILD_DIR', 'build-tests'))
+        vst3 = folder / 'plugin' / (cfg['wPLUGIN_NAME'] + '_artefacts') / cfg.get('wTEST_CONFIGURATION', 'Release') / 'VST3' / (cfg['wPLUGIN_NAME'] + '.vst3')
+        if not vst3.exists() and (folder / vst3.name).exists():
+            vst3 = folder / vst3.name
+        if vst3.exists():
+            from common import identity
+            return identity(vst3)['id']
+        manifest = local_path(os.environ.get('WEB_BUILD_DIR', 'build/web')) / 'test-build.json'
+        if manifest.exists():
+            data = json.loads(manifest.read_text(encoding='utf-8'))
+            return 'web ' + str(data.get('buildId') or data.get('commit'))
+    except Exception as error:
+        return 'unknown: ' + str(error)
+    return None
+
+
+def run_started(results, name, args):
+    """Only the outermost runner writes run-start/run-end; children it launches inherit NESTED."""
+    if os.environ.get(NESTED) == '1':
+        return None
+    os.environ[NESTED] = '1'
+    commit, dirty = git_state()
+    progress(results, 'run-start', run=name, machine=platform.node(), platform=PLATFORM,
+             profile=args.profile, commit=commit, dirty=dirty, build=build_id(args))
+    return time.monotonic()
+
+
+def run_ended(results, name, started, code):
+    if started is None:
+        return
+    data = json.loads((results / 'summary.json').read_text(encoding='utf-8')) if (results / 'summary.json').exists() else {}
+    progress(results, 'run-end', run=name, status=data.get('status', 'FAIL' if code else 'PASS'),
+             counts=data.get('counts', {}), seconds=round(time.monotonic() - started, 1))
 
 
 def sequence():
@@ -71,13 +133,9 @@ def summary(results, reports, *, product=False, omissions=(), profile='local'):
         coverage = 'no product tests yet'
     web = bool(reports) and all(r['id'].startswith('WEB-') for r in reports)
     suite_id = ('SU-02' if PLATFORM == 'win' else 'SU-04') if product else ('SU-05' if web else 'SU-01' if PLATFORM == 'win' else 'SU-03')
-    # [Claude 2026-10-31] The commit and any uncommitted tracked changes, so combine.py can require that every
-    # machine and the GitHub run tested one clean commit.
-    # Popen, not subprocess.run: the runner's contract tests patch subprocess.run to fake child scripts.
-    git = lambda *a: subprocess.Popen(['git', '-C', str(ROOT), *a], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).communicate()[0].rstrip()
+    commit, dirty = git_state()  # [Claude 2026-10-31] so combine.py can require one clean commit
     data = dict(suite_id=suite_id, platform=PLATFORM, profile=profile, finished=now(),
-                commit=git('rev-parse', 'HEAD').strip(),
-                dirty=[line[3:] for line in git('status', '--porcelain', '--untracked-files=no').splitlines()],
+                commit=commit, dirty=dirty,
                 status='FAIL' if counts['FAIL'] else 'PASS', coverage=coverage, counts=counts,
                 results=reports, excluded=list(omissions))
     stem = 'product-summary' if product else 'summary'
@@ -145,6 +203,16 @@ def validate_result(data, row, code):
 
 
 def child(row, args, results):
+    progress(results, 'test-start', id=row['id'], title=row.get('name', row['id']))
+    started = time.monotonic()
+    data = _child(row, args, results)
+    progress(results, 'test-finish', id=row['id'], status=data['status'],
+             counts={k: sum(c['status'] == k for c in data['checks']) for k in CODES},
+             seconds=round(time.monotonic() - started, 1))
+    return data
+
+
+def _child(row, args, results):
     script = ROOT / 'tests' / row['scripts'][PLATFORM]
     target = results / (row['id'] + '.json')
     if target.exists():
@@ -180,6 +248,13 @@ def product_rows(rows):
 
 
 def run_product(args, results, rows):
+    started = run_started(results, 'product', args)
+    code = _run_product(args, results, rows)
+    run_ended(results, 'product', started, code)
+    return code
+
+
+def _run_product(args, results, rows):
     reports, omissions = [], []
     for row in product_rows(rows):
         reason = excluded(row, args)
@@ -192,6 +267,13 @@ def run_product(args, results, rows):
 
 
 def run_all(args, results, rows):
+    started = run_started(results, 'all', args)
+    code = _run_all(args, results, rows)
+    run_ended(results, 'all', started, code)
+    return code
+
+
+def _run_all(args, results, rows):
     reports, omissions = [], []
     product_script = ROOT / 'tests' / PLATFORM / ('Run-All-Product-Tests.ps1' if PLATFORM == 'win' else 'run-all-product-tests.sh')
     product_target = results / 'product-summary.json'
@@ -260,6 +342,10 @@ def main():
                    if (p := results / (r['id'] + '.json')).exists()]
         return summary(results, reports, profile=args.profile)
     row = next(r for r in rows if r['id'] == args.name)
+    single = run_started(results, row['id'], args)
+    if single is not None:
+        progress(results, 'test-start', id=row['id'], title=row.get('name', row['id']))
+    single_t0 = time.monotonic()
     report = Report(row['id'], results, args.build_dir, row, args.profile)
     try:
         reason = excluded(row, args, native=False)
@@ -295,6 +381,13 @@ def main():
         report.check('exception', 'FAIL', str(error))
         report.screenshot('exception')
     code = report.finish()
+    if single is not None:
+        progress(results, 'test-finish', id=row['id'], status=report.data['status'],
+                 counts={k: sum(c['status'] == k for c in report.data['checks']) for k in CODES},
+                 seconds=round(time.monotonic() - single_t0, 1))
+        if row.get('ci_job') != 'web':
+            summary(results, [report.data], profile=args.profile)
+        run_ended(results, row['id'], single, code)
     if row.get('ci_job') == 'web':
         summary(results, [report.data], profile=args.profile)
         return int(report.data['status'] == 'FAIL') if args.profile == 'ci' else code

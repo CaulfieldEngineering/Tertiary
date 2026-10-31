@@ -260,3 +260,31 @@ It runs no tests. It passes only when every summary passed with zero failed chec
 run are on the same commit, no checkout had uncommitted tracked changes, and the GitHub run succeeded.
 Development runs while fixing do not count; nothing is waived.
 
+
+## Live progress: `progress.jsonl` (format v1, 2026-10-31)
+
+Every run appends events to `tests/results/<run>/progress.jsonl` while it goes, one JSON object per line,
+so the run can be watched live (Windows including web, Mac, and a single script such as `test-web`).
+`combine.py` builds the one release report from these same files, so the report is what was watched.
+Writers only append and flush each line; a reader can tail the file during the run. A line that does not
+parse is an error for `combine.py`, never skipped. New fields may be added; existing ones keep their meaning.
+
+Every event has `v` (1), `time` (local ISO 8601 with offset) and `event`:
+
+| `event` | Fields |
+|---|---|
+| `run-start` | `run` (`all`, `product` or a test ID run alone), `machine` (host name), `platform` (`win`/`mac`), `profile` (`local`/`ci`), `commit` (full SHA), `dirty` (uncommitted tracked files, `[]` when clean), `build` (the product VST3's embedded build id and SHA-256, the web manifest id for a web-only run, or `null`) |
+| `test-start` | `id` (registry ID, e.g. `W-04`), `title` |
+| `test-finish` | `id`, `status` (`PASS`/`FAIL`/`SKIP`/`PLANNED`), `counts` (checks by status), `seconds` |
+| `run-end` | `run`, `status` (`PASS` or `FAIL`), `counts` (all checks), `seconds` |
+
+Only the outermost runner writes `run-start`/`run-end`; the product runner and each script it launches add
+their `test-start`/`test-finish` lines to the same file. A test with `test-start` and no `test-finish` is
+running, or was cut off if `run-end` has been written.
+
+```json
+{"v": 1, "time": "2026-10-31T12:32:24-04:00", "event": "run-start", "run": "all", "machine": "Mini-PC", "platform": "win", "profile": "local", "commit": "5ed2de1...", "dirty": [], "build": "5ed2de1 · 2026-10-31 12:20; sha256:..."}
+{"v": 1, "time": "2026-10-31T12:32:25-04:00", "event": "test-start", "id": "W-01", "title": "Unit tests"}
+{"v": 1, "time": "2026-10-31T12:33:02-04:00", "event": "test-finish", "id": "W-01", "status": "PASS", "counts": {"PASS": 6, "FAIL": 0, "SKIP": 0, "PLANNED": 0}, "seconds": 37.1}
+{"v": 1, "time": "2026-10-31T13:31:40-04:00", "event": "run-end", "run": "all", "status": "PASS", "counts": {"PASS": 225, "FAIL": 0, "SKIP": 0, "PLANNED": 13}, "seconds": 3555.0}
+```
