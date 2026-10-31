@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import config from './config.mjs';
-import {snapshot,until,point,clickControl,toneWav} from './browser.mjs';
+import {snapshot,until,point,clickControl,toneWav,menuItem} from './browser.mjs';
 import {tapControl} from './window-tests.mjs';
 
 export async function noActivation(page) {
@@ -19,8 +19,9 @@ export async function disabledActivation(page,touch=false) {
   const activate=touch?tapControl:clickControl;
   const p=await point(page,config.menu.x,config.menu.y);
   if(touch)await page.touchscreen.tap(p.x,p.y);else await page.mouse.click(p.x,p.y);
-  const menu=await until(()=>snapshot(page),s=>s.controls.some(c=>c.visible&&/^About /.test(c.title||'')),'About menu missing');
-  await page.waitForTimeout(250);await activate(page,menu.controls.find(c=>c.visible&&/^About /.test(c.title||'')));
+  // [Claude 2026-10-31] Wait past JUCE's 250 ms menu click guard (see menuItem in browser.mjs).
+  const {item:about}=await menuItem(page,s=>s.controls.find(c=>c.visible&&/^About /.test(c.title||'')),'About menu missing');
+  await activate(page,about);
   const state=await until(()=>snapshot(page),s=>s.aboutVisible,'About panel did not open');
   assert.ok(state.controls.some(c=>c.visible&&c.text==='Activation is not needed in the browser demo'));
   const fields=state.controls.filter(c=>c.visible&&c.kind==='text');assert.equal(fields.length,2);

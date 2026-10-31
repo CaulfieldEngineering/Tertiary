@@ -136,13 +136,13 @@ Cross-machine comparisons still require the transferred artifacts; a quota failu
 | Standalone | Windows reuses the pywinauto control smoke test; Mac starts the built app, waits, captures it and quits. Settings are restored. | Python `pywinauto`, Pillow on Windows; built app; product control names in config. |
 | TwoInstance | Reuses HostTest section 11 from `fix-instance-isolation`; a binary without the section's completion marker is SKIP. | Updated HostTest and VST3. A template without this product check reports PLANNED. |
 | ASan | Uses a repo-local `build-asan` with `WLA_UI_TEST_ASAN:BOOL=ON`; otherwise PLANNED. Sanitizer errors fail. | Instrumented UiTest. The script does not silently rebuild the normal plugin. |
-| Performance | Existing PerfTest DSP, 120 seconds each of open/closed/idle, then 30 instances for 60 seconds. Stores measurements; an agreed budget/sign-off remains PLANNED. | PerfTest where the product supplies it; roughly 8 minutes. |
+| Performance | Existing PerfTest DSP, 120 seconds each of open/closed/idle, then T2-03: 30 instances on one real-time thread for 60 seconds, every block due within its 128-sample deadline. The thread is scheduled as hosts schedule audio: MMCSS Pro Audio plus TIME_CRITICAL on Windows; time-constraint policy inside a Core Audio work interval on macOS (2026-10-31). Nothing is pinned. Stores measurements; an agreed budget/sign-off remains PLANNED. | PerfTest where the product supplies it; roughly 8 minutes. |
 | Cubase | Existing export automation, machine golden comparison, normal Quit. | Cubase Pro 12, interactive console, pywinauto, psutil, NumPy, SciPy, Pillow, product `.cpr` and media builder, working audio output, golden `harness.wav`. `WLA_CUBASE` overrides host location. |
 | REAPER | Existing Lua/Python harness, matched transport render, repeatability, automation and saved projects; VST3 plus AU on Mac. | REAPER (`WLA_REAPER` override), updated HostTest, psutil on Windows. Product harness path from config. |
 | Logic | PLANNED: `no Logic harness project yet`. Once present: stage AU, auval, copy/open harness, System Events bounce, compare golden, quit. `--no-logic` skips opening even when a project exists. | Logic already set up by Joe; configured `tests/mac/logic/<product> harness.logicx`, default Cmd+B binding, saved cycle/PCM/WAVE/48 kHz/32-bit float/offline settings, golden `logic/harness.wav`, UI scripting permission. The bounce adapter is unverified until that project exists. |
 | FLStudio, Ableton, Bitwig, StudioOne | PLANNED: local-build scan, tempo, automation, save/reopen and golden bounce. | Future product harnesses and installed hosts. |
 | Installer (each OS) | PLANNED: signed staging installer, files/build ID, upgrade/uninstall; Mac also notarisation/Gatekeeper. | Future disposable installation check; normal runs do not change installed products. |
-| Microphone (Mac) | PLANNED: V-08 permission prompt and actual input. | First-launch fixture and input source; no TCC reset here. |
+| Microphone (Mac) | M-07 / V-08: builds the standalone, resets only Tertiary's microphone decision (`tccutil`), launches it, clicks Allow in the real macOS prompt, checks the TCC grant and that the input device is then open. | An audio input: macOS asks only when an app opens one. A Mac without an input uses the signed BlackHole 2ch driver at `~/.wla-test/mic/BlackHole2ch.driver` (or `WLA_MIC_LOOPBACK_DRIVER`), installed for the run and removed after; without either it is SKIP. |
 | Web | `npm test -- --no-ai` in `plugin/tests/web`, importing its report and screenshots. Missing suite: SKIP `web suite not present`. Missing dependencies/build: SKIP. | Node/npm, suite dependencies and Playwright browsers, repo web build made with that suite's `npm run build`. Does not build or alter `web-tests`. |
 | Safari (Mac) | PLANNED: real Safari via safaridriver. Playwright WebKit is a separate engine test. | Future real Safari adapter; no Remote Automation settings changed here. |
 | iPhone Safari | PLANNED/manual: physical-device look/listen with build ID and reviewer. | Joe's later review. |
@@ -244,3 +244,19 @@ python -m unittest discover -s tests/lib -p test_runner.py -v
 These tests exercise failed staging/restoration, build-path containment, all four statuses and coverage,
 and meta-script continuation after a child dies without a report. They do not open any host or touch an
 installed plugin.
+
+## One test run, one report (2026-10-31)
+
+Joe: "when we go to release in a normal process, I'm expecting one test run/GitHub run which yields a passing
+report before moving on." On the final commit, run `Run-All` once on each machine (Windows including web, Mac
+including Logic and the microphone) and let GitHub run once. Then compile the one report:
+
+```powershell
+python tests/lib/combine.py --run win=tests/results/<win-run> --run mac=tests/results/<mac-run-copied-here> `
+  --github-run <run id> --out tests/results/<date>_<rc> --report tests/reports/<rc>.md
+```
+
+It runs no tests. It passes only when every summary passed with zero failed checks, all machines and the GitHub
+run are on the same commit, no checkout had uncommitted tracked changes, and the GitHub run succeeded.
+Development runs while fixing do not count; nothing is waived.
+

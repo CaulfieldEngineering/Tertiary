@@ -23,8 +23,9 @@ def main():
     p.add_argument('--source', help='Source checkout for the microphone build (defaults to this checkout)')
     p.add_argument('--cmake')
     p.add_argument('--juce')
-    p.add_argument('--reset-mic', action='store_true', help='Reset only Tertiary\'s existing microphone decision before retesting')
-    p.add_argument('--loopback-driver', help='Optional signed BlackHole2ch.driver; installed only for the microphone check, then removed')
+    # [Claude 2026-10-31] The microphone check always resets Tertiary's own decision (tccutil, this bundle only),
+    # so every run sees the prompt. The old opt-in --reset-mic is gone; a remembered decision made runs unrepeatable.
+    p.add_argument('--loopback-driver', help='Signed BlackHole2ch.driver, installed only when this Mac has no audio input, then removed')
     args = p.parse_args()
     here = Path(__file__).resolve().parent
     repo = next((d for d in here.parents if (d / 'CMakeLists.txt').is_file() and (d / 'plugin').is_dir()), here)

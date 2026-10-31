@@ -1,6 +1,6 @@
 // [Codex 2026-10-30] Tertiary display options use real menu clicks and passive JUCE observations.
 import assert from 'node:assert/strict';
-import { snapshot, clickAt, clickControl, parameterChanges, toneWav, until } from './browser.mjs';
+import { snapshot, clickAt, clickControl, parameterChanges, toneWav, until, menuItem } from './browser.mjs';
 
 const scopeMenu = 'editor/0/2/1';
 const fftMenu = 'editor/0/3/1';
@@ -61,10 +61,9 @@ async function defaultPreset(page) {
   const next = state.controls.find(control => control.tooltip === 'Next preset');
   assert.ok(previous && next, 'Preset menu controls are missing');
   await clickAt(page, (previous.x + previous.width + next.x) / 2, previous.y + previous.height / 2);
-  const menu = await until(() => snapshot(page), current => current.controls.some(control =>
-    control.key.startsWith('popup/') && control.title === state.programs[0]), 'Default preset menu did not open');
-  const item = menu.controls.find(control => control.key.startsWith('popup/') && control.title === state.programs[0]);
-  await page.waitForTimeout(220);
+  // [Claude 2026-10-31] Wait past JUCE's 250 ms menu click guard (see menuItem in browser.mjs).
+  const { item } = await menuItem(page, current => current.controls.find(control =>
+    control.key.startsWith('popup/') && control.visible && control.title === state.programs[0]), 'Default preset menu did not open');
   await clickControl(page, item);
   await until(() => snapshot(page), current => current.program === 0 && !current.controls.some(control => control.key.startsWith('popup/')),
     'Default preset did not load');

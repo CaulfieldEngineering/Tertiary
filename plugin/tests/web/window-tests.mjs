@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import config from './config.mjs';
-import { snapshot, until, clickAt, clickControl, point, start } from './browser.mjs';
+import { snapshot, until, clickAt, clickControl, point, start, menuItem } from './browser.mjs';
 
 export async function fitAudit(page) {
   await page.evaluate(() => scrollTo(0, 0));
@@ -56,9 +56,9 @@ export async function disabledSizes(page, touch=false, capture) {
     const menuPoint=await point(page,config.menu.x,config.menu.y);
     if(touch) await page.touchscreen.tap(menuPoint.x,menuPoint.y);
     else await clickAt(page,config.menu.x,config.menu.y);
-    const menu=await until(()=>snapshot(page),s=>s.controls.some(c=>c.visible&&c.title==='Window size'),'Window size menu missing');
-    await page.waitForTimeout(250);
-    await activate(page,menu.controls.find(c=>c.visible&&c.title==='Window size'));
+    // [Claude 2026-10-31] Wait past JUCE's 250 ms menu click guard (see menuItem in browser.mjs).
+    const {item:sizeItem}=await menuItem(page,s=>s.controls.find(c=>c.visible&&c.title==='Window size'),'Window size menu missing');
+    await activate(page,sizeItem);
     const sub=await until(()=>snapshot(page),s=>s.controls.some(c=>c.visible&&c.title===`${pct} %`),'Size fields are not reachable by tap/click');
     assert.ok(sub.controls.some(c=>c.visible&&c.title==='Resize your browser to change the size'));
     await page.waitForTimeout(250);

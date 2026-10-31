@@ -14,7 +14,7 @@ import { serve } from './serve.mjs';
 import { compareScreenshot } from './visual.mjs';
 import { reviewDifferences } from './ai-review.mjs';
 import { testPlayer } from './wrapper-tests.mjs';
-import { snapshot, until, point, clickAt, clickControl, dragControl, selectItem, controlChanged,
+import { snapshot, until, point, clickAt, clickControl, dragControl, selectItem, menuItem, controlChanged,
   parameterChanges, audioSummary, renderAudio, toneWav, start } from './browser.mjs';
 
 fs.mkdirSync(outDir, {recursive:true});
@@ -86,10 +86,8 @@ async function choosePreset(index=0) {
   if(!config.preset)return;
   const before=await snapshot(page);
   await clickAt(page,config.preset.x,config.preset.y);
-  const menu=await until(()=>snapshot(page),s=>s.controls.some(c=>c.key.startsWith('popup/')),'Preset menu did not open');
-  const item=menu.controls.find(c=>c.key.startsWith('popup/')&&c.title===before.programs[index]);
-  assert.ok(item,`Preset ${before.programs[index]} missing`);
-  await page.waitForTimeout(230);await clickControl(page,item);
+  const {item}=await menuItem(page,s=>s.controls.find(c=>c.key.startsWith('popup/')&&c.visible&&c.title===before.programs[index]),`Preset menu did not open with ${before.programs[index]}`);
+  await clickControl(page,item);
   await until(()=>snapshot(page),s=>s.program===index&&!s.controls.some(c=>c.key.startsWith('popup/')),'Preset did not close and load');
   await page.mouse.move(1,1);await page.waitForTimeout(300);
 }
@@ -274,9 +272,8 @@ try {
     });
     await check('W-15','About displays this commit as its build ID',async()=>{
       await clickAt(page,config.menu.x,config.menu.y);
-      const menu=await until(()=>snapshot(page),s=>s.controls.some(c=>c.key.startsWith('popup/')),'Main menu did not open');
-      const about=menu.controls.find(c=>c.key.startsWith('popup/')&&/About /.test(c.title||''));assert.ok(about,'About item missing');
-      await page.waitForTimeout(230);await clickControl(page,about);await page.waitForTimeout(250);
+      const {item:about}=await menuItem(page,s=>s.controls.find(c=>c.key.startsWith('popup/')&&c.visible&&/About /.test(c.title||'')),'Main menu did not open with About');
+      await clickControl(page,about);await page.waitForTimeout(250);
       const aboutState=await snapshot(page),r=aboutState.aboutBounds;
       const p=await point(page,r.x+r.width*.75,r.y+52);
       await page.keyboard.down('Control');await page.keyboard.down('Shift');await page.mouse.click(p.x,p.y);

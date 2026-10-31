@@ -7,7 +7,7 @@ import sys
 import time
 
 queue, executable = Path(sys.argv[1]), sys.argv[2]
-allowed = {'status', 'dump', 'press', 'set', 'activate', 'paste', 'cgkey', 'cgclick'}
+allowed = {'status', 'dump', 'press', 'set', 'activate', 'paste', 'cgkey', 'cgclick', 'input-running'}
 deadline = time.monotonic() + 1200
 try:
     tty = os.ttyname(0)

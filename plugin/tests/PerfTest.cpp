@@ -49,6 +49,9 @@
  #include <mach/thread_policy.h>
  #include <pthread.h>
  #include <sys/resource.h>
+ #include <mach/mach_time.h>
+ #include <os/workgroup.h>
+ #include <AudioToolbox/AudioWorkInterval.h>
 #else
  #include <sys/resource.h>
 #endif
@@ -283,6 +286,10 @@ struct AudioThread
    #elif JUCE_MAC
     kern_return_t realtimePolicyResult = KERN_FAILURE;
     int qosFallbackResult = -1;   // -1 means the realtime policy succeeded, so no fallback was attempted
+    os_workgroup_t workgroup = nullptr;   // [Claude 2026-10-31] the audio work interval this thread joins
+    os_workgroup_join_token_s workgroupToken {};
+    int workgroupJoinResult = -1;
+    juce::int64 workgroupIntervalErrors = 0;   // any non-zero start/finish result; reported, never hidden
    #endif
     void waitUntil (Clock::time_point deadline)
     {
@@ -371,12 +378,44 @@ struct AudioThread
             // [Claude 2026-10-30, Codex] Allocate the harness's timing storage before its first scheduled period.
             // No plugin audio is processed here: its first callback remains measured against the full deadline.
             blockUs.reserve (1 << 20);
+           #if JUCE_MAC
+            // [Claude 2026-10-31] T2-03 fairness (Joe: make the test fair to how hosts run audio). Core Audio runs
+            // a device's IO thread inside an audio workgroup and opens one work interval per cycle with that
+            // cycle's deadline; Apple asks hosts' own real-time audio threads to do the same (AudioWorkIntervalCreate).
+            // On Apple silicon the scheduler uses that deadline to pick a performance core and its clock. Without it
+            // this synthetic thread ran on the M1 at about 3x the per-block cost of the same code in a host
+            // (mean 1808 us vs 627 us for 30 instances at 48 kHz / 128) and missed 3 to 19 deadlines a minute.
+            // The deadline, the block size, the instance count and the pass condition are unchanged; nothing is pinned.
+            if (__builtin_available (macOS 11.0, *))
+            {
+                workgroup = AudioWorkIntervalCreate ("Tertiary PerfTest audio", OS_CLOCK_MACH_ABSOLUTE_TIME, nullptr);
+                workgroupJoinResult = workgroup != nullptr ? os_workgroup_join (workgroup, &workgroupToken) : -1;
+                if (workgroupJoinResult != 0 && workgroup != nullptr) { os_release (workgroup); workgroup = nullptr; }
+            }
+            mach_timebase_info_data_t timebase {};
+            mach_timebase_info (&timebase);
+           #endif
             auto next = Clock::now();   // this block's scheduled start
             while (! stop.load())
             {
                 const auto t0 = Clock::now();
+               #if JUCE_MAC
+                if (workgroup != nullptr)
+                {
+                    // This cycle's real deadline (its scheduled start + one period), as Core Audio reports its own.
+                    // A start that is already past it still gets a short positive interval, as the API requires.
+                    const auto nowTicks = mach_absolute_time();
+                    const auto leftNs = std::chrono::duration_cast<std::chrono::nanoseconds> (next + period - t0).count();
+                    if (os_workgroup_interval_start (workgroup, nowTicks,
+                        nowTicks + (uint64_t) juce::jmax<juce::int64> (100000, leftNs) * timebase.denom / timebase.numer, nullptr) != 0)
+                        ++workgroupIntervalErrors;
+                }
+               #endif
                 for (auto* p : plugins) { sig.fill (buf, rate); p->processBlock (buf, midi); }
                 const auto t1 = Clock::now();
+               #if JUCE_MAC
+                if (workgroup != nullptr && os_workgroup_interval_finish (workgroup, nullptr) != 0) ++workgroupIntervalErrors;
+               #endif
                 clock->samples += block;
                 const double us = std::chrono::duration<double, std::micro> (t1 - t0).count();
                 busySeconds = busySeconds.load() + us * 1e-6;
@@ -399,6 +438,10 @@ struct AudioThread
                 }
                 waitUntil (next);
             }
+           #if JUCE_MAC
+            // A joined workgroup must be left on the same thread before it exits (libdispatch traps otherwise).
+            if (workgroup != nullptr) { os_workgroup_leave (workgroup, &workgroupToken); os_release (workgroup); }
+           #endif
            #if JUCE_WINDOWS
             // [Claude 2026-10-30, Codex] MMCSS must be reverted on the same thread that registered it.
             if (mmcssTask != nullptr && ! AvRevertMmThreadCharacteristics (mmcssTask))
@@ -586,9 +629,12 @@ static int runInstances (int count, int block, double seconds)
     o->setProperty ("timerPolicyStateAfter", (juce::int64) audio.timerPolicyAfter.StateMask);
     o->setProperty ("timeBeginPeriodResult", (juce::int64) audio.timerResolutionResult);
    #elif JUCE_MAC
-    o->setProperty ("schedulingMode", audio.realtimePolicyResult == KERN_SUCCESS
+    o->setProperty ("schedulingMode", juce::String (audio.realtimePolicyResult == KERN_SUCCESS
         ? "Mach THREAD_TIME_CONSTRAINT_POLICY"
-        : (audio.qosFallbackResult == 0 ? "QoS USER_INTERACTIVE fallback" : "Scheduling requests failed"));
+        : (audio.qosFallbackResult == 0 ? "QoS USER_INTERACTIVE fallback" : "Scheduling requests failed"))
+        + (audio.workgroupJoinResult == 0 ? " + audio work interval" : " (no audio work interval)"));
+    o->setProperty ("workgroupJoinResult", audio.workgroupJoinResult);
+    o->setProperty ("workgroupIntervalErrors", audio.workgroupIntervalErrors);
     o->setProperty ("realtimePolicyResult", (juce::int64) audio.realtimePolicyResult);
     o->setProperty ("qosFallbackResult", (juce::int64) audio.qosFallbackResult);
    #endif

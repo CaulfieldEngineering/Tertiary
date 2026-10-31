@@ -71,7 +71,13 @@ def summary(results, reports, *, product=False, omissions=(), profile='local'):
         coverage = 'no product tests yet'
     web = bool(reports) and all(r['id'].startswith('WEB-') for r in reports)
     suite_id = ('SU-02' if PLATFORM == 'win' else 'SU-04') if product else ('SU-05' if web else 'SU-01' if PLATFORM == 'win' else 'SU-03')
+    # [Claude 2026-10-31] The commit and any uncommitted tracked changes, so combine.py can require that every
+    # machine and the GitHub run tested one clean commit.
+    # Popen, not subprocess.run: the runner's contract tests patch subprocess.run to fake child scripts.
+    git = lambda *a: subprocess.Popen(['git', '-C', str(ROOT), *a], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).communicate()[0].strip()
     data = dict(suite_id=suite_id, platform=PLATFORM, profile=profile, finished=now(),
+                commit=git('rev-parse', 'HEAD'),
+                dirty=[line[3:] for line in git('status', '--porcelain', '--untracked-files=no').splitlines()],
                 status='FAIL' if counts['FAIL'] else 'PASS', coverage=coverage, counts=counts,
                 results=reports, excluded=list(omissions))
     stem = 'product-summary' if product else 'summary'

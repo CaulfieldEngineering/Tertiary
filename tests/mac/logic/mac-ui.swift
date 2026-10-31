@@ -1,6 +1,7 @@
 // [Codex 2026-10-30] Small native Accessibility CLI for repeatable Mac host tests.
 import AppKit
 import ApplicationServices
+import CoreAudio
 
 func attr(_ e: AXUIElement, _ key: String) -> CFTypeRef? {
     var value: CFTypeRef?
@@ -85,6 +86,19 @@ do {
         try osa("tell application \"System Events\" to keystroke \""+t+"\"")
     case "click":
         try osa("tell application \"System Events\" to click at {\(Int(a[1])!),\(Int(a[2])!)}")
+    case "input-running":
+        // [Claude 2026-10-31] M-07: is the default input device open by any process (read-only query)?
+        var address=AudioObjectPropertyAddress(mSelector:kAudioHardwarePropertyDefaultInputDevice,mScope:kAudioObjectPropertyScopeGlobal,mElement:kAudioObjectPropertyElementMain)
+        var device=AudioDeviceID(0); var size=UInt32(MemoryLayout<AudioDeviceID>.size)
+        AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),&address,0,nil,&size,&device)
+        var name="" as CFString; var running=UInt32(0)
+        if device != 0 {
+            address.mSelector=kAudioObjectPropertyName; size=UInt32(MemoryLayout<CFString>.size)
+            AudioObjectGetPropertyData(device,&address,0,nil,&size,&name)
+            address.mSelector=kAudioDevicePropertyDeviceIsRunningSomewhere; size=UInt32(MemoryLayout<UInt32>.size)
+            AudioObjectGetPropertyData(device,&address,0,nil,&size,&running)
+        }
+        print(String(data:try JSONSerialization.data(withJSONObject:["device":Int(device),"name":name as String,"running":running != 0],options:[.sortedKeys]),encoding:.utf8)!)
     default: throw NSError(domain:"Unknown operation",code:4)
     }
 } catch { fputs("\(error)\n",stderr); exit(1) }

@@ -18,13 +18,28 @@ def grant():
                           ('kTCCServiceMicrophone', BUNDLE)).fetchall()
 
 
+def has_input():
+    return 'Input Channels:' in run(['system_profiler', 'SPAudioDataType'], timeout=20).stdout.decode()
+
+
 def test(args, ui, result, here, repo):
+    """[Claude 2026-10-31] macOS shows the microphone prompt only when the app opens an audio input.
+
+    Joe's M1 has no input device, so without one the standalone never asks and M-07-prompt failed
+    (2026-10-31 08:32 and 08:33). That was the cause, not SSH: with the loopback input present the same
+    SSH-launched run passes. The temporary signed loopback input is now installed whenever the Mac has
+    no input; a Mac with a real input uses it and nothing is installed. No input and no driver is SKIP
+    (a missing fixture, like a missing host), with the reason, never a misleading prompt failure.
+    """
     destination = Path('/Library/Audio/Plug-Ins/HAL/BlackHole2ch.driver')
     installed = False
-    if args.loopback_driver:
+    if not has_input():
+        if not args.loopback_driver:
+            raise Stop('This Mac has no audio input, so macOS will not ask for the microphone. Put a signed '
+                       'BlackHole2ch.driver at ~/.wla-test/mic/ or set WLA_MIC_LOOPBACK_DRIVER', 2)
         driver = Path(args.loopback_driver).expanduser().resolve()
         if destination.exists():
-            raise Stop('An existing BlackHole2ch driver is present; it will not be replaced', 2)
+            raise Stop('An existing BlackHole2ch driver is present but gives no input; it will not be replaced', 2)
         if driver.name != destination.name or not driver.is_dir():
             raise Stop('Expected a signed BlackHole2ch.driver bundle', 2)
         from logic_test import running
@@ -37,7 +52,10 @@ def test(args, ui, result, here, repo):
         run(['sudo', '-n', 'ditto', driver, destination])
         installed = True
         run(['sudo', '-n', 'killall', 'coreaudiod'], check=False)
-        time.sleep(3)
+        for _ in range(40):
+            time.sleep(.5)
+            if has_input():
+                break
     try:
         _test(args, ui, result, here, repo)
     finally:
@@ -114,10 +132,11 @@ def _test(args, ui, result, here, repo):
                  'Disposable app verifies with hardened runtime and the audio-input entitlement; ad-hoc identity')
     result.data['build'].update(path=str(app), source_path=str(built_app), sha256=sha(app / 'Contents/MacOS/Tertiary'))
     before = grant()
-    if before:
-        if not args.reset_mic:
-            raise Stop('Microphone decision already exists; pass --reset-mic to retest this app\'s prompt', 2)
-        run(['tccutil', 'reset', 'Microphone', BUNDLE])
+    # Always start from "not determined" so the real prompt appears on every run (this bundle only).
+    run(['tccutil', 'reset', 'Microphone', BUNDLE])
+    reset = grant()
+    result.check('M-07-reset', not reset, "Tertiary's microphone decision reset before launch (was " + str(before) + ')')
+    input_before = json.loads(ui.call('input-running'))
     run(['open', '-n', app])
     try:
         deadline = time.monotonic() + 30
@@ -161,9 +180,20 @@ def _test(args, ui, result, here, repo):
         devices = run(['system_profiler', 'SPAudioDataType'], timeout=20).stdout.decode()
         (result.out / 'audio-devices.txt').write_text(devices)
         result.artifact(result.out / 'audio-devices.txt')
-        result.data['checks'].append(dict(id='M-07-live-input', status='SKIP',
-            detail='This check verifies consent and the absence of denial. No default input device is attached on this Mac; no physical-input meter test is claimed.' if 'Input Channels:' not in devices else
-            'Consent regression verified; a physical tone/meter test is outside this script.'))
+        # [Claude 2026-10-31] Was an always-SKIP placeholder. Now a real check: after Allow, the default
+        # input device is open (Core Audio "running somewhere"), i.e. Tertiary actually receives input.
+        deadline = time.monotonic() + 10
+        live = {}
+        while time.monotonic() < deadline:
+            live = json.loads(ui.call('input-running'))
+            if live.get('running'):
+                break
+            time.sleep(.4)
+        (result.out / 'input-device.json').write_text(json.dumps(dict(before_launch=input_before, after_allow=live), indent=2) + '\n')
+        result.artifact(result.out / 'input-device.json')
+        result.check('M-07-live-input', bool(live.get('running')) and live.get('device') == input_before.get('device'),
+                     'After Allow the input "' + str(live.get('name')) + '" is open (running before launch: '
+                     + str(input_before.get('running')) + '). An audible tone/meter test is not claimed.')
     finally:
         run(['osascript', '-e', 'tell application "Tertiary" to quit'], timeout=10, check=False)
         for _ in range(20):

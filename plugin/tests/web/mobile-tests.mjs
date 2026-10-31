@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {devices} from 'playwright';
 import config from './config.mjs';
-import {snapshot,until,point,audioSummary,parameterChanges} from './browser.mjs';
+import {snapshot,until,point,audioSummary,parameterChanges,MENU_GUARD_MS} from './browser.mjs';
 import {fitAudit,disabledSizes,tapControl} from './window-tests.mjs';
 import {noActivation,disabledActivation,waitPastNagCycle} from './activation-tests.mjs';
 
@@ -112,7 +112,7 @@ export async function testMobile({context,check,shot,outDir,meta,engine}) {
           for(const r of popupBounds)assert.ok(r.left>=-1&&r.top>=-1&&r.right<=r.visibleWidth+1&&r.bottom<=r.visibleHeight+1,
             `Touch menu outside the screen: ${JSON.stringify(r)}`);
           const item=menu.controls.find(c=>c.visible&&c.key.startsWith('popup/')&&combo.items.includes(c.title)&&c.title!==combo.text);assert.ok(item);
-          await page.waitForTimeout(250);await tapControl(page,item);
+          await page.waitForTimeout(MENU_GUARD_MS);await tapControl(page,item); // [Claude 2026-10-31] past JUCE's 250 ms menu guard
           const after=await until(()=>snapshot(page),s=>s.controls.find(c=>c.key===combo.key)?.text===item.title,'Touch menu did not select the item');
           const audit=await targets(page);
           fs.writeFileSync(path.join(outDir,`${id}-zoom-touch-targets.json`),JSON.stringify(audit,null,2));
