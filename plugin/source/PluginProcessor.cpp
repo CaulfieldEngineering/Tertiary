@@ -1483,4 +1483,4 @@ namespace audio_plugin {
 // This function definition must be in the global namespace.
 juce::AudioProcessor *JUCE_CALLTYPE createPluginFilter() {
   return new audio_plugin::AudioPluginAudioProcessor();
-}
+}
