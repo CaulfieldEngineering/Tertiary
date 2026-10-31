@@ -283,3 +283,25 @@ on the M1. PowerShell/Python/Bash syntax and the future Logic AppleScript compil
 
 Undo: revert the commit containing this entry. Test output/build folders are ignored; no runtime DSP change
 is included. Restore journals retain recovery paths if a future host prevents restoration.
+
+
+## Test layout follow-up (Codex, 2026-10-30)
+
+- `tests/sequence.json`: all 35 Blocks test IDs, GitHub checkboxes and suite relations; retained local T2-03.
+- `tests/win`, `tests/mac`, `tests/web`: independent row scripts; platform product folders and discovery runners.
+- `tests/lib/native.py`: splits unit, LFO, UI robot, host, validator, render, AU and screenshot phases without
+  changing their assertions. Mac architecture/minimum-OS checks and pre-layout CI counts remain enforced.
+- `tests/lib/run.py`, `common.py`, `hosts.py`: IDs in JSON/summary checks, CI selection, product aggregation,
+  explicit coverage gaps, and protection against another worktree's active test processes. UI tests receive
+  an isolated temporary settings directory; another worktree's UiTest can otherwise overwrite saved-size assertions.
+- Both workflows call the same scripts; test summaries print before upload. Seven-day test/staging artifacts;
+  release installer retention unchanged. Original build/sign/deploy steps unchanged; release tests additionally
+  build the ReviewRender test tool. No plug-in code or T2-03 threshold changed.
+
+Validation so far: 16 runner contract/restoration tests, PowerShell/Bash/Python syntax, exact Blocks metadata
+comparison and workflow structure/retention checks. Windows product: 43 unit sections, two LFO regressions,
+493 UI assertions; HostTest: 96 passes. Full local and post-push CI outcomes are recorded in the follow-up
+verification note. The separate fix-first-block worktree is untouched.
+
+Undo: revert this layout commit; the older combined wrappers and workflows return together. Ignored result
+artifacts preserve per-run evidence and binary hashes.

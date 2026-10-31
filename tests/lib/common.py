@@ -71,8 +71,10 @@ def write_json(path, value):
 
 
 class Report:
-    def __init__(self, name, results, build_dir=None):
+    def __init__(self, name, results, build_dir=None, row=None, profile='local'):
         self.name = name
+        self.row = row or {'id': name, 'name': name, 'suite_ids': []}
+        self.profile = profile
         self.cfg = config()
         self.product = self.cfg['wPLUGIN_NAME']
         self.results = Path(results).resolve()
@@ -93,14 +95,16 @@ class Report:
         self.build_dir = local_path(build_dir or os.environ.get('WLA_TEST_BUILD_DIR') or self.cfg.get('wTEST_BUILD_DIR', 'build-tests'))
         self.release = self.cfg.get('wTEST_CONFIGURATION', 'Release')
         self.binaries = {}
-        self.data = dict(name=name, platform=PLATFORM, status='SKIP', started=now(), finished=None,
+        self.data = dict(id=self.row['id'], name=name, title=self.row['name'],
+                         suite_ids=self.row.get('suite_ids', []), profile=profile,
+                         platform=PLATFORM, status='SKIP', started=now(), finished=None,
                          build={'path': str(self.build_dir), 'id': 'not built / not selected'},
                          host={'name': name, 'version': 'not detected'}, checks=[], artifacts=[])
 
     def check(self, id, state, detail):
         assert state in CODES
-        self.data['checks'].append(dict(id=id, status=state, detail=str(detail)))
-        print(f'{state:7} {id}: {detail}', flush=True)
+        self.data['checks'].append(dict(test_id=self.row['id'], id=id, status=state, detail=str(detail)))
+        print(f'{state:7} {self.row["id"]} / {id}: {detail}', flush=True)
 
     def artifact(self, path):
         value = os.path.relpath(Path(path).resolve(), self.results).replace(os.sep, '/')

@@ -8,11 +8,13 @@ DSP, UI and DAW harnesses stay under `plugin/tests`; this folder selects the rep
 ```text
 tests/
   sequence.json               ordered release checklist, shared by both operating systems
-  win/                        Test-*.ps1, Run-All.ps1, portable Cubase helpers
-  mac/                        test-*.sh, run-all.sh, Logic bounce and Mac-day screenshots
+  win/                        universal Test-*.ps1, Run-All.ps1, Run-All-Product-Tests.ps1
+    product/                  this plugin's Test-*.ps1 scripts
+  mac/                        universal test-*.sh, run-all.sh, run-all-product-tests.sh
+    product/                  this plugin's test-*.sh scripts
   web/                        web suite, iPhone/manual, staging-preview and post-release wrappers
   lib/                        shared runner, result format, build selection and host cleanup
-  results/YYYY-MM-DD_HHMM/     <name>.json, <name>-artifacts/, summary.md, summary.json
+  results/YYYY-MM-DD_HHMM/     <ID>.json, <ID>-artifacts/, summary.md/json, product-summary.md/json
 ```
 
 ## Run
@@ -25,14 +27,14 @@ and a local build. Launch from any working directory. `WLA_TEST_PYTHON` selects 
 powershell -NoProfile -ExecutionPolicy Bypass -File tests/win/Test-Reaper.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests/win/Run-All.ps1
 # Optional: a different build INSIDE this repo and a result destination
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/win/Test-Suite.ps1 -BuildDir build-rc -ResultsDir tests/results/my-run
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/win/Test-HostTest.ps1 -BuildDir build-rc -ResultsDir tests/results/my-run
 ```
 
 ```bash
 # Mac: one check, or everything (do not open Logic for this verification)
 bash tests/mac/test-reaper.sh
 bash tests/mac/run-all.sh --no-logic
-bash tests/mac/test-suite.sh --build-dir build-ci --results-dir tests/results/my-run
+bash tests/mac/test-hosttest.sh --build-dir build-ci --results-dir tests/results/my-run
 ```
 
 There are no host downloads, host installations, reboots or privacy-setting changes. Missing installed hosts
@@ -65,12 +67,66 @@ outside this repo, including symlinks to another worktree, are rejected. Install
 
 ## Checklist and prerequisites
 
-Execution order is in `sequence.json`. Reports display failing scripts/checks first while retaining each script's
-checklist index. Adding a future test takes one sequence entry and an independently executable wrapper.
+The 35 Blocks Tests IDs and Suite relation IDs are recorded in `sequence.json`, plus the retained
+`T2-03` performance test. `ci_ok` mirrors the GitHub checkbox. One row owns one script per supported
+platform; the old combined Test-Suite wrappers have been removed. Reports use the registry ID in every
+script row and every check (`test_id`); internal assertion IDs remain separate.
+
+Product runners live in `win/` and `mac/` and discover all `Test-*.ps1` / `test-*.sh` files directly in that
+platform's `product/` folder. There is no top-level `tests/product/` and no second runner list. Register
+metadata in `sequence.json`; an unregistered file is still executed, then explicitly fails the result
+contract. Main Run-All invokes the product runner once and merges its results. Each has its own summary.
+Product checks run together first; the final report follows registry order, with failures first.
+
+Tertiary product scripts: W-01 unit, W-05 LFO, W-06 Windows UI robot and M-04 Mac UI robot. Mac unit/LFO
+counterparts retain W-01/W-05, and the existing Mac render/isolation/ASan checks retain W-04/W-14/W-15:
+these are the same checks on another platform, not new IDs invented outside Blocks. `suite_ids` preserves
+the database relation; the summary also names the platform suite actually invoked.
+
+NewPluginTemplate's two product folders contain only a README. Its product runners say **no product tests
+yet**. The existing generic processor-invariant unit binary still runs through W-01 at the platform root
+(scope `universal` in the template); its five real generic sections and existing empty product section
+are retained. Actual product scenarios and their wrappers are written in situ when a plugin is developed.
+
+```powershell
+powershell -NoProfile -File tests/win/Run-All-Product-Tests.ps1
+pwsh tests/win/Run-All.ps1 -Profile ci -BuildDir build -ResultsDir tests/results/ci -ExpectDemo
+```
+
+```bash
+bash tests/mac/run-all-product-tests.sh
+bash tests/mac/run-all.sh --profile ci --build-dir out --results-dir tests/results/ci --expect-demo
+bash tests/web/test-web.sh --profile ci --engine chromium --results-dir tests/results/ci
+```
+
+The `ci` profile selects checked rows, excludes DAWs/humans/Mac-day-only rows, and delegates WEB-01 to the
+separate web job. M-05/06/07 retain checked GitHub flags but need a real Mac desktop/Retina/microphone session;
+they are explicitly listed as excluded, not silently marked passed. T2-03 is local-only as before and its
+original 30-instance deadline failure is not suppressed. ASan without an instrumented build remains
+PLANNED; it has never been part of the prior CI baseline. Missing prerequisites for selected implemented
+CI checks fail the run. Template product scenarios not written yet are listed as absent.
+
+CI and local wrappers execute the same assertions. `ci-baseline.json` retains pre-layout counts, and result
+metrics compare them with the current unit/UI/HostTest/render counts. Mac M-03 also preserves architecture
+and minimum-OS checks from the old CI script. CI uses the existing quick render matrix (36 Tertiary files);
+local runs use the full matrix. Set `WLA_TEST_REFERENCE` to an approved release-render directory for the
+W-04 previous-release comparison; without it that comparison is PLANNED, never an implied sound match.
+
+Both workflows print `summary.md` before artifact uploads and upload `tests/results/`. Native tests run
+before the universal-build upload, so a quota error cannot prevent the first Mac's tests. Every test/staging
+artifact has seven-day retention; release/tag installer retention stays at its previous repository default.
+Cross-machine comparisons still require the transferred artifacts; a quota failure is not a green CI run.
 
 | Script / row | What runs or is intended | Installed tools / fixtures |
 |---|---|---|
-| Suite | Windows wraps `plugin/tests/run_all.ps1`: unit, HostTest, pluginval, render matrix, UI robot; product LFO scripts follow. Mac runs the Mac-day auval, pluginval with and without GUI, VST3/AU HostTest, unit, UI robot, renders, screenshots and LFO phases. | Built test programs; pluginval; Python. Windows retains the existing pinned pluginval download into the build folder. Mac: `WLA_PLUGINVAL`, `/Applications/pluginval.app` or `build-tests/pluginval/pluginval.app`. Screenshots need command-line tools and screen capture permission. |
+| W-01 Unit | Existing unit binary, with assertion-section count. | Built `<product>Tests`. |
+| W-02 / M-03 HostTest | Full VST3 host suite; AU too on Mac. | Built HostTest; `-ExpectDemo` / `--expect-demo` for unlicensed CI. |
+| W-03 / M-02 pluginval | Strictness 10; all GUI completion markers required. Mac local also runs the no-GUI pass. | `WLA_PLUGINVAL` or pluginval in the build folder. |
+| W-04 Renders | Existing render matrix; optional approved-release comparison. Also on Mac with the same ID. | ReviewRender, sample audio. |
+| W-05 LFO | This repo's configured regression scripts. | ReviewRender. |
+| W-06 / M-04 UI robot | All existing assertions, snapshots, private per-run temp/settings directory. | UiTest. |
+| M-01 auval | Strict Apple AU validation of the staged repo build. | AU build, logged-in Mac session. |
+| M-05 Screenshots | All four scales and Retina from the existing Mac-day script. | Real Mac display and screen-capture permission. |
 | Standalone | Windows reuses the pywinauto control smoke test; Mac starts the built app, waits, captures it and quits. Settings are restored. | Python `pywinauto`, Pillow on Windows; built app; product control names in config. |
 | TwoInstance | Reuses HostTest section 11 from `fix-instance-isolation`; a binary without the section's completion marker is SKIP. | Updated HostTest and VST3. A template without this product check reports PLANNED. |
 | ASan | Uses a repo-local `build-asan` with `WLA_UI_TEST_ASAN:BOOL=ON`; otherwise PLANNED. Sanitizer errors fail. | Instrumented UiTest. The script does not silently rebuild the normal plugin. |
@@ -140,16 +196,17 @@ Each script writes the same schema and exits `0=PASS`, `1=FAIL`, `2=SKIP`, `3=PL
 
 ```json
 {
-  "name": "reaper", "platform": "win", "status": "PASS",
+  "id": "W-09", "name": "W-09", "title": "REAPER",
+  "suite_ids": ["SU-01"], "profile": "local", "platform": "win", "status": "PASS",
   "started": "2026-10-30T20:00:00-04:00", "finished": "2026-10-30T20:00:20-04:00",
   "build": {"path": ".../VST3/Product.vst3", "id": "embedded build id; sha256:..."},
   "host": {"name": "REAPER", "version": "7.x"},
-  "checks": [{"id": "reaper-vst3", "status": "PASS", "detail": "..."}],
-  "artifacts": ["reaper-artifacts/reaper-vst3.log"]
+  "checks": [{"test_id": "W-09", "id": "reaper-vst3", "status": "PASS", "detail": "..."}],
+  "artifacts": ["W-09-artifacts/reaper-vst3.log"]
 }
 ```
 
-PLANNED means the intended check is not written/provisioned yet and prints `Future placeholder: ...`.
+PLANNED means the intended check is not written/provisioned yet and records its reason.
 SKIP means an implemented check cannot run here, with its reason. PASS certifies only the checks named.
 Mixed script precedence is FAIL, PLANNED, SKIP, PASS; the individual check rows preserve partial success.
 The meta-script continues past failures, missing reports and result/exit mismatches, writes both summaries
@@ -165,7 +222,7 @@ under `history/`. Then rebuild the complete summary from all the current per-scr
 python tests/lib/run.py summarize --results-dir tests/results/my-run
 ```
 
-This requires every row for that operating system to have a result; it does not fill absent tests with passes.
+This reads only result files present in that run; it never fills absent tests with passes. The original full-run summary records profile exclusions.
 
 ## New plugins and runner checks
 

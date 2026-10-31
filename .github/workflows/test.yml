@@ -102,21 +102,37 @@ jobs:
         cp "$A/HostTest_artefacts/Release/HostTest" out/
         cp "$A/UiTest_artefacts/Release/UiTest" out/
 
+    - name: Check, test and render
+      env:
+        WLA_PLUGINVAL: ${{ runner.temp }}/pv/pluginval.app/Contents/MacOS/pluginval
+      run: bash tests/mac/run-all.sh --profile ci --build-dir out --results-dir tests/results/ci --expect-demo
+
+    - name: Print test summary
+      if: always()
+      shell: bash
+      run: |
+        if [ -f tests/results/ci/summary.md ]; then
+          cat tests/results/ci/summary.md | tee -a "$GITHUB_STEP_SUMMARY"
+        else
+          echo "Tests did not produce a summary; see the failed build/test step." | tee -a "$GITHUB_STEP_SUMMARY"
+        fi
+
+
     - name: Upload the built files (for the Intel job)
       uses: actions/upload-artifact@v4
       with:
+        retention-days: 7
         name: mac-universal-build
         path: out/
 
-    - name: Check, test and render
-      run: bash plugin/tests/ci/mac_checks.sh out "$RUNNER_TEMP/pv/pluginval.app/Contents/MacOS/pluginval" mac-arm64
 
     - name: Upload logs and renders
       if: always()
       uses: actions/upload-artifact@v4
       with:
+        retention-days: 7
         name: results-mac-arm64
-        path: results/
+        path: tests/results/
 
 
   # Job: Mac test (Intel), using the universal build above
@@ -142,14 +158,28 @@ jobs:
         chmod +x out/ReviewRender out/TertiaryTests out/HostTest out/UiTest
 
     - name: Check, test and render
-      run: bash plugin/tests/ci/mac_checks.sh out "$RUNNER_TEMP/pv/pluginval.app/Contents/MacOS/pluginval" mac-x86_64
+      env:
+        WLA_PLUGINVAL: ${{ runner.temp }}/pv/pluginval.app/Contents/MacOS/pluginval
+      run: bash tests/mac/run-all.sh --profile ci --build-dir out --results-dir tests/results/ci --expect-demo
+
+    - name: Print test summary
+      if: always()
+      shell: bash
+      run: |
+        if [ -f tests/results/ci/summary.md ]; then
+          cat tests/results/ci/summary.md | tee -a "$GITHUB_STEP_SUMMARY"
+        else
+          echo "Tests did not produce a summary; see the failed build/test step." | tee -a "$GITHUB_STEP_SUMMARY"
+        fi
+
 
     - name: Upload logs and renders
       if: always()
       uses: actions/upload-artifact@v4
       with:
+        retention-days: 7
         name: results-mac-x86_64
-        path: results/
+        path: tests/results/
 
 
   # Job: Windows build and test
@@ -177,50 +207,35 @@ jobs:
         cmake --build build --config Release --target Tertiary_VST3 Tertiary_Standalone ReviewRender TertiaryTests HostTest UiTest -- -m
 
     # [Claude 2026-10-29] The UI tests (T2-02, T2-04 to T2-13, R-01 to R-08; see plugin/tests/UiTest.cpp)
-    - name: UI tests
-      shell: bash
-      run: |
-        set -o pipefail
-        mkdir -p results
-        bash plugin/tests/ci/ui_tests.sh build/plugin/UiTest_artefacts/Release/UiTest.exe results windows
+    - name: Install Windows test dependencies
+      run: python -m pip install --quiet pywinauto pillow
 
-    # [Claude 2026-10-29] The standalone through Windows UI Automation; never left running (timeouts, killed on failure)
-    - name: Standalone smoke test (UI Automation)
+
+
+    - name: Run Windows test scripts
+      if: always()
+      shell: pwsh
+      env:
+        WLA_PLUGINVAL: ${{ runner.temp }}/pv/pluginval.exe
+      run: pwsh tests/win/Run-All.ps1 -Profile ci -BuildDir build -ResultsDir tests/results/ci -ExpectDemo
+
+    - name: Print test summary
       if: always()
       shell: bash
       run: |
-        mkdir -p results
-        python -m pip install --quiet pywinauto
-        status=0
-        timeout 300 python plugin/tests/ui/smoke_standalone.py "$(pwd)/build/plugin/Tertiary_artefacts/Release/Standalone/Tertiary.exe" \
-          --toggle "Low Sync" --appears "Low Rate" --slider "Low Depth" --menu-at 727,25.75 --layout 750x478 \
-          --menu-item "About Tertiary...|Activate Tertiary..." --dialog-button "Activate|Deactivate this computer" --close-button X \
-          --protect '%APPDATA%\Tertiary\Tertiary.settings' > results/smoke.log 2>&1 || status=$?
-        cat results/smoke.log
-        { echo "### Standalone smoke test (windows)"; grep -E '^(PASS|FAIL)' results/smoke.log | sed 's/^/    /'; } >> "$GITHUB_STEP_SUMMARY"
-        taskkill //F //IM Tertiary.exe 2>/dev/null || true   # never left running
-        exit $status
-
-    - name: Test and render
-      if: always()
-      shell: bash
-      run: |
-        set -o pipefail
-        mkdir -p results
-        A=build/plugin
-        "$A/TertiaryTests_artefacts/Release/TertiaryTests.exe" 2>&1 | tee results/unit-tests.log
-        "$A/HostTest_artefacts/Release/HostTest.exe" --vst3 "$A/Tertiary_artefacts/Release/VST3/Tertiary.vst3" --expect-demo 2>&1 | tee results/hosttest-vst3.log
-        "$(cygpath -m "$RUNNER_TEMP")/pv/pluginval.exe" --strictness-level $STRICTNESS --validate-in-process --output-dir results \
-          --validate "$A/Tertiary_artefacts/Release/VST3/Tertiary.vst3" 2>&1 | tee results/pluginval-vst3.log
-        python plugin/tests/regression/render_matrix.py "$A/ReviewRender_artefacts/Release/ReviewRender.exe" \
-          plugin/sample_audio results/renders --quick 2>&1 | tee results/renders.log
+        if [ -f tests/results/ci/summary.md ]; then
+          cat tests/results/ci/summary.md | tee -a "$GITHUB_STEP_SUMMARY"
+        else
+          echo "Tests did not produce a summary; see the failed build/test step." | tee -a "$GITHUB_STEP_SUMMARY"
+        fi
 
     - name: Upload logs and renders
       if: always()
       uses: actions/upload-artifact@v4
       with:
+        retention-days: 7
         name: results-windows
-        path: results/
+        path: tests/results/
 
 
   # Job: Compare the renders across the three machines
@@ -243,15 +258,16 @@ jobs:
         # Different compilers and chips round floating point differently; 1e-3 (-60 dBFS) is far below
         # anything audible here, and the report shows the actual numbers.
         set -o pipefail
-        python3 plugin/tests/regression/compare_renders.py results/results-windows/renders results/results-mac-arm64/renders \
+        python3 plugin/tests/regression/compare_renders.py results/results-windows/ci/renders results/results-mac-arm64/ci/renders \
           --tolerance 1e-3 --report compare-windows-vs-mac-arm64.txt | tee -a "$GITHUB_STEP_SUMMARY"
-        python3 plugin/tests/regression/compare_renders.py results/results-windows/renders results/results-mac-x86_64/renders \
+        python3 plugin/tests/regression/compare_renders.py results/results-windows/ci/renders results/results-mac-x86_64/ci/renders \
           --tolerance 1e-3 --report compare-windows-vs-mac-x86_64.txt | tee -a "$GITHUB_STEP_SUMMARY"
 
     - name: Upload the comparison
       if: always()
       uses: actions/upload-artifact@v4
       with:
+        retention-days: 7
         name: render-comparison
         path: compare-*.txt
 
@@ -318,3 +334,25 @@ jobs:
     - name: No Wonderlab access
       if: env.PAT == ''
       run: echo "CE_GITHUB_PAT is not available to this run; the web build check was skipped."
+
+    - name: Check web build through the shared script
+      if: env.PAT != ''
+      run: bash tests/web/test-web.sh --profile ci --results-dir tests/results/ci
+
+    - name: Print test summary
+      if: always()
+      shell: bash
+      run: |
+        if [ -f tests/results/ci/summary.md ]; then
+          cat tests/results/ci/summary.md | tee -a "$GITHUB_STEP_SUMMARY"
+        else
+          echo "Tests did not produce a summary; see the failed build/test step." | tee -a "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Upload web test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        retention-days: 7
+        name: web-test-results
+        path: tests/results/

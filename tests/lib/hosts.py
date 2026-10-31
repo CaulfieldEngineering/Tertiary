@@ -41,6 +41,9 @@ def py_module(r, module):
 
 
 def standalone(r, args):
+    if PLATFORM == 'win' and not r.cfg.get('wTEST_SMOKE_TOGGLE'):
+        planned(r, 'standalone-controls', 'Configure product UI controls for the standalone smoke test')
+        return
     app = r.built('Standalone')
     if not app:
         return
@@ -247,96 +250,6 @@ def lfo(r):
             r.command(path.stem, [sys.executable, path, review, r.work / path.stem], timeout=180)
 
 
-def suite(r, args):
-    vst = r.built('VST3')
-    if not vst:
-        return
-    r.select(vst)
-    r.data['host'] = dict(name='native test suite', version=r.cfg['wPROJECT_VERSION'])
-    if PLATFORM == 'win':
-        inner = ROOT / 'plugin/tests/run_all.ps1'
-        code, _ = r.command('native-suite', ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', inner,
-                            '-SkipBuild', '-SkipStandalone', '-BuildDir', r.build_dir,
-                            '-ResultsDir', r.work / 'native', '-TimeoutSeconds', '1200'], timeout=3300, record=False)
-        rows_path = r.work / 'native/checks.json'
-        if not rows_path.exists():
-            r.check('native-suite', 'FAIL', f'wrapper exited {code} without checks.json')
-        else:
-            for row in json.loads(rows_path.read_text(encoding='utf-8-sig')):
-                r.check(row['Check'], row['Result'], row['Detail'])
-            if code and not any(c['status'] == 'FAIL' for c in r.data['checks']):
-                r.check('native-suite', 'FAIL', 'child returned ' + str(code))
-    else:
-        native_mac_suite(r)
-    lfo(r)
-
-
-def validator(r):
-    candidates = [os.environ.get('WLA_PLUGINVAL'),
-                  r.build_dir / 'pluginval/pluginval.app/Contents/MacOS/pluginval',
-                  '/Applications/pluginval.app/Contents/MacOS/pluginval']
-    return next((Path(p) for p in candidates if p and Path(p).exists()), None)
-
-
-def native_mac_suite(r):
-    vst = r.built('VST3')
-    au = r.built('AU', False)
-    pv = validator(r)
-    ht, unit, ui, render = [r.built(x, False) for x in ('HostTest', r.product + 'Tests', 'UiTest', 'ReviewRender')]
-    with contextlib.ExitStack() as stack:
-        if au:
-            component = stack.enter_context(staged(r, au, Path.home() / 'Library/Audio/Plug-Ins/Components' / au.name, au_reset))
-            r.command('auval', ['auval', '-strict', '-v', r.cfg.get('wTEST_AU_TYPE', 'aufx'),
-                      r.cfg['wPLUGIN_CODE'], r.cfg['wPLUGIN_MANUFACTURER_CODE']], timeout=180,
-                      required_text=('AU VALIDATION SUCCEEDED',))
-        else:
-            r.check('auval', 'SKIP', 'AU build not present')
-        # Mac-day validator phases, including affirmative proof that all three editor checks ran.
-        for fmt, path in [('vst3', vst), ('au', au)]:
-            if not path:
-                continue
-            if pv:
-                for gui in (False, True):
-                    command = [pv, '--strictness-level', '10', '--validate-in-process', '--timeout-ms', '600000', '--validate', path]
-                    markers = ['SUCCESS']
-                    if gui:
-                        markers += ['Completed tests in pluginval / Editor\n',
-                                    'Completed tests in pluginval / Open editor whilst processing\n',
-                                    'Completed tests in pluginval / Editor Automation\n']
-                    else:
-                        command += ['--skip-gui-tests']
-                    r.command('pluginval-' + fmt + ('-gui' if gui else ''), command, timeout=660, required_text=markers)
-            else:
-                r.check('pluginval-' + fmt, 'SKIP', 'pluginval not installed; set WLA_PLUGINVAL or copy into build folder')
-            if ht:
-                r.command('hosttest-' + fmt, [ht, *(['--vst3', vst] if fmt == 'vst3' else ['--au'])], timeout=360)
-            else:
-                r.check('hosttest-' + fmt, 'SKIP', 'HostTest build missing')
-        if unit:
-            r.command('unit', [unit], timeout=300)
-        else:
-            r.check('unit', 'SKIP', 'unit-test build missing')
-        if ui:
-            r.command('ui-robot', ['bash', ROOT / 'plugin/tests/ci/ui_tests.sh', ui, r.work, 'mac'], timeout=1240,
-                      required_text=('ALL UI TESTS PASSED',))
-        else:
-            r.check('ui-robot', 'SKIP', 'UiTest build missing')
-        if render:
-            r.command('renders', [sys.executable, ROOT / 'plugin/tests/regression/render_matrix.py', render,
-                                 ROOT / 'plugin/sample_audio', r.work / 'renders'], timeout=300)
-        else:
-            r.check('renders', 'SKIP', 'ReviewRender build missing')
-    app = r.built('Standalone', False)
-    if app and not running(r.product):
-        env = dict(os.environ, WLA_TEST_APP=str(app), WLA_TEST_OUT=str(r.work),
-                   WLA_TEST_PRODUCT=r.product, WLA_TEST_SETTINGS=r.cfg['wTEST_SETTINGS_MAC'],
-                   WLA_TEST_LAYOUT=r.cfg.get('wTEST_SMOKE_LAYOUT', '750x478'))
-        r.command('screenshots', ['bash', ROOT / 'tests/mac/screenshots.sh'], timeout=240, env=env,
-                  required_text=('PASS screens:',))
-    else:
-        r.check('screenshots', 'SKIP', 'standalone build missing or already running')
-
-
 def isolation(r, args):
     ht, vst = r.built('HostTest', False), r.built('VST3', False)
     source = ROOT / 'plugin/tests/HostTest.cpp'
@@ -376,7 +289,7 @@ def asan(r, args):
 def logic(r, args):
     project = local_path(r.cfg.get('wTEST_LOGIC_PROJECT', 'tests/mac/logic/' + r.product + ' harness.logicx'))
     if not project.exists():
-        planned(r, 'logic-harness', 'no Logic harness project yet; AU validation is covered by test-suite.sh')
+        planned(r, 'logic-harness', 'no Logic harness project yet; AU validation is covered by test-auval.sh')
         return
     if args.no_logic or os.environ.get('WLA_NO_LOGIC') == '1':
         r.check('logic-harness', 'SKIP', 'Logic opening disabled for this run')
@@ -429,7 +342,14 @@ def logic(r, args):
 def web(r, args):
     suite_path = ROOT / 'plugin/tests/web'
     if not suite_path.exists():
-        r.check('web', 'SKIP', 'web suite not present')
+        web_build = local_path(os.environ.get('WEB_BUILD_DIR', 'build/web'))
+        outputs = [web_build / (r.product + 'Web' + ext) for ext in ('.js', '.wasm')]
+        if all(p.is_file() and p.stat().st_size for p in outputs):
+            r.data['build'] = identity(outputs[-1])
+            r.check('web-build', 'PASS', 'Compiled JS and WASM are present in ' + str(web_build))
+            planned(r, 'browser-suite', 'Browser assertions are on the separate web-tests branch; this checkout previously checked compilation only')
+        else:
+            r.check('web-build', 'SKIP', 'repo web build missing; build the Wonderlab demo first')
         return
     package = suite_path / 'package.json'
     if not package.exists():
@@ -458,7 +378,8 @@ def web(r, args):
                PLAYWRIGHT_JSON_OUTPUT_NAME=str(r.work / 'playwright.json'), WEB_BUILD_DIR=str(web_build))
     report_path = suite_path / 'out/report.json'
     started = time.time()
-    code, _ = r.command('web', [npm, 'test', '--', '--no-ai'], timeout=1200, cwd=suite_path, env=env, record=False)
+    r.command('web-harness', [npm, 'run', 'test:harness'], timeout=300, cwd=suite_path, env=env)
+    code, _ = r.command('web', [npm, 'test', '--', '--no-ai', *([] if args.engine == 'all' else ['--engine=' + args.engine])], timeout=1200, cwd=suite_path, env=env, record=False)
     if not report_path.exists() or report_path.stat().st_mtime < started - 1:
         r.check('web', 'FAIL', f'exit {code}; suite produced no fresh out/report.json')
         return
@@ -482,7 +403,7 @@ def web(r, args):
         if 'webkit.launch(' in runner_source and any(c['id'].startswith('M-01-iphone-')
                 and 'AppleWebKit' in str(c.get('data', {}).get('ua', '')) for c in data.get('rows', [])):
             browsers.append('webkit')
-    for browser in ('chromium', 'firefox', 'webkit'):
+    for browser in (('chromium', 'firefox', 'webkit') if args.engine == 'all' else (args.engine,)):
         if browser not in browsers:
             planned(r, browser, 'Add ' + browser + ' execution and its completion record to plugin/tests/web')
 
@@ -498,9 +419,9 @@ def performance(r, args):
     r.select(vst)
     r.data['host'] = dict(name='PerfTest', version=identity(exe)['id'])
     for mode, options in [('dsp', []), ('live', ['--seconds', '120']), ('instances', ['--count', '30', '--seconds', '60'])]:
-        r.command('performance-' + mode, [exe, '--vst3', vst, mode, *options, '--out', r.work / (mode + '.json')], timeout=430)
+        r.command('T2-03' if mode == 'instances' else 'performance-' + mode, [exe, '--vst3', vst, mode, *options, '--out', r.work / (mode + '.json')], timeout=430)
     r.check('performance-budget', 'PLANNED', 'Review the measured CPU/memory numbers against agreed release limits; exit zero alone is not a performance-budget pass')
 
 
-HANDLERS = dict(suite=suite, standalone=standalone, reaper=reaper, cubase=cubase, isolation=isolation,
+HANDLERS = dict(standalone=standalone, reaper=reaper, cubase=cubase, isolation=isolation,
                 asan=asan, logic=logic, web=web, performance=performance)

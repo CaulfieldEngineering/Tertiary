@@ -344,32 +344,52 @@ jobs:
     # the plug-in this job is about to sign and ship; a failure stops the build before anything is signed.
     # The full suite (renders, auval, the Intel Mac, the host test) is test.yml, run on the work branches.
     # ==========================================================================================
-    - name: Run Tests (unit tests and pluginval on this build)
+    # [Codex 2026-10-30] Same test entry points as local/work-branch CI; signing/deploy steps follow unchanged.
+    - name: Prepare test tools
       shell: bash
       env:
         PLUGINVAL_TAG: v1.0.4
-        STRICTNESS: 10
       run: |
-        set -o pipefail
-        A="build/plugin"
-        if [ "$RUNNER_OS" = "Windows" ]; then
-          T=$(cygpath -m "$RUNNER_TEMP"); EXE=".exe"; PV_ZIP="pluginval_Windows.zip"; PV="$T/pv/pluginval.exe"
+        if [ "$RUNNER_OS" = Windows ]; then
+          T=$(cygpath -m "$RUNNER_TEMP"); PV_ZIP=pluginval_Windows.zip; PV="$T/pv/pluginval.exe"
+          python -m pip install --quiet pywinauto pillow
         else
-          T="$RUNNER_TEMP"; EXE=""; PV_ZIP="pluginval_macOS.zip"; PV="$T/pv/pluginval.app/Contents/MacOS/pluginval"
+          T="$RUNNER_TEMP"; PV_ZIP=pluginval_macOS.zip; PV="$T/pv/pluginval.app/Contents/MacOS/pluginval"
         fi
         curl -fsSL -o "$T/pv.zip" "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_TAG/$PV_ZIP"
         unzip -q -o "$T/pv.zip" -d "$T/pv"
+        echo "WLA_PLUGINVAL=$PV" >> "$GITHUB_ENV"
+        # ReviewRender was not a release target before. Build the additional test tool separately.
+        cmake -S . -B build -DWLA_REVIEW_RENDER=ON
+        cmake --build build --config Release --target ReviewRender
 
-        echo "Unit tests..."
-        "$A/${wPLUGIN_NAME}Tests_artefacts/Release/${wPLUGIN_NAME}Tests$EXE"
+    - name: Run Windows test scripts
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: pwsh tests/win/Run-All.ps1 -Profile ci -BuildDir build -ResultsDir tests/results/ci -ExpectDemo
 
-        echo "pluginval (strictness $STRICTNESS) on the VST3..."
-        "$PV" --strictness-level "$STRICTNESS" --validate-in-process           --validate "$A/${wPLUGIN_NAME}_artefacts/Release/VST3/${wPLUGIN_NAME}.vst3"
-        echo "✓ Tests passed"
+    - name: Run Mac test scripts
+      if: runner.os == 'macOS'
+      run: bash tests/mac/run-all.sh --profile ci --build-dir build --results-dir tests/results/ci --expect-demo
 
+    - name: Print test summary
+      if: always()
+      shell: bash
+      run: |
+        if [ -f tests/results/ci/summary.md ]; then
+          cat tests/results/ci/summary.md | tee -a "$GITHUB_STEP_SUMMARY"
+        else
+          echo "Tests did not produce a summary; see the failed build/test step." | tee -a "$GITHUB_STEP_SUMMARY"
+        fi
 
-    # Debug; print project variables - All Cases
-    # ==========================================================================================
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.os }}
+        retention-days: 7
+        path: tests/results/
+
     - name: Use Variables
       run: |
         echo "Plugin Name: $wPLUGIN_NAME"
@@ -1139,7 +1159,20 @@ jobs:
 
     # UPLOAD ARTIFACTS - All Cases
     # ==========================================================================================
+    - name: Upload Final Installer Artifact (staging)
+      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      uses: actions/upload-artifact@v4
+      with:
+        retention-days: 7
+        name: ${{ matrix.os }}-installer
+        if-no-files-found: error
+        path: |
+          build/*Installer_*.pkg
+          build/*Installer_*.exe
+          build/*Installer_*.sha256
+
     - name: Upload Final Installer Artifact
+      if: startsWith(github.ref, 'refs/tags/')
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.os }}-installer

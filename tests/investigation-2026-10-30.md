@@ -1,6 +1,8 @@
 # Test-layout follow-up investigation, 2026-10-30
 
-**Stopped before the requested layout/CI migration because the Windows investigation confirms a real first-callback performance defect in the approved RC1b plug-in. Joe must decide whether it blocks 1.1.0.** No plug-in code or performance threshold was changed. The independent REAPER harness investigation is recorded below. No Mac connection, SSH command, or Mac run was made.
+**Follow-up authorized by Joe on 2026-10-30:** the performance fix is being handled separately on `fix-first-block`. Layout/CI migration may proceed; T2-03 remains an unchanged real test and may fail until that fix merges. The investigation below is the original evidence.
+
+**Originally stopped before the requested layout/CI migration because the Windows investigation confirms a real first-callback performance defect in the approved RC1b plug-in. Joe must decide whether it blocks 1.1.0.** No plug-in code or performance threshold was changed. The independent REAPER harness investigation is recorded below. No Mac connection, SSH command, or Mac run was made.
 
 ## 30-instance stress
 

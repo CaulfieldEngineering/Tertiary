@@ -126,18 +126,21 @@ class Contracts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             out = Path(temp)
             (out / 'broken.json').write_text('{"status":"PASS"}')
-            rows = [dict(name=name, scripts={common.PLATFORM: 'fake.ps1'}) for name in ('broken', 'later')]
+            rows = [dict(id=name, name=name, scope='universal', ci_ok=True, suite_ids=['SU-01'], scripts={common.PLATFORM: name + '.ps1'}) for name in ('broken', 'later')]
             calls = []
             def child(command, **kwargs):
+                if any('Run-All-Product' in str(c) or 'run-all-product' in str(c) for c in command):
+                    run.summary(out, [], product=True)
+                    return argparse.Namespace(returncode=0)
                 name = rows[len(calls)]['name']
                 calls.append(name)
                 if name == 'broken':
                     return argparse.Namespace(returncode=1)
-                r = common.Report(name, out)
+                r = common.Report(name, out, row=rows[len(calls)-1])
                 r.check('future', 'PLANNED', 'future')
                 return argparse.Namespace(returncode=r.finish())
             with patch('run.subprocess.run', side_effect=child):
-                code = run.run_all(argparse.Namespace(build_dir=None, no_logic=False), out, rows)
+                code = run.run_all(argparse.Namespace(build_dir=None, no_logic=False, profile='local', expect_demo=False), out, rows)
             self.assertEqual(code, 1)
             self.assertEqual(calls, ['broken', 'later'])
             report = json.loads((out / 'summary.json').read_text())
@@ -145,6 +148,68 @@ class Contracts(unittest.TestCase):
 
     def test_every_manifest_row_has_script(self):
         self.assertGreater(len(run.sequence()), 10)
+
+
+    def test_ci_selects_registry_checkbox_but_never_daws_humans_or_mac_day(self):
+        args = argparse.Namespace(profile='ci')
+        rows = run.sequence()
+        selected = [r for r in rows if not run.excluded(r, args)]
+        self.assertTrue(selected)
+        self.assertTrue(all(r['ci_ok'] for r in selected))
+        self.assertFalse(any(r.get('daw') or r.get('human') or r.get('mac_day_only') for r in selected))
+        self.assertNotIn('T2-03', [r['id'] for r in selected])
+        self.assertNotIn('WEB-01', [r['id'] for r in selected])  # separate web job
+        web = next(r for r in rows if r['id'] == 'WEB-01')
+        self.assertIsNone(run.excluded(web, args, native=False))
+
+    def test_product_discovery_runs_unregistered_files_and_fails_visibly(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / 'tests' / common.PLATFORM / 'product'
+            folder.mkdir(parents=True)
+            script = folder / ('Test-New.ps1' if common.PLATFORM == 'win' else 'test-new.sh')
+            script.write_text('# new product test')
+            out = root / 'results'
+            out.mkdir()
+            args = argparse.Namespace(build_dir=None, no_logic=False, profile='local', expect_demo=False)
+            with patch('run.ROOT', root), patch('run.subprocess.run', return_value=argparse.Namespace(returncode=0)) as proc:
+                rows = run.product_rows([])
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(run.run_product(args, out, []), 1)
+                proc.assert_called_once()
+                result = json.loads((out / 'product-summary.json').read_text())
+                self.assertEqual(result['results'][0]['status'], 'FAIL')
+                self.assertIn('no Blocks ID', result['results'][0]['checks'][0]['detail'])
+
+    def test_result_cannot_claim_another_registry_id(self):
+        with tempfile.TemporaryDirectory() as temp:
+            r = common.Report('W-01', Path(temp))
+            r.check('unit', 'PASS', 'ran')
+            r.finish()
+            r.data['checks'][0]['test_id'] = 'W-02'
+            with self.assertRaisesRegex(ValueError, 'mismatched Blocks'):
+                run.validate_result(r.data, {'id':'W-01', 'suite_ids':[]}, 0)
+
+    def test_no_product_tests_is_explicit(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out = root / 'results'
+            out.mkdir()
+            args = argparse.Namespace(profile='local')
+            with patch('run.ROOT', root):
+                self.assertEqual(run.run_product(args, out, []), 0)
+            result = json.loads((out / 'product-summary.json').read_text())
+            self.assertEqual(result['coverage'], 'no product tests yet')
+            self.assertEqual(result['results'], [])
+
+    def test_all_registry_ids_and_suite_membership_are_preserved(self):
+        rows = run.sequence()
+        expected = {f'W-{n:02}' for n in range(1,16)} | {f'M-{n:02}' for n in range(1,10)}
+        expected |= {f'WEB-{n:02}' for n in range(1,5)} | {'H-01','H-02','GH-01','S-01','S-02','S-03','P-01','T2-03'}
+        self.assertEqual({r['id'] for r in rows}, expected)
+        self.assertEqual({r['id'] for r in rows if r['ci_ok']},
+            {f'W-{n:02}' for n in (*range(1,8),14,15)} | {f'M-{n:02}' for n in range(1,8)} | {'WEB-01'})
+        self.assertTrue(all('SU-06' in r['suite_ids'] for r in rows if r['ci_ok']))
 
 
 if __name__ == '__main__':
