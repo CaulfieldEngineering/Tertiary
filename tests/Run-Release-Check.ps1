@@ -39,6 +39,9 @@ if (-not (Get-NetTCPConnection -LocalPort 4120 -State Listen -ErrorAction Silent
     Start-Process -WindowStyle Hidden -FilePath $Python -ArgumentList @('tests/dashboard/server.py', '--port', '4120')
     Say 'Started the dashboard: http://127.0.0.1:4120/'
 } else { Say 'Dashboard already running on port 4120' }
+# [Claude 2026-10-31] Open it on the whole plan (every test, in run order, filling in as it runs).
+for ($i = 0; $i -lt 20 -and -not (Get-NetTCPConnection -LocalPort 4120 -State Listen -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 500 }
+Start-Process 'http://127.0.0.1:4120/?plan=all'
 
 # 2. Same commit on the Mac, then both machines at once -----------------------------------------------
 $mac = $null

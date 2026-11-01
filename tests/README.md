@@ -322,6 +322,15 @@ in the background on this machine's tailnet address, port 4120, and open it; `Da
 `-BindHost`/`--host` takes this machine's tailnet address instead (100.64.0.0/10 only; never public).
 `Run-All -Dashboard` / `run-all.sh --dashboard` and the release check start it too.
 
+The picker at the top (Joe, 2026-10-31) chooses what the page shows: Run all (every machine, or Windows or Mac alone),
+one of the Test Suites (SU-01 to SU-06), or a single test. It lists every test that will run, in run order (this
+platform's product tests first, then the rest in `sequence.json` order, as `run.py` runs them), before anything starts,
+and fills in as it runs: an icon per row (hollow circle not started, spinner running, check passed, cross failed, muted
+for skipped and planned), passed / failed / skipped / planned counts, Started, Stopped and Duration, and the run's start,
+end and elapsed time at the top. When nothing is running it says "Idle, last run ended ...". A row expands while running
+and after: its checks, log tails, screenshots and numbers. `?plan=all`, `all:win`, `SU-03` or `test:W-09` in the address
+picks the view; `Run-Release-Check.ps1` opens it on `?plan=all`. The saved report page has the same layout.
+
 It reads only what runs write: each machine's newest `tests/results/<run>/progress.jsonl` and `<ID>.json`
 (the Mac over SSH, from `wTEST_DASHBOARD_MAC` / `wTEST_DASHBOARD_MAC_REPO` in config.cmake), and the GitHub
 Actions jobs for that commit (token from `git credential`, kept in the server, never sent to the page). One row

@@ -5,49 +5,68 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Test run</title>
 <!-- [Claude 2026-10-31] Live test dashboard (tests/dashboard/server.py). House style: HQ agent/app-design.md.
-     Served live it polls /api/state; saved by --export it carries window.SNAPSHOT and needs nothing else. -->
+     Served live it polls /api/state; saved by --export it carries window.SNAPSHOT and needs nothing else.
+     2026-10-31 (Joe): a suite/test picker that shows the whole plan in run order before anything starts, status icons,
+     rows that expand while running and after, Started / Stopped / Duration per test, the run's start, end and elapsed
+     time, "Idle, last run ..." when nothing is running, and labelled counts. -->
 <style>
 :root {
-  color-scheme: dark light;
+  color-scheme: light dark;
   --bg: light-dark(#ffffff, #1c1c1b); --side: light-dark(#f7f7f5, #161615); --raised: light-dark(#ffffff, #262625);
   --text: light-dark(#1c1b19, #e4e3df); --muted: light-dark(#6a6964, #a3a29c); --faint: light-dark(#a09f99, #6b6a65);
   --line: light-dark(#ebeae6, #2b2b29); --line-strong: light-dark(#dcdbd6, #3b3b38);
   --hover: light-dark(rgba(55,53,47,.055), rgba(255,255,250,.055)); --active: light-dark(rgba(55,53,47,.09), rgba(255,255,250,.09));
   --accent: #6FB7A0; --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
   --warn: #D9A441; --danger: light-dark(#c4402b, #e8796b);
+  --shadow-pop: 0 0 0 1px light-dark(rgba(28,27,25,.08), rgba(255,255,250,.1)), 0 6px 20px -4px light-dark(rgba(28,27,25,.16), rgba(0,0,0,.6));
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', Inter, Roboto, sans-serif;
   --mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
   --fs-micro: 11px; --fs-small: 12px; --fs-ui: 13px; --fs-head: 15px;
-  --sp-2: 4px; --sp-3: 6px; --sp-4: 8px; --sp-5: 12px; --sp-6: 16px; --sp-7: 24px;
+  --sp-1: 2px; --sp-2: 4px; --sp-3: 6px; --sp-4: 8px; --sp-5: 12px; --sp-6: 16px; --sp-7: 24px;
   --r-sm: 4px; --r-md: 6px; --row-h: 28px; --ease: .12s ease;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: var(--fs-ui)/1.45 var(--font); }
 main { max-width: 1180px; margin: 0 auto; padding: var(--sp-7) var(--sp-6); }
 h1 { font-size: var(--fs-head); font-weight: 600; margin: 0; }
-.top { display: flex; align-items: baseline; gap: var(--sp-5); flex-wrap: wrap; }
+.top { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; }
+.top .grow { flex: 1; }
 .sub { color: var(--muted); font-size: var(--fs-small); }
-.bar { height: 4px; background: var(--line); border-radius: 2px; margin: var(--sp-5) 0 var(--sp-2); overflow: hidden; display: flex; }
+.num, .t { font-variant-numeric: tabular-nums; }
+select { font: inherit; font-size: var(--fs-small); color: var(--text); background: var(--active); border: 0; border-radius: var(--r-sm);
+         height: var(--row-h); padding: 0 var(--sp-4); max-width: 100%; cursor: pointer; }
+select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.times { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-6); margin-top: var(--sp-4); }
+.times b { font-weight: 500; color: var(--text); }
+.bar { height: 4px; background: var(--line); border-radius: 2px; margin: var(--sp-5) 0 var(--sp-3); overflow: hidden; display: flex; }
 .bar i { display: block; height: 100%; }
-.label { font-size: var(--fs-micro); font-variant: all-small-caps; letter-spacing: .04em; color: var(--muted); margin: var(--sp-6) 0 var(--sp-4); display: flex; gap: var(--sp-4); }
-.row { display: grid; grid-template-columns: 64px minmax(0, 1fr) 92px 120px 64px; align-items: center; min-height: var(--row-h);
-       padding: 0 var(--sp-4); border-radius: var(--r-sm); cursor: pointer; gap: var(--sp-4); }
+.label { font-size: var(--fs-micro); font-variant: all-small-caps; letter-spacing: .04em; color: var(--muted);
+         margin: var(--sp-6) 0 var(--sp-2); display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); }
+.label .name { color: var(--text); }
+/* columns: icon, id, title, pass, fail, skip, planned, started, stopped, duration, chevron */
+.grid { display: grid; grid-template-columns: 20px 56px minmax(0, 1fr) 40px 40px 40px 52px 64px 64px 64px 16px;
+        align-items: center; gap: var(--sp-4); padding: 0 var(--sp-4); }
+.head { font-size: var(--fs-micro); color: var(--faint); min-height: 22px; }
+.head span:nth-child(n+4) { text-align: right; }
+.row { min-height: var(--row-h); border-radius: var(--r-sm); cursor: pointer; }
 .row:hover { background: var(--hover); }
 .row.open { background: var(--active); }
-.id, .num { font-variant-numeric: tabular-nums; color: var(--muted); }
-.num { text-align: right; }
-.title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.st { font-size: var(--fs-small); display: flex; align-items: center; gap: var(--sp-3); }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
-.PASS .dot, .success .dot { background: var(--accent); }
-.FAIL .dot, .failure .dot, .cancelled .dot { background: var(--danger); }
-.SKIP .dot, .skipped .dot { background: var(--warn); }
-.PLANNED .dot { background: var(--line-strong); }
-.RUNNING .dot, .in_progress .dot, .queued .dot { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: .25; } }
-.FAIL .st, .failure .st { color: var(--danger); }
-.detail { padding: var(--sp-4) var(--sp-4) var(--sp-6) 72px; border-bottom: 1px solid var(--line); }
-.check { display: grid; grid-template-columns: 70px 220px minmax(0, 1fr); gap: var(--sp-4); font-size: var(--fs-small); padding: 2px 0; }
+.row > span:nth-child(n+4):not(:last-child) { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: var(--fs-small); }
+.row .id { color: var(--muted); font-variant-numeric: tabular-nums; }
+.row .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row.PENDING .title, .row.PENDING .id { color: var(--muted); }
+.row .fail-n { color: var(--danger) !important; }
+.chev { color: var(--faint); transition: transform var(--ease); display: flex; }
+.row.open .chev { transform: rotate(90deg); }
+.ic { width: 16px; height: 16px; display: block; }
+.ic.PASS { color: var(--accent); } .ic.FAIL { color: var(--danger); } .ic.SKIP, .ic.PLANNED, .ic.PENDING { color: var(--faint); }
+.ic.RUNNING { color: var(--accent); animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.detail { padding: var(--sp-4) var(--sp-4) var(--sp-6) 92px; border-bottom: 1px solid var(--line); }
+.facts { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-6); font-size: var(--fs-small); color: var(--muted); margin-bottom: var(--sp-4); }
+.facts b { color: var(--text); font-weight: 500; }
+.check { display: grid; grid-template-columns: 16px 220px minmax(0, 1fr); gap: var(--sp-4); font-size: var(--fs-small); padding: 2px 0; align-items: start; }
+.check .ic { width: 14px; height: 14px; margin-top: 2px; }
 .check .d { color: var(--muted); overflow-wrap: anywhere; }
 .check.FAIL .d { color: var(--danger); }
 .shots { display: flex; flex-wrap: wrap; gap: var(--sp-4); margin-top: var(--sp-5); }
@@ -55,20 +74,29 @@ h1 { font-size: var(--fs-head); font-weight: 600; margin: 0; }
 pre { font: var(--fs-micro)/1.5 var(--mono); background: var(--side); border-radius: var(--r-md); padding: var(--sp-4) var(--sp-5);
       max-height: 240px; overflow: auto; white-space: pre-wrap; color: var(--muted); margin: var(--sp-3) 0 0; }
 details summary { cursor: pointer; color: var(--muted); font-size: var(--fs-small); margin-top: var(--sp-4); }
-.empty { color: var(--muted); padding: var(--sp-4); }
+.empty { color: var(--muted); padding: var(--sp-3) var(--sp-4); }
 .err { color: var(--danger); font-size: var(--fs-small); }
 a { color: inherit; }
 #zoom { position: fixed; inset: 0; background: rgba(0,0,0,.82); display: none; align-items: center; justify-content: center; cursor: zoom-out; z-index: 2; }
 #zoom img { max-width: 96vw; max-height: 92vh; border-radius: var(--r-md); }
 #zoom div { position: absolute; bottom: var(--sp-5); color: #ccc; font-size: var(--fs-small); }
-@media (max-width: 700px) { .row { grid-template-columns: 52px minmax(0,1fr) 80px; } .row .num { display: none; }
-  .detail { padding-left: var(--sp-4); } .check { grid-template-columns: 60px minmax(0,1fr); } .check .d { grid-column: 1 / -1; } }
+@media (max-width: 760px) {
+  main { padding: var(--sp-6) var(--sp-6); }
+  .grid { grid-template-columns: 18px 48px minmax(0, 1fr) 56px 14px; gap: var(--sp-3); }
+  .grid > :nth-child(n+4):nth-child(-n+9) { display: none; }
+  .head { display: none; }
+  .detail { padding-left: var(--sp-4); }
+  .check { grid-template-columns: 16px minmax(0, 1fr); row-gap: 0; } .check .d { grid-column: 2; }
+  .top select { width: 100%; }
+}
 </style>
 <script id="snapshot"></script>
 </head>
 <body>
 <main>
-  <div class="top"><h1 id="head">Test run</h1><span class="sub" id="when"></span><span class="sub" id="clock"></span></div>
+  <div class="top"><h1 id="head">Test run</h1><span class="sub" id="when"></span><span class="grow"></span>
+    <select id="plan" aria-label="What to show"></select></div>
+  <div class="times sub" id="times"></div>
   <div class="bar" id="bar"></div>
   <div class="sub" id="summary">Loading.</div>
   <div id="groups"></div>
@@ -79,140 +107,216 @@ const SNAP = window.SNAPSHOT || null;
 const open = new Set();
 const cache = {};
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const secs = s => s == null ? '' : s < 90 ? s.toFixed(0) + ' s' : (s / 60).toFixed(1) + ' min';
 const fileUrl = (m, p) => '/file?machine=' + encodeURIComponent(m) + '&path=' + encodeURIComponent(p);
-// [Claude 2026-10-31] Run times (Joe: "test suite started at xxx and ended at yyy so I can feel for how long they all take").
 const clock = s => { if (s == null || isNaN(s)) return ''; s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
   return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
-const hm = t => { const d = new Date(t); return isNaN(d) ? '' : d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}); };
-const elapsedOf = (t0, t1) => t0 ? ((t1 ? Date.parse(t1) : Date.now()) - Date.parse(t0)) / 1000 : null;
-function runSpan(state) {
-  // The whole run: earliest machine or GitHub start, to the last end (or now, while anything is still going).
-  const starts = [], ends = []; let going = false;
-  for (const m of state.machines) { const r = machineRows(m); if (r.start) { starts.push(r.start.time); r.end ? ends.push(r.end.time) : going = true; } }
-  for (const run of (state.github?.runs || [])) { if (run.started) starts.push(run.started); run.status === 'completed' ? ends.push(run.updated) : going = true; }
-  if (!starts.length) return null;
-  const t0 = starts.reduce((a, b) => Date.parse(a) < Date.parse(b) ? a : b);
-  const t1 = going || !ends.length ? null : ends.reduce((a, b) => Date.parse(a) > Date.parse(b) ? a : b);
-  return {t0, t1};
+const hm = t => { const d = new Date(t); return t && !isNaN(d) ? d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false}) : ''; };
+const day = t => { const d = new Date(t); return t && !isNaN(d) ? d.toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false}) : ''; };
+// A saved page counts to the moment it was saved, never to whenever it is opened.
+const nowMs = () => SNAP ? Date.parse(SNAP.time) : Date.now();
+const elapsedOf = (t0, t1) => t0 ? ((t1 ? Date.parse(t1) : nowMs()) - Date.parse(t0)) / 1000 : null;
+const MACHINE = {win: 'Windows', mac: 'Mac', github: 'GitHub'};
+const SUITES = {'SU-01': ['win', 'Windows, run all'], 'SU-02': ['win', 'Windows, product tests'], 'SU-03': ['mac', 'Mac, run all'],
+  'SU-04': ['mac', 'Mac, product tests'], 'SU-05': ['win', 'Web'], 'SU-06': ['github', 'GitHub CI']};
+const ICON = {
+  PENDING: '<circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  RUNNING: '<path d="M8 2.5a5.5 5.5 0 1 1-5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  PASS: '<path d="M3.5 8.4l3 3 6-6.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  FAIL: '<path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  SKIP: '<circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 8h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  PLANNED: '<circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/>'};
+const WORD = {PENDING: 'Not started', RUNNING: 'Running', PASS: 'Passed', FAIL: 'Failed', SKIP: 'Skipped', PLANNED: 'Planned'};
+const icon = st => '<svg class="ic ' + st + '" viewBox="0 0 16 16" role="img" aria-label="' + (WORD[st] || st) + '"><title>' + (WORD[st] || st) + '</title>' + (ICON[st] || ICON.PENDING) + '</svg>';
+const CHEV = '<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ghStatus = j => j.status !== 'completed' ? (j.status === 'queued' ? 'PENDING' : 'RUNNING') :
+  j.conclusion === 'success' ? 'PASS' : j.conclusion === 'skipped' ? 'SKIP' : 'FAIL';
+
+// ---- Picker: what to show, as a plan in run order (tests/sequence.json, as tests/lib/run.py orders it) ----------
+let plan = (() => { try { return new URLSearchParams(location.search).get('plan') || localStorage.getItem('wla-plan') || 'all'; } catch { return 'all'; } })();
+function planOptions(state) {
+  const seq = state.sequence || [];
+  let o = '<optgroup label="Run all"><option value="all">Run all, every machine</option><option value="all:win">Run all, Windows</option><option value="all:mac">Run all, Mac</option></optgroup>';
+  o += '<optgroup label="Test suites">' + Object.entries(SUITES).map(([k, [, n]]) => '<option value="' + k + '">' + k + ' ' + esc(n) + '</option>').join('') + '</optgroup>';
+  o += '<optgroup label="One test">' + seq.map(r => '<option value="test:' + esc(r.id) + '">' + esc(r.id) + ' ' + esc(r.name) + '</option>').join('') + '</optgroup>';
+  return o;
 }
-function tickClock() {
-  if (!state) return;
-  const sp = runSpan(state), el = document.getElementById('clock');
-  if (!el) return;
-  el.textContent = sp ? 'Started ' + hm(sp.t0) + (sp.t1 ? ' · ended ' + hm(sp.t1) + ' · took ' : ' · elapsed ') + clock(elapsedOf(sp.t0, sp.t1)) : '';
-  document.querySelectorAll('[data-t0]').forEach(x => x.textContent = clock(elapsedOf(x.dataset.t0, x.dataset.t1 || null)));
+function runOrder(state, platform) {
+  // Run-All: this platform's product tests first, then every other row, both in registry order; AU-only rows need AU.
+  const formats = (state.formats || '').split(/\s+/);
+  const rows = (state.sequence || []).filter(r => r.scripts.includes(platform) && (!r.requires_format || formats.includes(r.requires_format)));
+  return [...rows.filter(r => r.scope === 'product'), ...rows.filter(r => r.scope !== 'product')];
+}
+function planned(state) {
+  // [{machine, rows:[{id,name}]}] for the picker's choice
+  const seq = state.sequence || [];
+  if (plan === 'all' || plan.startsWith('all:')) {
+    const ms = plan === 'all' ? ['win', 'mac'] : [plan.slice(4)];
+    return ms.map(m => ({machine: m, rows: runOrder(state, m)}));
+  }
+  if (SUITES[plan]) {
+    const [m] = SUITES[plan];
+    if (m === 'github') return [{machine: 'github', rows: seq.filter(r => r.ci_ok && r.suite_ids.includes(plan))}];
+    const product = plan === 'SU-02' || plan === 'SU-04';
+    return [{machine: m, rows: runOrder(state, m).filter(r => r.suite_ids.includes(plan) && (!product || r.scope === 'product'))}];
+  }
+  if (plan.startsWith('test:')) {
+    const r = seq.find(x => x.id === plan.slice(5));
+    return r ? r.scripts.filter(p => p === 'win' || p === 'mac').map(m => ({machine: m, rows: [r]})) : [];
+  }
+  return [];
 }
 
+// ---- What the runs wrote -------------------------------------------------------------------------------------
 function machineRows(m) {
-  // One row per test ID from progress.jsonl: started = running, finished = its status.
   const rows = new Map(); let start = null, end = null;
   for (const e of m.events) {
     if (e.event === 'run-start') start = e;
     if (e.event === 'run-end') end = e;
-    if (e.event === 'test-start') rows.set(e.id, {id: e.id, title: e.title, status: 'RUNNING', t0: Date.parse(e.time)});
-    if (e.event === 'test-finish') rows.set(e.id, Object.assign(rows.get(e.id) || {id: e.id, title: e.id}, {status: e.status, counts: e.counts, seconds: e.seconds}));
+    if (e.event === 'test-start') rows.set(e.id, {id: e.id, title: e.title, status: 'RUNNING', t0: e.time});
+    if (e.event === 'test-finish') rows.set(e.id, Object.assign(rows.get(e.id) || {id: e.id, title: e.id}, {status: e.status, counts: e.counts, seconds: e.seconds, t1: e.time}));
   }
-  return {start, end, rows: [...rows.values()]};
+  return {start, end, rows};
+}
+function runSpan(state, only) {
+  // only: the machine names in the current plan (the GitHub run always counts)
+  const starts = [], ends = []; let going = false;
+  for (const m of state.machines.filter(x => !only || only.includes(x.name))) { const r = machineRows(m); if (r.start) { starts.push(r.start.time); r.end ? ends.push(r.end.time) : going = true; } }
+  for (const run of (state.github?.runs || [])) { if (run.started) starts.push(run.started); run.status === 'completed' ? ends.push(run.updated) : going = true; }
+  if (!starts.length) return null;
+  const t0 = starts.reduce((a, b) => Date.parse(a) < Date.parse(b) ? a : b);
+  const t1 = ends.length ? ends.reduce((a, b) => Date.parse(a) > Date.parse(b) ? a : b) : null;
+  return {t0, t1: going ? null : t1, last: t1, going};
 }
 
-function groupsOf(state) {
-  const groups = [];
-  for (const m of state.machines) {
-    const r = machineRows(m);
-    const web = r.rows.filter(x => x.id.startsWith('WEB-')), rest = r.rows.filter(x => !x.id.startsWith('WEB-'));
-    groups.push({key: m.name, label: m.name === 'win' ? 'Windows' : m.name === 'mac' ? 'Mac' : m.name, m, r, rows: rest});
-    if (web.length) groups.push({key: m.name + '-web', label: 'Web (on ' + (m.name === 'win' ? 'Windows' : m.name) + ')', m, r, rows: web});
-  }
-  return groups;
+function rowHtml(machine, x) {
+  const key = machine + '/' + x.id, k = x.counts || {}, has = !!x.counts, st = x.status || 'PENDING';
+  const dur = st === 'RUNNING' ? '<span data-t0="' + esc(x.t0) + '"></span>' : x.seconds != null ? clock(x.seconds) : '';
+  const n = v => has ? String(v || 0) : '';
+  return '<div class="grid row ' + st + (open.has(key) ? ' open' : '') + '" data-key="' + esc(key) + '" title="' + esc(WORD[st] || st) + '">' +
+    '<span>' + icon(st) + '</span><span class="id">' + esc(x.id) + '</span><span class="title">' + esc(x.title || x.name || x.id) + '</span>' +
+    '<span>' + n(k.PASS) + '</span><span class="' + (k.FAIL ? 'fail-n' : '') + '">' + n(k.FAIL) + '</span><span>' + n(k.SKIP) + '</span><span>' + n(k.PLANNED) + '</span>' +
+    '<span class="t">' + hm(x.t0) + '</span><span class="t">' + hm(x.t1) + '</span><span class="t">' + dur + '</span><span class="chev">' + CHEV + '</span></div>' +
+    (open.has(key) ? '<div class="detail" id="d-' + esc(key) + '">' + detailHtml(machine, x, cache[key]) + '</div>' : '');
 }
+const HEAD = '<div class="grid head"><span></span><span>ID</span><span>Test</span><span>Passed</span><span>Failed</span><span>Skipped</span><span>Planned</span><span>Started</span><span>Stopped</span><span>Duration</span><span></span></div>';
 
-function counts(rows) {
-  const c = {PASS: 0, FAIL: 0, SKIP: 0, PLANNED: 0, RUNNING: 0};
-  rows.forEach(x => c[x.status] = (c[x.status] || 0) + 1);
-  return c;
-}
-
-async function getDetail(machine, id) {
+async function getDetail(machine, id, status) {
   const key = machine + '/' + id;
-  if (SNAP) return SNAP.details?.[key] || {checks: [], logs: [], images: [], error: 'not saved'};
-  if (!cache[key] || cache[key].status === 'RUNNING') {
+  if (SNAP) return SNAP.details?.[key] || {checks: [], logs: [], images: []};
+  const hit = cache[key];
+  if (hit && hit._status === status && status !== 'RUNNING') return hit;
+  try {
     const r = await fetch('/api/test?machine=' + encodeURIComponent(machine) + '&id=' + encodeURIComponent(id));
-    cache[key] = await r.json();
-  }
+    const d = await r.json(); d._status = status; cache[key] = d;
+  } catch (error) { cache[key] = {error: String(error), _status: status}; }
   return cache[key];
 }
 
-function detailHtml(machine, d) {
-  if (d.error) return '<div class="err">' + esc(d.error) + '</div>';
+function detailHtml(machine, x, d) {
+  const st = x.status || 'PENDING', k = x.counts || {};
+  let h = '<div class="facts"><span><b>' + esc(WORD[st] || st) + '</b></span>' +
+    (x.counts ? '<span>' + (k.PASS || 0) + ' passed · ' + (k.FAIL || 0) + ' failed · ' + (k.SKIP || 0) + ' skipped · ' + (k.PLANNED || 0) + ' planned</span>' : '') +
+    (x.t0 ? '<span>Started ' + hm(x.t0) + '</span>' : '') + (x.t1 ? '<span>Stopped ' + hm(x.t1) + '</span>' : '') +
+    (x.seconds != null ? '<span>Took ' + clock(x.seconds) + '</span>' : '') +
+    (d?.build?.id ? '<span>Build ' + esc(d.build.id) + '</span>' : '') + (d?.host?.name ? '<span>' + esc(d.host.name) + ' ' + esc(d.host.version || '') + '</span>' : '') + '</div>';
+  if (st === 'PENDING') return h + '<div class="sub">Not started yet.</div>';
+  if (!d) return h + '<div class="sub">Loading.</div>';
+  if (d.error) return h + '<div class="sub">' + (st === 'RUNNING' ? 'Running; its checks, logs and screenshots appear when it finishes.' : esc(d.error)) + '</div>';
   const checks = (d.checks || []).slice().sort((a, b) => (b.status === 'FAIL') - (a.status === 'FAIL'))
-    .map(c => '<div class="check ' + c.status + '"><span class="st"><span class="dot"></span>' + c.status + '</span><span>' + esc(c.id) + '</span><span class="d">' + esc(c.detail) + '</span></div>').join('');
+    .map(c => '<div class="check ' + c.status + '">' + icon(c.status) + '<span>' + esc(c.id) + '</span><span class="d">' + esc(c.detail) + '</span></div>').join('');
   const shots = (d.images || []).map(i => {
     const src = typeof i === 'string' ? fileUrl(machine, i) : i.src, path = typeof i === 'string' ? i : i.path;
-    return '<img loading="lazy" src="' + esc(src) + '" title="' + esc(path) + '" data-path="' + esc(path) + '">';
+    return '<img loading="lazy" src="' + esc(src) + '" title="' + esc(path) + '" data-path="' + esc(path) + '" alt="' + esc(path) + '">';
   }).join('');
   const logs = (d.logs || []).map(l => '<details><summary>' + esc(l.path) + '</summary><pre>' + esc(l.tail) + '</pre></details>').join('');
-  const build = d.build?.id ? '<div class="sub">Build ' + esc(d.build.id) + (d.host?.name ? ' · ' + esc(d.host.name) + ' ' + esc(d.host.version || '') : '') + '</div>' : '';
-  return build + checks + (shots ? '<div class="shots">' + shots + '</div>' : '') + logs;
+  return h + checks + (shots ? '<div class="shots">' + shots + '</div>' : '') + logs;
 }
 
-async function render(state) {
-  const groups = groupsOf(state);
-  const all = groups.flatMap(g => g.rows), c = counts(all);
+function render(state) {
+  const sel = document.getElementById('plan');
+  if (!sel.options.length) { sel.innerHTML = planOptions(state); }
+  if (![...sel.options].some(o => o.value === plan)) plan = 'all';
+  sel.value = plan;
+  const byName = Object.fromEntries(state.machines.map(m => [m.name, m]));
   const gh = state.github || {}, jobs = (gh.runs || []).flatMap(r => r.jobs.map(j => ({...j, run: r})));
-  const ended = state.machines.every(m => machineRows(m).end);
-  const ghDone = jobs.length && jobs.every(j => j.status === 'completed');
-  const ghFail = jobs.filter(j => j.status === 'completed' && !['success', 'skipped'].includes(j.conclusion)).length;
-  document.getElementById('head').textContent = (state.product || 'Test') + ' test run' + (state.commit ? ' · ' + state.commit.slice(0, 7) : '');
-  document.getElementById('when').textContent = (SNAP ? 'Saved ' : 'Live · ') + state.time.replace('T', ' ').slice(0, 16);
-  const total = all.length + jobs.length;
-  const part = (n, color) => n ? '<i style="width:' + (100 * n / Math.max(total, 1)) + '%;background:' + color + '"></i>' : '';
-  const jobPass = jobs.filter(j => j.conclusion === 'success').length;
-  document.getElementById('bar').innerHTML = part(c.PASS + jobPass, 'var(--accent)') + part(c.FAIL + ghFail, 'var(--danger)') +
+  const groups = [];
+  for (const p of planned(state)) {
+    const m = byName[p.machine], r = m ? machineRows(m) : {rows: new Map(), start: null, end: null};
+    const rows = p.rows.map(row => Object.assign({id: row.id, title: row.name}, r.rows.get(row.id) || {status: 'PENDING'}));
+    const known = new Set(p.rows.map(x => x.id));
+    if (plan === 'all' || plan.startsWith('all:')) for (const [id, x] of r.rows) if (!known.has(id)) rows.push(x);  // anything the plan did not list
+    if (p.machine === 'github') { groups.push({key: 'github-plan', label: 'GitHub CI (SU-06), checked on every push', m: null, r: {}, rows}); continue; }
+    const web = rows.filter(x => x.id.startsWith('WEB-')), rest = rows.filter(x => !x.id.startsWith('WEB-'));
+    if (rest.length) groups.push({key: p.machine, label: MACHINE[p.machine] || p.machine, m, r, rows: rest});
+    if (web.length) groups.push({key: p.machine + '-web', label: 'Web (on ' + (MACHINE[p.machine] || p.machine) + ')', m, r, rows: web});
+  }
+  const all = groups.flatMap(g => g.rows);
+  const c = {PASS: 0, FAIL: 0, SKIP: 0, PLANNED: 0, RUNNING: 0, PENDING: 0};
+  all.forEach(x => c[x.status] = (c[x.status] || 0) + 1);
+  const ghPass = jobs.filter(j => ghStatus(j) === 'PASS').length, ghFail = jobs.filter(j => ghStatus(j) === 'FAIL').length;
+  const sp = runSpan(state, planned(state).map(p => p.machine));
+  document.getElementById('head').textContent = (state.product || 'Test') + ' tests' + (state.commit ? ' · ' + state.commit.slice(0, 7) : '');
+  document.getElementById('when').textContent = SNAP ? 'Saved ' + day(state.time) : 'Live';
+  const total = Math.max(all.length + jobs.length, 1);
+  const part = (n, color) => n ? '<i style="width:' + (100 * n / total) + '%;background:' + color + '"></i>' : '';
+  document.getElementById('bar').innerHTML = part(c.PASS + ghPass, 'var(--accent)') + part(c.FAIL + ghFail, 'var(--danger)') +
     part(c.SKIP, 'var(--warn)') + part(c.PLANNED, 'var(--line-strong)');
-  const verdict = c.RUNNING || !ended || !ghDone ? 'Running.' : c.FAIL || ghFail ? 'Failed.' : 'Passed.';
-  document.getElementById('summary').innerHTML = esc(verdict) + ' ' + c.PASS + ' passed, ' + c.FAIL + ' failed, ' + c.SKIP + ' skipped, ' +
-    c.PLANNED + ' planned' + (c.RUNNING ? ', ' + c.RUNNING + ' running' : '') + ' · GitHub ' + jobPass + ' of ' + jobs.length + ' jobs passed' +
-    (state.commits?.length > 1 ? ' · <span class="err">machines are on different commits: ' + state.commits.map(x => x.slice(0, 7)).join(', ') + '</span>' : '');
+  const done = c.PASS + c.FAIL + c.SKIP + c.PLANNED;
+  const localStarted = groups.some(g => g.r && g.r.start);
+  const verdict = sp?.going ? 'Running, ' + done + ' of ' + all.length + ' tests done.'
+    : !localStarted ? 'Idle. Not run yet; this is the plan, in run order.'
+    : (c.FAIL || ghFail ? 'Failed.' : c.PENDING ? 'Stopped before every test ran.' : 'Passed.') + ' Idle, last run ended ' + day(sp.last) + '.';
+  document.getElementById('summary').innerHTML = esc(verdict) + ' Tests: ' + c.PASS + ' passed, ' + c.FAIL + ' failed, ' + c.SKIP + ' skipped, ' +
+    c.PLANNED + ' planned' + (c.RUNNING ? ', ' + c.RUNNING + ' running' : '') + (c.PENDING ? ', ' + c.PENDING + ' not started' : '') +
+    '. GitHub: ' + ghPass + ' of ' + jobs.length + ' jobs passed' + (ghFail ? ', ' + ghFail + ' failed' : '') + '.' +
+    (state.commits?.length > 1 ? ' <span class="err">The machines are on different commits: ' + state.commits.map(x => x.slice(0, 7)).join(', ') + '.</span>' : '');
   let out = '';
   for (const g of groups) {
-    const gc = counts(g.rows), s = g.r.start;
-    out += '<div class="label"><span>' + esc(g.label) + '</span><span>' + (s ? esc(s.machine) + ' · ' + esc((s.build || '').split(';')[0]) : '') +
-      '</span><span>' + gc.PASS + ' of ' + g.rows.length + ' passed' + '</span>' +
-      (s ? '<span>started ' + esc(hm(s.time)) + (g.r.end ? ' · ended ' + esc(hm(g.r.end.time)) + ' · took ' : ' · elapsed ') +
-        '<span data-t0="' + esc(s.time) + '" data-t1="' + esc(g.r.end ? g.r.end.time : '') + '"></span></span>' : '') +
-      (g.m.error ? '<span class="err">' + esc(g.m.error) + '</span>' : '') + '</div>';
-    if (!g.rows.length) out += '<div class="empty">' + (g.m.run ? 'Waiting for the first test.' : 'No run found on this machine yet.') + '</div>';
-    for (const x of g.rows) {
-      const key = g.m.name + '/' + x.id, k = x.counts || {};
-      const dur = x.status === 'RUNNING' ? secs((Date.now() - x.t0) / 1000) : secs(x.seconds);
-      out += '<div class="row ' + x.status + (open.has(key) ? ' open' : '') + '" data-key="' + esc(key) + '"><span class="id">' + esc(x.id) +
-        '</span><span class="title">' + esc(x.title) + '</span><span class="st"><span class="dot"></span>' + (x.status === 'RUNNING' ? 'Running' : x.status) +
-        '</span><span class="sub">' + (x.counts ? (k.PASS || 0) + ' / ' + (k.FAIL || 0) + ' / ' + (k.SKIP || 0) + ' / ' + (k.PLANNED || 0) : '') +
-        '</span><span class="num">' + dur + '</span></div>';
-      if (open.has(key)) out += '<div class="detail" id="d-' + esc(key) + '">' + (cache[key] ? detailHtml(g.m.name, cache[key]) : '<span class="sub">Loading.</span>') + '</div>';
-    }
+    const s = g.r.start, e = g.r.end;
+    out += '<div class="label"><span class="name">' + esc(g.label) + '</span>' + (s ? '<span>' + esc(s.machine) + ' · ' + esc((s.build || '').split(';')[0]) + '</span>' : '') +
+      (s ? '<span>started ' + esc(hm(s.time)) + (e ? ' · ended ' + esc(hm(e.time)) + ' · took ' : ' · elapsed ') +
+        '<span data-t0="' + esc(s.time) + '" data-t1="' + esc(e ? e.time : '') + '"></span></span>' : '<span>not started</span>') +
+      (g.m?.error ? '<span class="err">' + esc(g.m.error) + '</span>' : '') + '</div>';
+    out += HEAD + (g.rows.length ? g.rows.map(x => rowHtml(g.m ? g.m.name : 'github', x)).join('') : '<div class="empty">Nothing in this plan for this machine.</div>');
   }
   const ghRuns = (gh.runs || []).filter(r => r.started);
-  out += '<div class="label"><span>GitHub</span>' + ghRuns.map(r => '<span>' + esc(r.name) + ' started ' + esc(hm(r.started)) +
+  out += '<div class="label"><span class="name">GitHub</span>' + ghRuns.map(r => '<span>' + esc(r.name) + ' started ' + esc(hm(r.started)) +
       (r.status === 'completed' ? ' · ended ' + esc(hm(r.updated)) + ' · took ' : ' · elapsed ') +
-      '<span data-t0="' + esc(r.started) + '" data-t1="' + esc(r.status === 'completed' ? r.updated : '') + '"></span></span>').join('') + (gh.error ? '<span class="err">' + esc(gh.error) + '</span>' : '') + '</div>';
+      '<span data-t0="' + esc(r.started) + '" data-t1="' + esc(r.status === 'completed' ? r.updated : '') + '"></span></span>').join('') +
+      (gh.error ? '<span class="err">' + esc(gh.error) + '</span>' : '') + '</div>';
   if (!jobs.length) out += '<div class="empty">No GitHub run for this commit yet.</div>';
+  else out += '<div class="grid head"><span></span><span>Run</span><span>Job</span><span></span><span></span><span></span><span></span><span>Started</span><span>Stopped</span><span>Duration</span><span></span></div>';
   for (const j of jobs) {
-    const st = j.status === 'completed' ? j.conclusion : j.status;
-    const dur = j.started ? ((Date.parse(j.completed || new Date().toISOString()) - Date.parse(j.started)) / 1000) : null;
-    out += '<div class="row ' + esc(st) + '"><span class="id">' + esc(String(j.run.id).slice(-5)) + '</span><span class="title"><a href="' + esc(j.url) +
-      '" target="_blank" rel="noopener">' + esc(j.name) + '</a></span><span class="st"><span class="dot"></span>' + esc(st) + '</span><span class="sub">' +
-      esc(j.run.name) + '</span><span class="num">' + secs(dur) + '</span></div>';
+    const st = ghStatus(j);
+    const dur = j.started ? (j.completed ? clock(elapsedOf(j.started, j.completed)) : '<span data-t0="' + esc(j.started) + '"></span>') : '';
+    out += '<div class="grid row ' + st + '" title="' + esc(j.conclusion || j.status) + '"><span>' + icon(st) + '</span><span class="id">' + esc(String(j.run.id).slice(-5)) +
+      '</span><span class="title"><a href="' + esc(j.url) + '" target="_blank" rel="noopener">' + esc(j.name) + '</a> <span class="sub">' + esc(j.run.name) + '</span></span>' +
+      '<span></span><span></span><span></span><span></span><span class="t">' + hm(j.started) + '</span><span class="t">' + hm(j.completed) + '</span><span class="t">' + dur + '</span><span></span></div>';
   }
   document.getElementById('groups').innerHTML = out;
   tickClock();
-  if (!SNAP) for (const key of open) {
-    const [machine, ...rest] = key.split('/'), id = rest.join('/');
-    getDetail(machine, id).then(d => { const el = document.getElementById('d-' + key); if (el) el.innerHTML = detailHtml(machine, d); });
+  for (const key of open) {
+    const g = groups.find(x => key.startsWith((x.m ? x.m.name : 'github') + '/') && x.rows.some(r => (x.m ? x.m.name : 'github') + '/' + r.id === key));
+    if (!g) continue;
+    const machine = g.m ? g.m.name : 'github', x = g.rows.find(r => machine + '/' + r.id === key);
+    if (!x || x.status === 'PENDING' || machine === 'github') continue;
+    getDetail(machine, x.id, x.status).then(d => { const el = document.getElementById('d-' + key); if (el) el.innerHTML = detailHtml(machine, x, d); });
   }
 }
 
+function tickClock() {
+  if (!state) return;
+  const sp = runSpan(state, planned(state).map(p => p.machine)), el = document.getElementById('times');
+  el.innerHTML = sp ? '<span>Run started <b>' + esc(day(sp.t0)) + '</b></span>' + (sp.t1 ? '<span>Ended <b>' + esc(day(sp.t1)) + '</b></span><span>Took <b>' : '<span>Elapsed <b>') +
+    clock(elapsedOf(sp.t0, sp.t1)) + '</b></span>' : '<span>Not started</span>';
+  document.querySelectorAll('[data-t0]').forEach(x => x.textContent = clock(elapsedOf(x.dataset.t0, x.dataset.t1 || null)));
+}
+
+document.getElementById('plan').addEventListener('change', e => {
+  plan = e.target.value;
+  try { localStorage.setItem('wla-plan', plan); } catch {}
+  if (state) render(state);
+});
 document.addEventListener('click', async e => {
   const img = e.target.closest('.shots img');
   if (img) { const z = document.getElementById('zoom'); z.querySelector('img').src = img.src; z.querySelector('div').textContent = img.dataset.path; z.style.display = 'flex'; return; }

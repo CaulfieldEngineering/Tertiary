@@ -17,6 +17,7 @@ checkout). This machine is always included. No new dependencies; Pillow is used 
 """
 import argparse
 import base64
+import datetime
 import html
 import http.server
 import io
@@ -203,8 +204,18 @@ def snapshot(sources, github):
     machines = [s.state() for s in sources]
     commits = {e.get('commit') for m in machines for e in m['events'] if e.get('event') == 'run-start'}
     commit = next(iter(commits)) if len(commits) == 1 else None
-    return dict(product=config()['wPLUGIN_NAME'], time=time.strftime('%Y-%m-%dT%H:%M:%S%z'), machines=machines,
-                commit=commit, commits=sorted(c for c in commits if c), github=github.state(commit))
+    # [Claude 2026-10-31] The plan: tests/sequence.json, so the page lists every test in run order before it starts.
+    try:
+        rows = json.loads((ROOT / 'tests' / 'sequence.json').read_text(encoding='utf-8'))
+        sequence = [dict(id=r['id'], name=r.get('name', r['id']), scope=r.get('scope'), suite_ids=r.get('suite_ids', []),
+                         scripts=sorted(r.get('scripts', {})), ci_ok=r.get('ci_ok', False),
+                         requires_format=r.get('requires_format')) for r in rows]
+    except Exception:
+        sequence = []
+    cfg = config()
+    return dict(product=cfg['wPLUGIN_NAME'], time=datetime.datetime.now().astimezone().isoformat(timespec='seconds'), machines=machines,
+                commit=commit, commits=sorted(c for c in commits if c), github=github.state(commit),
+                sequence=sequence, formats=cfg.get('wFORMATS', ''))
 
 
 def thumbnail(data, name):
