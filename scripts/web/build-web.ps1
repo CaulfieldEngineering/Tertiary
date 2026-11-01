@@ -22,7 +22,11 @@ if (-not $env:EMSDK) {
         if (-not $sdk) { Fail-Step 'Emscripten SDK could not be installed into .tools (or set EMSDK / WLA_EMSDK_ENV)' }
         $envScript = Join-Path $sdk 'emsdk_env.ps1'
     }
+    # emsdk_env prints its notes on stderr; under 'Stop' Windows PowerShell would turn the first one into an error
+    $env:EMSDK_QUIET = '1'
+    $ErrorActionPreference = 'Continue'
     . $envScript *> $null
+    $ErrorActionPreference = 'Stop'
     if (-not $env:EMSDK) { Fail-Step "could not activate Emscripten from $envScript" }
 }
 if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
