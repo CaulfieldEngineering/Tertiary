@@ -13,6 +13,7 @@ on one commit with a clean checkout, and that GitHub run concluded success. Anyt
       --github-run 41210000000 --out tests/results/2026-10-31_rc --report tests/reports/rc-1.1.0.md
 """
 import argparse
+import datetime as dt
 import json
 import os
 from pathlib import Path
@@ -33,6 +34,36 @@ def repo_slug():
 
 
 REPO = repo_slug()
+
+
+def when(text):
+    """An ISO time from progress.jsonl or the GitHub API ('...Z'), as an aware datetime; None if absent."""
+    if not text:
+        return None
+    try:
+        return dt.datetime.fromisoformat(str(text).replace('Z', '+00:00')).astimezone()
+    except ValueError:
+        return None
+
+
+def duration(seconds):
+    """[Claude 2026-10-31] Run time as Joe reads it: 3725 -> '1 h 2 min 5 s'. Blank when unknown."""
+    if seconds is None or seconds == '':
+        return ''
+    seconds = int(round(float(seconds)))
+    h, rest = divmod(seconds, 3600)
+    m, s = divmod(rest, 60)
+    return ' '.join(x for x in (f'{h} h' if h else '', f'{m} min' if (h or m) else '', f'{s} s') if x)
+
+
+def span(start, end):
+    a, b = when(start), when(end)
+    return (b - a).total_seconds() if a and b else None
+
+
+def stamp(text):
+    t = when(text)
+    return t.strftime('%Y-%m-%d %H:%M:%S') if t else ''
 
 
 def github(run_id):
@@ -134,33 +165,44 @@ def main():
 
     status = 'FAIL' if problems else 'PASS'
     url = run.get('html_url') or f'https://github.com/{REPO}/actions/runs/{args.github_run}'
+    # [Claude 2026-10-31] Run times (Joe: "test suite started at xxx and ended at yyy so I can feel for how long
+    # they all take"). The whole run is the earliest machine start to the last of the machines and the GitHub run.
+    gh_start, gh_end = run.get('run_started_at') or run.get('created_at'), run.get('updated_at')
+    starts = [t for t in [when(m['summary'].get('started')) for m in machines] + [when(gh_start)] if t]
+    ends = [t for t in [when(m['summary'].get('finished')) for m in machines] + [when(gh_end)] if t]
+    whole = (min(starts), max(ends)) if starts and ends else None
+    run_line = (f'Run time: started {whole[0].strftime("%Y-%m-%d %H:%M:%S")}, ended {whole[1].strftime("%Y-%m-%d %H:%M:%S")}, '
+                f'total {duration((whole[1] - whole[0]).total_seconds())}.') if whole else 'Run time: unknown (no start or end recorded).'
     lines = [f'# {args.title}', '',
-             f'**{status}.** Commit `{commit or "mixed"}`, compiled {now()}.', '',
+             f'**{status}.** Commit `{commit or "mixed"}`, compiled {now()}.', '', run_line, '',
              'One test run: a full local Run-All on each machine and one GitHub run, all on this commit. '
              'PASS means no check failed anywhere and nothing was waived. PLANNED and SKIP rows are listed '
              'coverage that does not exist yet or does not apply on that machine; they are not passes.', '']
     if problems:
         lines += ['## Why this is not a pass', ''] + [f'- {x}' for x in problems] + ['']
-    lines += ['## Runs', '', '| Machine | Status | Pass | Fail | Skip | Planned | Finished | Results |',
-              '|---|---|---|---|---|---|---|---|']
+    lines += ['## Runs', '', '| Machine | Status | Pass | Fail | Skip | Planned | Started | Finished | Duration | Results |',
+              '|---|---|---|---|---|---|---|---|---|---|']
     for m in machines:
         s, c = m['summary'], m['summary'].get('counts', {})
         lines.append(f"| {m['name']} ({s.get('machine')}, {s.get('platform')}) | {s.get('status')} | {c.get('PASS', 0)} | {c.get('FAIL', 0)} | "
-                     f"{c.get('SKIP', 0)} | {c.get('PLANNED', 0)} | {s.get('finished')} | `{m['folder']}` |")
+                     f"{c.get('SKIP', 0)} | {c.get('PLANNED', 0)} | {stamp(s.get('started'))} | {stamp(s.get('finished'))} | "
+                     f"{duration(span(s.get('started'), s.get('finished')))} | `{m['folder']}` |")
     lines.append(f"| GitHub run [{args.github_run}]({url}) | {run.get('conclusion') or run.get('status') or 'unknown'} | "
                  f"{sum(j.get('conclusion') == 'success' for j in jobs)} jobs | "
                  f"{sum(j.get('conclusion') not in ('success', 'skipped') for j in jobs)} jobs | "
-                 f"{sum(j.get('conclusion') == 'skipped' for j in jobs)} jobs | | {run.get('updated_at', '')} | |")
-    lines += ['', '## Tests', '', '| Machine | ID | Test | Status | Checks (pass / fail / skip / planned) | Seconds |',
+                 f"{sum(j.get('conclusion') == 'skipped' for j in jobs)} jobs | | {stamp(gh_start)} | {stamp(gh_end)} | "
+                 f"{duration(span(gh_start, gh_end))} | |")
+    lines += ['', '## Tests', '', '| Machine | ID | Test | Status | Checks (pass / fail / skip / planned) | Duration |',
               '|---|---|---|---|---|---|']
     for m in machines:
         for t in m['tests']:
             k = [t.get('counts', {}).get(x, 0) for x in ('PASS', 'FAIL', 'SKIP', 'PLANNED')]
-            lines.append(f"| {m['name']} | {t['id']} | {t['title']} | {t['status']} | {' / '.join(map(str, k))} | {t.get('seconds', '')} |")
+            lines.append(f"| {m['name']} | {t['id']} | {t['title']} | {t['status']} | {' / '.join(map(str, k))} | {duration(t.get('seconds'))} |")
     lines += ['', 'Builds: ' + '; '.join(f"{m['name']} `{m['summary'].get('build')}`" for m in machines)]
     if jobs:
-        lines += ['', '## GitHub jobs', '', '| Job | Conclusion |', '|---|---|']
-        lines += [f"| {j['name']} | {j.get('conclusion')} |" for j in jobs]
+        lines += ['', '## GitHub jobs', '', '| Job | Conclusion | Started | Finished | Duration |', '|---|---|---|---|---|']
+        lines += [f"| {j['name']} | {j.get('conclusion')} | {stamp(j.get('started_at'))} | {stamp(j.get('completed_at'))} | "
+                  f"{duration(span(j.get('started_at'), j.get('completed_at')))} |" for j in jobs]
     open_rows = [(m['name'], r['id'], c) for m in machines for r in m['summary'].get('results', [])
                  for c in r['checks'] if c['status'] in ('SKIP', 'PLANNED')]
     if open_rows:
@@ -172,9 +214,16 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     (out / 'report.md').write_text(text, encoding='utf-8')
     (out / 'report.json').write_text(json.dumps(dict(status=status, commit=commit, problems=problems,
-        github=dict(id=args.github_run, url=url, conclusion=run.get('conclusion'), head_sha=run.get('head_sha')),
+        started=whole[0].isoformat(timespec='seconds') if whole else None,
+        finished=whole[1].isoformat(timespec='seconds') if whole else None,
+        seconds=round((whole[1] - whole[0]).total_seconds()) if whole else None,
+        github=dict(id=args.github_run, url=url, conclusion=run.get('conclusion'), head_sha=run.get('head_sha'),
+                    started=gh_start, finished=gh_end, seconds=span(gh_start, gh_end)),
         machines=[dict(name=m['name'], folder=m['folder'], status=m['summary'].get('status'),
-                       counts=m['summary'].get('counts')) for m in machines]), indent=2) + '\n', encoding='utf-8')
+                       counts=m['summary'].get('counts'), started=m['summary'].get('started'),
+                       finished=m['summary'].get('finished'),
+                       seconds=span(m['summary'].get('started'), m['summary'].get('finished'))) for m in machines]),
+        indent=2) + '\n', encoding='utf-8')
     if args.report:
         target = (ROOT / args.report).resolve()
         target.parent.mkdir(parents=True, exist_ok=True)

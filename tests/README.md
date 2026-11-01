@@ -305,6 +305,13 @@ running, or was cut off if `run-end` has been written.
 {"v": 1, "time": "2026-10-31T13:31:40-04:00", "event": "run-end", "run": "all", "status": "PASS", "counts": {"PASS": 225, "FAIL": 0, "SKIP": 0, "PLANNED": 13}, "seconds": 3555.0}
 ```
 
+Run times (Joe, 2026-10-31: "test suite started at xxx and ended at yyy so I can feel for how long they all take"):
+`Run-All` (both platforms) and `Run-Release-Check.ps1` print the start, end and duration when they finish; the
+single report opens with the whole run's start, end and total, and gives Started / Finished / Duration per machine,
+per GitHub job and for the GitHub run, and a Duration per test; the dashboard shows the run's start with a live
+elapsed clock, each machine's and the GitHub run's elapsed time, and each test's duration. All come from the
+`time` and `seconds` fields above.
+
 ## Live dashboard (2026-10-31)
 
 Joe: watch the whole run live, local and GitHub; "reports and screenshots and statuses print here"; the final

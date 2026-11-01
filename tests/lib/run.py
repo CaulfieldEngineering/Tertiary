@@ -64,17 +64,34 @@ def run_started(results, name, args):
         return None
     os.environ[NESTED] = '1'
     commit, dirty = git_state()
+    global RUN_STARTED_AT
+    RUN_STARTED_AT = now()
     progress(results, 'run-start', run=name, machine=platform.node(), platform=PLATFORM,
              profile=args.profile, commit=commit, dirty=dirty, build=build_id(args))
     return time.monotonic()
+
+
+RUN_STARTED_AT = None
+
+
+def duration(seconds):
+    """[Claude 2026-10-31] 3725 -> '1 h 2 min 5 s', for the run-time lines Joe reads."""
+    seconds = int(round(seconds or 0))
+    h, rest = divmod(seconds, 3600)
+    m, s = divmod(rest, 60)
+    return ' '.join(x for x in (f'{h} h' if h else '', f'{m} min' if (h or m) else '', f'{s} s') if x)
 
 
 def run_ended(results, name, started, code):
     if started is None:
         return
     data = json.loads((results / 'summary.json').read_text(encoding='utf-8')) if (results / 'summary.json').exists() else {}
+    seconds = round(time.monotonic() - started, 1)
+    finished = now()
     progress(results, 'run-end', run=name, status=data.get('status', 'FAIL' if code else 'PASS'),
-             counts=data.get('counts', {}), seconds=round(time.monotonic() - started, 1))
+             counts=data.get('counts', {}), seconds=seconds)
+    # [Claude 2026-10-31] Joe: "test suite started at xxx and ended at yyy so I can feel for how long they all take."
+    print(f'Run {name}: started {RUN_STARTED_AT}, finished {finished}, took {duration(seconds)}', flush=True)
 
 
 def sequence():

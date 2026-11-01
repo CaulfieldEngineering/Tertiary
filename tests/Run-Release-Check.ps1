@@ -22,7 +22,11 @@ $Python = if ($env:WLA_TEST_PYTHON) { $env:WLA_TEST_PYTHON } else { 'python' }
 $envFile = Join-Path $HOME '.wla-test\env.ps1'
 if (Test-Path $envFile) { . $envFile }
 function Say($text) { Write-Host ("[{0:HH:mm:ss}] {1}" -f (Get-Date), $text) }
-function Fail($text) { Say "FAIL: $text"; exit 1 }
+# [Claude 2026-10-31] Joe: "test suite started at xxx and ended at yyy so I can feel for how long they all take."
+$RunStart = Get-Date
+function RunTime { $end = Get-Date; $t = $end - $RunStart
+    Say ("Release check started {0:yyyy-MM-dd HH:mm:ss}, ended {1:yyyy-MM-dd HH:mm:ss}, took {2} h {3} min {4} s" -f $RunStart, $end, [int][math]::Floor($t.TotalHours), $t.Minutes, $t.Seconds) }
+function Fail($text) { Say "FAIL: $text"; RunTime; exit 1 }
 
 # 1. Commit and dashboard ----------------------------------------------------------------------------
 $commit = (git rev-parse HEAD).Trim()
@@ -122,4 +126,5 @@ Say "GitHub run $runId finished"
 & $Python tests/lib/combine.py @runs --github-run $runId --out "tests/results/$stamp/release" --report "tests/reports/$Report.md" --title "$product $Report test report"
 $code = $LASTEXITCODE
 Say $(if ($code) { "FAIL. Report: tests/reports/$Report.md and .html" } else { "PASS. Report: tests/reports/$Report.md and .html" })
+RunTime
 exit $code

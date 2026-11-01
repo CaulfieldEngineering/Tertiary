@@ -68,7 +68,7 @@ a { color: inherit; }
 </head>
 <body>
 <main>
-  <div class="top"><h1 id="head">Test run</h1><span class="sub" id="when"></span></div>
+  <div class="top"><h1 id="head">Test run</h1><span class="sub" id="when"></span><span class="sub" id="clock"></span></div>
   <div class="bar" id="bar"></div>
   <div class="sub" id="summary">Loading.</div>
   <div id="groups"></div>
@@ -81,6 +81,28 @@ const cache = {};
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const secs = s => s == null ? '' : s < 90 ? s.toFixed(0) + ' s' : (s / 60).toFixed(1) + ' min';
 const fileUrl = (m, p) => '/file?machine=' + encodeURIComponent(m) + '&path=' + encodeURIComponent(p);
+// [Claude 2026-10-31] Run times (Joe: "test suite started at xxx and ended at yyy so I can feel for how long they all take").
+const clock = s => { if (s == null || isNaN(s)) return ''; s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
+const hm = t => { const d = new Date(t); return isNaN(d) ? '' : d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}); };
+const elapsedOf = (t0, t1) => t0 ? ((t1 ? Date.parse(t1) : Date.now()) - Date.parse(t0)) / 1000 : null;
+function runSpan(state) {
+  // The whole run: earliest machine or GitHub start, to the last end (or now, while anything is still going).
+  const starts = [], ends = []; let going = false;
+  for (const m of state.machines) { const r = machineRows(m); if (r.start) { starts.push(r.start.time); r.end ? ends.push(r.end.time) : going = true; } }
+  for (const run of (state.github?.runs || [])) { if (run.started) starts.push(run.started); run.status === 'completed' ? ends.push(run.updated) : going = true; }
+  if (!starts.length) return null;
+  const t0 = starts.reduce((a, b) => Date.parse(a) < Date.parse(b) ? a : b);
+  const t1 = going || !ends.length ? null : ends.reduce((a, b) => Date.parse(a) > Date.parse(b) ? a : b);
+  return {t0, t1};
+}
+function tickClock() {
+  if (!state) return;
+  const sp = runSpan(state), el = document.getElementById('clock');
+  if (!el) return;
+  el.textContent = sp ? 'Started ' + hm(sp.t0) + (sp.t1 ? ' · ended ' + hm(sp.t1) + ' · took ' : ' · elapsed ') + clock(elapsedOf(sp.t0, sp.t1)) : '';
+  document.querySelectorAll('[data-t0]').forEach(x => x.textContent = clock(elapsedOf(x.dataset.t0, x.dataset.t1 || null)));
+}
 
 function machineRows(m) {
   // One row per test ID from progress.jsonl: started = running, finished = its status.
@@ -156,7 +178,9 @@ async function render(state) {
   for (const g of groups) {
     const gc = counts(g.rows), s = g.r.start;
     out += '<div class="label"><span>' + esc(g.label) + '</span><span>' + (s ? esc(s.machine) + ' · ' + esc((s.build || '').split(';')[0]) : '') +
-      '</span><span>' + gc.PASS + ' of ' + g.rows.length + ' passed' + (g.r.end ? ' · ' + secs(g.r.end.seconds) : '') + '</span>' +
+      '</span><span>' + gc.PASS + ' of ' + g.rows.length + ' passed' + '</span>' +
+      (s ? '<span>started ' + esc(hm(s.time)) + (g.r.end ? ' · ended ' + esc(hm(g.r.end.time)) + ' · took ' : ' · elapsed ') +
+        '<span data-t0="' + esc(s.time) + '" data-t1="' + esc(g.r.end ? g.r.end.time : '') + '"></span></span>' : '') +
       (g.m.error ? '<span class="err">' + esc(g.m.error) + '</span>' : '') + '</div>';
     if (!g.rows.length) out += '<div class="empty">' + (g.m.run ? 'Waiting for the first test.' : 'No run found on this machine yet.') + '</div>';
     for (const x of g.rows) {
@@ -169,7 +193,10 @@ async function render(state) {
       if (open.has(key)) out += '<div class="detail" id="d-' + esc(key) + '">' + (cache[key] ? detailHtml(g.m.name, cache[key]) : '<span class="sub">Loading.</span>') + '</div>';
     }
   }
-  out += '<div class="label"><span>GitHub</span>' + (gh.error ? '<span class="err">' + esc(gh.error) + '</span>' : '') + '</div>';
+  const ghRuns = (gh.runs || []).filter(r => r.started);
+  out += '<div class="label"><span>GitHub</span>' + ghRuns.map(r => '<span>' + esc(r.name) + ' started ' + esc(hm(r.started)) +
+      (r.status === 'completed' ? ' · ended ' + esc(hm(r.updated)) + ' · took ' : ' · elapsed ') +
+      '<span data-t0="' + esc(r.started) + '" data-t1="' + esc(r.status === 'completed' ? r.updated : '') + '"></span></span>').join('') + (gh.error ? '<span class="err">' + esc(gh.error) + '</span>' : '') + '</div>';
   if (!jobs.length) out += '<div class="empty">No GitHub run for this commit yet.</div>';
   for (const j of jobs) {
     const st = j.status === 'completed' ? j.conclusion : j.status;
@@ -179,6 +206,7 @@ async function render(state) {
       esc(j.run.name) + '</span><span class="num">' + secs(dur) + '</span></div>';
   }
   document.getElementById('groups').innerHTML = out;
+  tickClock();
   if (!SNAP) for (const key of open) {
     const [machine, ...rest] = key.split('/'), id = rest.join('/');
     getDetail(machine, id).then(d => { const el = document.getElementById('d-' + key); if (el) el.innerHTML = detailHtml(machine, d); });
@@ -204,7 +232,7 @@ async function tick() {
   catch (error) { document.getElementById('summary').innerHTML = '<span class="err">The dashboard server is not answering: ' + esc(error) + '</span>'; }
   setTimeout(tick, 3000);
 }
-if (SNAP) render(SNAP); else tick();
+if (SNAP) render(SNAP); else { tick(); setInterval(tickClock, 1000); }
 </script>
 </body>
 </html>

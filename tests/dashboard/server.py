@@ -151,6 +151,7 @@ class GitHub:
                 jobs = self.get(f"{api}/{run['id']}/jobs?per_page=100").get('jobs', [])
                 result['runs'].append(dict(id=run['id'], name=run.get('name'), url=run.get('html_url'),
                     status=run.get('status'), conclusion=run.get('conclusion'), sha=run.get('head_sha'),
+                    started=run.get('run_started_at') or run.get('created_at'), updated=run.get('updated_at'),
                     jobs=[dict(name=j['name'], status=j.get('status'), conclusion=j.get('conclusion'),
                                started=j.get('started_at'), completed=j.get('completed_at'), url=j.get('html_url')) for j in jobs]))
         except Exception as error:
