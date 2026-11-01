@@ -131,6 +131,20 @@ def bounce(ui, destination):
     name = [e for e in rows if e.get('Role') == 'AXTextField' and abs(e['frame'][1] - label['frame'][1]) < 6][0]
     ui.set(name, destination.stem)
     ui.goto_folder(str(destination.parent))
+    # [Claude 2026-11-01] On 2026-11-01 the save panel twice put its default name ("Tertiary harness") back after the
+    # folder change, so the bounce landed as "Tertiary harness.wav" and this test waited for bounce-1.wav in vain. The
+    # name is now set again after the folder change and read back before Bounce is pressed; the checks are unchanged
+    # (the bounce must still appear at exactly this path, complete, and match the golden).
+    for _ in range(5):
+        rows = ui.dump()
+        label = ui.find(rows, role='AXStaticText', value='Save As:')[0]
+        name = [e for e in rows if e.get('Role') == 'AXTextField' and abs(e['frame'][1] - label['frame'][1]) < 6][0]
+        if name.get('Value') == destination.stem:
+            break
+        ui.set(name, destination.stem)
+        time.sleep(.3)
+    else:
+        raise Stop('The bounce name field would not keep ' + destination.stem, 3)
     ui.button('Bounce')
     deadline = time.monotonic() + 90
     last_size, stable = -1, 0
