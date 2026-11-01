@@ -26,3 +26,7 @@ plugin/tests/web/out/
 
 # [Claude 2026-10-31] Finder metadata; it was tracked and Finder rewrites it, which marked clean checkouts dirty.
 .DS_Store
+
+# [Claude 2026-10-31] Pinned tools fetched by scripts/lib/tools.py, and build-step results (scripts/lib/report.py)
+.tools/
+scripts/results/

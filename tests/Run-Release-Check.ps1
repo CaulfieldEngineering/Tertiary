@@ -12,7 +12,8 @@
 #    tests/reports/<Report>.md and the same view as the dashboard, tests/reports/<Report>.html.
 #    Prints PASS or FAIL and exits 0 or 1.
 #
-# Machine settings live outside the repo: $HOME\.wla-test\env.ps1 here, ~/.wla-test/env.sh on the Mac.
+# Machine settings live outside the repo: $HOME\.wla-test\env.ps1 here, ~/.wla-test/env.sh on the Mac. Both are optional
+# overrides only (2026-10-31): tools default to the pinned copies in .tools (scripts/lib/tools.json).
 # The Mac comes from config.cmake (wTEST_DASHBOARD_MAC, wTEST_DASHBOARD_MAC_REPO).
 param([Parameter(Mandatory)][string]$Report, [string]$Branch = 'development', [switch]$NoWeb)
 $ErrorActionPreference = 'Stop'
@@ -84,9 +85,11 @@ Say 'Windows: building'
 cmake --build build-tests --config Release -j 8 | Out-File (Join-Path $Root "tests/results/$stamp-win-build.log")
 if ($LASTEXITCODE) { Fail 'Windows build failed' }
 if (-not $NoWeb) {
-    if ($env:WLA_EMSDK_ENV) { . $env:WLA_EMSDK_ENV *> $null }
-    Push-Location plugin/tests/web; npm run build *> (Join-Path $Root "tests/results/$stamp-web-build.log"); $webCode = $LASTEXITCODE; Pop-Location
-    if ($webCode) { Fail 'web build failed' }
+    # [Claude 2026-10-31] The one web build script (scripts/web/build-web.ps1 -Test: the same plugin/tests/web/build.mjs as
+    # `npm run build`). It takes Emscripten and Wonderlab from WLA_EMSDK_ENV / EMSDK and WONDERLAB_DIR when env.ps1 sets
+    # them, else the pinned copies in .tools (scripts/lib/tools.json), so a fresh machine needs no settings file.
+    & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web/build-web.ps1 -Test *> (Join-Path $Root "tests/results/$stamp-web-build.log"); $webCode = $LASTEXITCODE
+    if ($webCode) { Fail "web build failed; see tests/results/$stamp-web-build.log" }
 }
 Say 'Windows: Run-All'
 & powershell -NoProfile -ExecutionPolicy Bypass -File tests/win/Run-All.ps1 -ResultsDir "tests/results/$stamp"

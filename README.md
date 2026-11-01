@@ -4,6 +4,13 @@ Wonderland Audio's three-band tremolo (JUCE; VST3, AU and standalone). Settings 
 `config.cmake`. What changed in each version is in `CHANGELOG.md`; how the code changed for 1.1 is in
 `CLAUDE_CHANGES.md`.
 
+## Build and test locally
+
+Build: `scripts/win/Build-All.ps1` (Windows) or `scripts/mac/build-all.sh` (Mac), the plug-in, signing where credentials
+allow, the installer, its verification and the web demo, each step also runnable alone; GitHub calls the same scripts.
+See `scripts/README.md` (it replaced `run_local/`). Tests: `tests/README.md`; the release candidate's one run is
+`tests/Run-Release-Check.ps1`. Pinned tools (pluginval, Inno Setup, emsdk, ...) are fetched into `.tools/`.
+
 ## Release flow
 
 Work happens on **`development`**, the work branch (Joe, 2026-10-31; it replaced `ui-house-style`), then `staging`, then

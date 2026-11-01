@@ -29,7 +29,16 @@ on:
 #   cleanup-failed-tag   deletes the tag of a failed release so it can be pushed again, but never when the
 #               tag check could not reach GitHub (that is not a verdict), never after publish started, and
 #               never if the tag was moved to another commit meanwhile.
+#
+# [Claude 2026-10-31] The build, installer, Mac signing/notarization, verify and web steps call the same scripts a desk
+# build uses (scripts/README.md, order in scripts/sequence.json), so the build is written once. Every secret, signing
+# identity, condition and deploy rule is unchanged: the scripts read the same secrets from the same env names, skip and
+# fail exactly as the inline steps did, and the live deploys below stay inline and tag-only. Windows signing stays in
+# the pinned azure/trusted-signing-action. Build-step results go to tests/results/build (WLA_BUILD_RESULTS).
 # ==========================================================================================
+env:
+  WLA_BUILD_RESULTS: tests/results/build
+
 jobs:
 
   # Job: Preflight (tag checks and secrets, before anything is built)
@@ -331,17 +340,17 @@ jobs:
     # ==========================================================================================
     # [Claude 2026-10-29] -DWLA_TESTS=ON adds the unit test and host test programs (separate targets; the
     # plug-in, app and installers are built exactly as before), so "Run Tests" below tests this very build.
-    - name: Configure CMake
+    # [Claude 2026-10-31] Configure and build are scripts/win/Build-Plugin.ps1 and scripts/mac/build-plugin.sh (B-01):
+    # the same -DBUILD_DEMO / -DWLA_TESTS=ON / architecture / CMAKE_BUILD_TYPE as before, plus
+    # -DWLA_COPY_PLUGIN_AFTER_BUILD=OFF (the build is no longer copied into the runner's system plug-in folders;
+    # nothing here used those copies).
+    - name: Check Build Version
+      shell: bash
       run: |
-        if [ "${{ matrix.version }}" == "Demo" ]; then
-          cmake -S "${{github.workspace}}" -B "${{github.workspace}}/build" -DBUILD_DEMO=ON -DWLA_TESTS=ON ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        elif [ "${{ matrix.version }}" == "Full" ]; then
-          cmake -S "${{github.workspace}}" -B "${{github.workspace}}/build" -DBUILD_DEMO=OFF -DWLA_TESTS=ON ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        else
+        if [ "${{ matrix.version }}" != "Demo" ] && [ "${{ matrix.version }}" != "Full" ]; then
           echo "Unexpected version: ${{ matrix.version }}"
           exit 1
         fi
-      shell: bash
 
 
     # Gather project variables from config.cmake - All Cases
@@ -362,8 +371,19 @@ jobs:
 
     # Compile Executables - All Cases
     # ==========================================================================================
-    - name: Build
-      run: cmake --build ${{github.workspace}}/build --config ${{ matrix.build_type }}
+    - name: Build (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $demo = @(); if ('${{ matrix.version }}' -eq 'Demo') { $demo = @('-Demo') }
+        pwsh scripts/win/Build-Plugin.ps1 -BuildDir build -Config ${{ matrix.build_type }} -Tests @demo
+
+    - name: Build (Mac, universal)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        DEMO=(); if [ "${{ matrix.version }}" == "Demo" ]; then DEMO=(--demo); fi
+        bash scripts/mac/build-plugin.sh --build-dir build --config ${{ matrix.build_type }} --universal --tests "${DEMO[@]}"
 
 
     # Production Testing - All Cases
@@ -378,17 +398,17 @@ jobs:
         PLUGINVAL_TAG: v1.0.4
       run: |
         if [ "$RUNNER_OS" = Windows ]; then
-          T=$(cygpath -m "$RUNNER_TEMP"); PV_ZIP=pluginval_Windows.zip; PV="$T/pv/pluginval.exe"
           python -m pip install --quiet pywinauto pillow
-        else
-          T="$RUNNER_TEMP"; PV_ZIP=pluginval_macOS.zip; PV="$T/pv/pluginval.app/Contents/MacOS/pluginval"
         fi
-        curl -fsSL -o "$T/pv.zip" "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_TAG/$PV_ZIP"
-        unzip -q -o "$T/pv.zip" -d "$T/pv"
+        # [Claude 2026-10-31] pluginval from scripts/lib/tools.json (same tag, checksum-checked, into .tools/)
+        PV=$(python3 scripts/lib/tools.py path pluginval 2>/dev/null || python scripts/lib/tools.py path pluginval)
         echo "WLA_PLUGINVAL=$PV" >> "$GITHUB_ENV"
         # ReviewRender was not a release target before. Build the additional test tool separately.
-        cmake -S . -B build -DWLA_REVIEW_RENDER=ON
-        cmake --build build --config Release --target ReviewRender
+        if [ "$RUNNER_OS" = Windows ]; then
+          pwsh scripts/win/Build-Plugin.ps1 -BuildDir build -Tests -ReviewRender -Targets ReviewRender
+        else
+          bash scripts/mac/build-plugin.sh --build-dir build --universal --tests --review-render --target ReviewRender
+        fi
 
     - name: Run Windows test scripts
       if: runner.os == 'Windows'
@@ -428,13 +448,6 @@ jobs:
         echo "Needs MIDI Input: $wNEEDS_MIDI_INPUT"
         echo "Needs MIDI Output: $wNEEDS_MIDI_OUTPUT"
         echo "Plugin Code: $wPLUGIN_CODE"
-
-
-    # Install Inno Setup (Windows Only) - All Cases
-    # ==========================================================================================
-    - name: Install Inno Setup (Windows Only)
-      if: matrix.os == 'windows-latest'
-      run: choco install innosetup --yes
 
 
     # Check for required signing secrets - All Cases
@@ -479,11 +492,12 @@ jobs:
 
 
     # Compile Inno Setup script (Windows Only) - All Cases
+    # [Claude 2026-10-31] scripts/win/Build-Installer.ps1 (B-03): the same build\installer_win.iss, compiled by the
+    # pinned Inno Setup 6.7.4 from scripts/lib/tools.json (was the newest Chocolatey innosetup).
     # ==========================================================================================
     - name: Compile Inno Setup script (Windows Only)
       if: matrix.os == 'windows-latest'
-      run: |
-        & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' "${{github.workspace}}\build\installer_win.iss"
+      run: pwsh scripts/win/Build-Installer.ps1 -BuildDir build
       shell: pwsh
 
 
@@ -507,6 +521,9 @@ jobs:
 
 
     # Sign Payload (Mac) - 2024.10.25 - All Cases
+    # [Claude 2026-10-31] scripts/mac/sign-plugin.sh (B-02): the same temporary keychain from the same secrets, the same
+    # codesign calls (VST3, AU, and the standalone with its audio-input entitlement, V-08) and checks. Missing secrets:
+    # FAIL on a v* tag, a warning and no signing on staging, as before.
     # ==========================================================================================
     - name: Sign Mac Binaries
       if: matrix.os == 'macos-latest'
@@ -514,618 +531,36 @@ jobs:
         APPLICATION_CERTIFICATE_BASE64: ${{ secrets.MAC_APPLICATION_CERTIFICATE_BASE64 }}
         CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
         KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
-      run: |
-        # Check for required secrets
-        if [ -z "$APPLICATION_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "::error::Signing or notarization secrets are missing on a release tag. Stopping."; exit 1; fi
-          echo "::warning::Required secrets for application signing are not set. Skipping application signing step."
-          exit 0
-        fi
-
-        echo "Starting the signing process for macOS binaries..."
-
-        # Create temporary keychain
-        # ====================================
-        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-        # Import certificate to keychain
-        # ====================================
-        echo -n "$APPLICATION_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-        security import "$RUNNER_TEMP/cert.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-        security list-keychains -d user -s "$KEYCHAIN_PATH"
-        security default-keychain -s "$KEYCHAIN_PATH"
-        
-        # Add certificate to partition list
-        # ====================================
-        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-        echo "Signing VST3 bundle..."
-        # ====================================
-        VST3_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3/${REPOSITORY_NAME}.vst3"
-        codesign --force \
-          --sign "Developer ID Application" \
-          --verbose \
-          --deep --strict --options=runtime --timestamp \
-          "$VST3_PATH"
-
-        echo "Verifying VST3 signature..."
-        # ====================================
-        codesign --verify --deep --verbose=2 "$VST3_PATH"
-        # Only verify code signature, skip notarization check
-        codesign --display --verbose=2 "$VST3_PATH"
-
-        # [Claude 2026-10-27] AU bundle, signed exactly like the VST3
-        echo "Signing AU bundle..."
-        # ====================================
-        AU_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/AU/${REPOSITORY_NAME}.component"
-        codesign --force \
-          --sign "Developer ID Application" \
-          --verbose \
-          --deep --strict --options=runtime --timestamp \
-          "$AU_PATH"
-
-        echo "Verifying AU signature..."
-        # ====================================
-        codesign --verify --deep --verbose=2 "$AU_PATH"
-        codesign --display --verbose=2 "$AU_PATH"
-
-        echo "Signing standalone application..."
-        # ====================================
-        # [Claude 2026-10-30] V-08: the standalone (only) is signed with the audio-input entitlement. With the hardened
-        # runtime, macOS gives an app silence from the audio interface without it. The VST3 and AU above stay as they
-        # were: the DAW holds that permission for them. The Mac checks (plugin/tests/ci/mac_checks.sh, every
-        # work-branch push) sign a copy the same way with an ad-hoc identity and check the result.
-        APP_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone/${REPOSITORY_NAME}.app"
-        APP_ENTITLEMENTS="${GITHUB_WORKSPACE}/package_config/mac/standalone.entitlements"
-        plutil -lint "$APP_ENTITLEMENTS"
-        codesign --force \
-          --sign "Developer ID Application" \
-          --verbose \
-          --deep --strict --options=runtime --timestamp \
-          --entitlements "$APP_ENTITLEMENTS" \
-          "$APP_PATH"
-
-        echo "Verifying standalone application signature..."
-        # ====================================
-        codesign --verify --deep --verbose=2 "$APP_PATH"
-        # Only verify code signature, skip notarization check
-        codesign --display --verbose=2 "$APP_PATH"
-        APP_ENT=$(codesign --display --entitlements - --xml "$APP_PATH" 2>/dev/null)
-        grep -q "com.apple.security.device.audio-input" <<< "$APP_ENT" \
-          || { echo "::error::$APP_PATH was signed without the audio-input entitlement"; exit 1; }
-        /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "$APP_PATH/Contents/Info.plist" \
-          || { echo "::error::$APP_PATH has no microphone permission text (NSMicrophoneUsageDescription)"; exit 1; }
-
-        # Clean up
-        # ====================================
-        security default-keychain -s login.keychain
-        security delete-keychain "$KEYCHAIN_PATH"
-        rm "$RUNNER_TEMP/cert.p12"
-
-        echo "Signing process completed successfully."
+      run: bash scripts/mac/sign-plugin.sh --build-dir build --config ${{ matrix.build_type }}
 
 
-    # Package: Standalone (Mac) - All Cases
+    # Package and sign: Standalone, VST3, AU, Distribution (Mac) - All Cases
+    # [Claude 2026-10-31] scripts/mac/build-installer.sh (B-03): was "Create Standalone / VST3 / AU Package", "Sign
+    # Individual Packages", "Create Distribution Package" and "Sign Distribution Package". Same pkgbuild (not
+    # relocatable), productsign "Developer ID Installer" from the same secrets, productbuild with distribution-full.xml
+    # (distribution-demo.xml and the .D suffix for a demo build). Missing secrets: FAIL on a tag, unsigned on staging.
     # ==========================================================================================
-    - name: Create Standalone Package (Mac Only)
-      if: matrix.os == 'macos-latest'
-      env:
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
-      run: |
-        # Create output directory
-        mkdir -p ${GITHUB_WORKSPACE}/build/output
-    
-        # Format COMPANY_NAME by removing spaces
-        FORMATTED_COMPANY_NAME=$(echo "$wCOMPANY_NAME" | tr -d ' ')
-
-        # Determine the suffix based on the version
-        SUFFIX=""
-        if [[ "${{ matrix.version }}" == "Demo" ]]; then
-          SUFFIX=".D"
-        fi
-
-        # Define paths
-        APP_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/Standalone/${REPOSITORY_NAME}.app"
-        PKG_PATH="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg"
-
-        echo "Checking for standalone app before packaging..."
-        if [ ! -d "$APP_PATH" ]; then
-          echo "ERROR: Standalone app not found at: $APP_PATH"
-          echo "Contents of $(dirname "$APP_PATH"):"
-          ls -la "$(dirname "$APP_PATH")"
-          exit 1
-        fi
-
-        echo "Ã¢Å“â€œ Found standalone app at: $APP_PATH"
-        echo "Creating standalone package..."
-
-        # [Claude 2026-10-27] Not relocatable: otherwise, if macOS knows another copy of this bundle anywhere
-        # (an old download, a build folder), the installer updates that copy and the right folder stays empty
-        # (found by installer-test.yml on the Intel Mac)
-        pkgbuild --analyze --root "$(dirname "$APP_PATH")" "$RUNNER_TEMP/component.plist"
-        plutil -replace BundleIsRelocatable -bool NO "$RUNNER_TEMP/component.plist"
-
-        pkgbuild \
-          --root "$(dirname "$APP_PATH")" \
-          --component-plist "$RUNNER_TEMP/component.plist" \
-          --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.app" \
-          --version "$wPROJECT_VERSION" \
-          --install-location "/Applications/${REPOSITORY_NAME}" \
-          "$PKG_PATH"
-
-        # Verify package was created and is not empty
-        if [ ! -f "$PKG_PATH" ]; then
-          echo "ERROR: Package was not created at: $PKG_PATH"
-          exit 1
-        fi
-
-        if [ ! -s "$PKG_PATH" ]; then
-          echo "ERROR: Created package is empty: $PKG_PATH"
-          exit 1
-        fi
-
-        echo "Ã¢Å“â€œ Successfully created standalone package at: $PKG_PATH"
-        
-
-    # Package: VST3 (Mac) - All Cases
-    # ==========================================================================================
-    - name: Create VST3 Package (Mac Only)
-      if: matrix.os == 'macos-latest'
-      env:
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
-      run: |
-        # Create output directory
-        mkdir -p ${GITHUB_WORKSPACE}/build/output
-
-        # Format COMPANY_NAME by removing spaces
-        FORMATTED_COMPANY_NAME=$(echo "$wCOMPANY_NAME" | tr -d ' ')
-
-        # Determine the suffix based on the version
-        SUFFIX=""
-        if [[ "${{ matrix.version }}" == "Demo" ]]; then
-          SUFFIX=".D"
-        fi
-
-        # Define paths
-        VST3_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/VST3/${REPOSITORY_NAME}.vst3"
-        PKG_PATH="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg"
-
-        echo "Checking for VST3 bundle before packaging..."
-        if [ ! -d "$VST3_PATH" ]; then
-          echo "ERROR: VST3 bundle not found at: $VST3_PATH"
-          echo "Contents of $(dirname "$VST3_PATH"):"
-          ls -la "$(dirname "$VST3_PATH")"
-          exit 1
-        fi
-
-        echo "Ã¢Å“â€œ Found VST3 bundle at: $VST3_PATH"
-        echo "Creating VST3 package..."
-
-        # [Claude 2026-10-27] Not relocatable: otherwise, if macOS knows another copy of this bundle anywhere
-        # (an old download, a build folder), the installer updates that copy and the right folder stays empty
-        # (found by installer-test.yml on the Intel Mac)
-        pkgbuild --analyze --root "$(dirname "$VST3_PATH")" "$RUNNER_TEMP/component.plist"
-        plutil -replace BundleIsRelocatable -bool NO "$RUNNER_TEMP/component.plist"
-
-        pkgbuild \
-          --root "$(dirname "$VST3_PATH")" \
-          --component-plist "$RUNNER_TEMP/component.plist" \
-          --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.vst3" \
-          --version "$wPROJECT_VERSION" \
-          --install-location "/Library/Audio/Plug-Ins/VST3" \
-          "$PKG_PATH"
-
-        # Verify package was created and is not empty
-        if [ ! -f "$PKG_PATH" ]; then
-          echo "ERROR: Package was not created at: $PKG_PATH"
-          exit 1
-        fi
-
-        if [ ! -s "$PKG_PATH" ]; then
-          echo "ERROR: Created package is empty: $PKG_PATH"
-          exit 1
-        fi
-
-        echo "Ã¢Å“â€œ Successfully created VST3 package at: $PKG_PATH"
-
-
-    # Package: AU (Mac) - All Cases
-    # [Claude 2026-10-27] New in 1.1: the AU, for Logic and GarageBand. Same as the VST3 step, into Components.
-    # ==========================================================================================
-    - name: Create AU Package (Mac Only)
-      if: matrix.os == 'macos-latest'
-      env:
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
-      run: |
-        # Create output directory
-        mkdir -p ${GITHUB_WORKSPACE}/build/output
-
-        # Format COMPANY_NAME by removing spaces
-        FORMATTED_COMPANY_NAME=$(echo "$wCOMPANY_NAME" | tr -d ' ')
-
-        # Determine the suffix based on the version
-        SUFFIX=""
-        if [[ "${{ matrix.version }}" == "Demo" ]]; then
-          SUFFIX=".D"
-        fi
-
-        # Define paths
-        AU_PATH="${GITHUB_WORKSPACE}/build/plugin/${REPOSITORY_NAME}_artefacts/Release/AU/${REPOSITORY_NAME}.component"
-        PKG_PATH="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_AU_${wPROJECT_VERSION}${SUFFIX}.pkg"
-
-        echo "Checking for AU bundle before packaging..."
-        if [ ! -d "$AU_PATH" ]; then
-          echo "ERROR: AU bundle not found at: $AU_PATH"
-          echo "Contents of $(dirname "$AU_PATH"):"
-          ls -la "$(dirname "$AU_PATH")"
-          exit 1
-        fi
-
-        echo "Ã¢Å“â€œ Found AU bundle at: $AU_PATH"
-        echo "Creating AU package..."
-
-        # [Claude 2026-10-27] Not relocatable: otherwise, if macOS knows another copy of this bundle anywhere
-        # (an old download, a build folder), the installer updates that copy and the right folder stays empty
-        # (found by installer-test.yml on the Intel Mac)
-        pkgbuild --analyze --root "$(dirname "$AU_PATH")" "$RUNNER_TEMP/component.plist"
-        plutil -replace BundleIsRelocatable -bool NO "$RUNNER_TEMP/component.plist"
-
-        pkgbuild \
-          --root "$(dirname "$AU_PATH")" \
-          --component-plist "$RUNNER_TEMP/component.plist" \
-          --identifier "com.${FORMATTED_COMPANY_NAME}.${REPOSITORY_NAME}.component" \
-          --version "$wPROJECT_VERSION" \
-          --install-location "/Library/Audio/Plug-Ins/Components" \
-          "$PKG_PATH"
-
-        # Verify package was created and is not empty
-        if [ ! -s "$PKG_PATH" ]; then
-          echo "ERROR: AU package was not created, or is empty: $PKG_PATH"
-          exit 1
-        fi
-
-        echo "Ã¢Å“â€œ Successfully created AU package at: $PKG_PATH"
-          
-
-    # Sign Individual Packages (Mac) - 2024.10.25 CLAUDE - All Cases
-    # ==========================================================================================
-    - name: Sign Individual Packages
+    - name: Create and Sign Mac Installer Packages
       if: matrix.os == 'macos-latest'
       env:
         INSTALLER_CERTIFICATE_BASE64: ${{ secrets.MAC_INSTALLER_CERTIFICATE_BASE64 }}
         CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
         KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
-      run: |
-        # Check for required secrets
-        if [ -z "$INSTALLER_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "::error::Signing or notarization secrets are missing on a release tag. Stopping."; exit 1; fi
-          echo "::warning::Required secrets for installer signing are not set. Skipping installer signing step."
-          exit 0
-        fi
-
-        echo "Starting the package signing process..."
-
-        # Create temporary keychain
-        # ====================================
-        KEYCHAIN_PATH=$RUNNER_TEMP/pkg-signing.keychain-db
-        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-        # Import certificate to keychain
-        # ====================================
-        echo -n "$INSTALLER_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-        security import "$RUNNER_TEMP/cert.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-        security list-keychains -d user -s "$KEYCHAIN_PATH"
-        security default-keychain -s "$KEYCHAIN_PATH"
-        
-        # Add certificate to partition list
-        # ====================================
-        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-        # Determine the suffix based on the version
-        SUFFIX=""
-        if [[ "${{ matrix.version }}" == "Demo" ]]; then
-          SUFFIX=".D"
-        fi
-
-        echo "Signing standalone package..."
-        # ====================================
-        STANDALONE_PKG="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_Standalone_${wPROJECT_VERSION}${SUFFIX}.pkg"
-        productsign --sign "Developer ID Installer" \
-          "$STANDALONE_PKG" \
-          "${STANDALONE_PKG%.pkg}_signed.pkg"
-
-        echo "Verifying standalone package signature..."
-        # ====================================
-        pkgutil --check-signature "${STANDALONE_PKG%.pkg}_signed.pkg"
-
-        echo "Signing VST3 package..."
-        # ====================================
-        VST3_PKG="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_VST3_${wPROJECT_VERSION}${SUFFIX}.pkg"
-        productsign --sign "Developer ID Installer" \
-          "$VST3_PKG" \
-          "${VST3_PKG%.pkg}_signed.pkg"
-
-        echo "Verifying VST3 package signature..."
-        # ====================================
-        pkgutil --check-signature "${VST3_PKG%.pkg}_signed.pkg"
-
-        # [Claude 2026-10-27] AU package, signed like the VST3 package
-        echo "Signing AU package..."
-        # ====================================
-        AU_PKG="${GITHUB_WORKSPACE}/build/output/${REPOSITORY_NAME}_AU_${wPROJECT_VERSION}${SUFFIX}.pkg"
-        productsign --sign "Developer ID Installer" \
-          "$AU_PKG" \
-          "${AU_PKG%.pkg}_signed.pkg"
-
-        echo "Verifying AU package signature..."
-        # ====================================
-        pkgutil --check-signature "${AU_PKG%.pkg}_signed.pkg"
-
-        # Replace unsigned with signed packages
-        # ====================================
-        mv "${STANDALONE_PKG%.pkg}_signed.pkg" "$STANDALONE_PKG"
-        mv "${VST3_PKG%.pkg}_signed.pkg" "$VST3_PKG"
-        mv "${AU_PKG%.pkg}_signed.pkg" "$AU_PKG"
-
-        # Clean up
-        # ====================================
-        security default-keychain -s login.keychain
-        security delete-keychain "$KEYCHAIN_PATH"
-        rm "$RUNNER_TEMP/cert.p12"
-
-        echo "Package signing process completed successfully."
+      run: bash scripts/mac/build-installer.sh --build-dir build --config ${{ matrix.build_type }}
 
 
-    # Package: Distribution (Mac) - All Cases
+    # Notarize and staple the Distribution Package (Mac) - All Cases
+    # [Claude 2026-10-31] scripts/mac/sign-notarize.sh (B-04): was "Notarize Mac Distribution Package" and "Staple
+    # Notarization Ticket". Same notarytool profile, 15-minute wait, stapler and spctl checks; missing secrets: FAIL on
+    # a tag, a warning and no notarization on staging.
     # ==========================================================================================
-    - name: Create Distribution Package (Mac Only)
-      if: matrix.os == 'macos-latest'
-      env:
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
-      run: |
-        mkdir -p ${GITHUB_WORKSPACE}/build/output
-
-        # Determine the suffix and distribution file based on the version
-        SUFFIX=""
-        DIST_FILE="distribution-full.xml"
-        
-        if [[ "${{ matrix.version }}" == "Demo" ]]; then
-          SUFFIX=".D"
-          DIST_FILE="distribution-demo.xml"
-        fi
-
-        # Copy the appropriate distribution file
-        echo "Using distribution file: $DIST_FILE"
-        if [ ! -f "${{github.workspace}}/build/$DIST_FILE" ]; then
-          echo "ERROR: Distribution file not found: $DIST_FILE"
-          echo "Contents of build directory:"
-          ls -la ${{github.workspace}}/build/
-          exit 1
-        fi
-
-        # Copy and verify
-        cp "${{github.workspace}}/build/$DIST_FILE" "${GITHUB_WORKSPACE}/build/output/distribution.xml"
-        if [ ! -f "${GITHUB_WORKSPACE}/build/output/distribution.xml" ]; then
-          echo "ERROR: Failed to copy distribution file"
-          exit 1
-        fi
-        echo "Ã¢Å“â€œ Distribution file copied successfully"
-
-        # Verify package path contains our packages
-        echo "Checking for component packages..."
-        ls -la ${GITHUB_WORKSPACE}/build/output/*.pkg
-        
-        echo "Creating distribution package..."
-        productbuild \
-          --distribution "${GITHUB_WORKSPACE}/build/output/distribution.xml" \
-          --package-path "${GITHUB_WORKSPACE}/build/output" \
-          "${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
-
-        # Verify the final package was created
-        if [ ! -f "${{github.workspace}}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg" ]; then
-          echo "ERROR: Failed to create distribution package"
-          exit 1
-        fi
-        
-        echo "Ã¢Å“â€œ Distribution package created successfully"
-        
-      shell: bash
-
-
-    # Sign Distribution Package (Mac) - All Cases
-    # ==========================================================================================
-    - name: Sign Distribution Package
-      if: matrix.os == 'macos-latest'
-      env:
-        INSTALLER_CERTIFICATE_BASE64: ${{ secrets.MAC_INSTALLER_CERTIFICATE_BASE64 }}
-        CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
-        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
-      run: |
-        # Check for required secrets
-        if [ -z "$INSTALLER_CERTIFICATE_BASE64" ] || [ -z "$CERTIFICATE_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "::error::Signing or notarization secrets are missing on a release tag. Stopping."; exit 1; fi
-          echo "::warning::Required secrets for installer signing are not set. Skipping installer signing step."
-          exit 0
-        fi
-
-        echo "Starting the distribution package signing process..."
-
-        # Create temporary keychain
-        # ====================================
-        KEYCHAIN_PATH=$RUNNER_TEMP/dist-signing.keychain-db
-        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-        # Import certificate to keychain
-        # ====================================
-        echo -n "$INSTALLER_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-        security import "$RUNNER_TEMP/cert.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-        security list-keychains -d user -s "$KEYCHAIN_PATH"
-        security default-keychain -s "$KEYCHAIN_PATH"
-        
-        # Add certificate to partition list
-        # ====================================
-        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-        # Determine the suffix based on the version
-        SUFFIX=""
-        if [[ "${{ matrix.version }}" == "Demo" ]]; then
-          SUFFIX=".D"
-        fi
-
-        # Sign the distribution package
-        UNSIGNED_PKG="${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
-        SIGNED_PKG="${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}_signed.pkg"
-
-        echo "Signing distribution package..."
-        productsign --sign "Developer ID Installer" \
-          "$UNSIGNED_PKG" \
-          "$SIGNED_PKG"
-
-        # Verify the signature
-        echo "Verifying package signature..."
-        pkgutil --check-signature "$SIGNED_PKG"
-
-        # Replace unsigned with signed package
-        mv "$SIGNED_PKG" "$UNSIGNED_PKG"
-
-        # Clean up
-        security default-keychain -s login.keychain
-        security delete-keychain "$KEYCHAIN_PATH"
-        rm "$RUNNER_TEMP/cert.p12"
-
-        echo "Distribution package signing completed successfully."
-
-
-    # Notarize the Distribution Package (Mac) - 2024.10.25 CLAUDE - All Cases
-    # ==========================================================================================
-    - name: Notarize Mac Distribution Package
+    - name: Notarize and Staple Mac Distribution Package
       if: matrix.os == 'macos-latest'
       env:
         APPLE_ID: ${{ secrets.APPLE_ID }}
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
-      run: |
-        # Check for required secrets
-        if [ -z "$APPLE_ID" ] || [ -z "$APPLE_TEAM_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "::error::Signing or notarization secrets are missing on a release tag. Stopping."; exit 1; fi
-          echo "::warning::Required secrets for notarization are not set. Skipping notarization step."
-          exit 0
-        fi
-
-        echo "Starting the notarization process..."
-
-        # Determine the suffix based on the version
-        SUFFIX=""
-        if [[ "${{ matrix.version }}" == "Demo" ]]; then
-          SUFFIX=".D"
-        fi
-
-        # Store the installer path
-        INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
-
-        # Create temporary keychain for notarization
-        xcrun notarytool store-credentials "notarytool-profile" \
-          --apple-id "$APPLE_ID" \
-          --team-id "$APPLE_TEAM_ID" \
-          --password "$APPLE_APP_SPECIFIC_PASSWORD"
-
-        # Submit for notarization and capture the submission ID
-        echo "Submitting for notarization..."
-        SUBMISSION_RESPONSE=$(xcrun notarytool submit "$INSTALLER_PATH" --keychain-profile "notarytool-profile")
-        SUBMISSION_ID=$(echo "$SUBMISSION_RESPONSE" | grep "id:" | head -n 1 | awk '{print $2}')
-
-        if [ -z "$SUBMISSION_ID" ]; then
-          echo "Failed to get submission ID"
-          echo "Full submission response: $SUBMISSION_RESPONSE"
-          exit 1
-        fi
-
-        echo "Captured Submission ID: $SUBMISSION_ID"
-
-        # Add a timeout counter
-        ATTEMPTS=0
-        MAX_ATTEMPTS=30  # 15 minutes maximum (30 * 30 seconds)
-
-        # Wait and check status
-        while [ $ATTEMPTS -lt $MAX_ATTEMPTS ]; do
-          echo "Checking status for submission ID: $SUBMISSION_ID"
-          STATUS_RESPONSE=$(xcrun notarytool info "$SUBMISSION_ID" --keychain-profile "notarytool-profile")
-          echo "Full status response: $STATUS_RESPONSE"
-          
-          STATUS=$(echo "$STATUS_RESPONSE" | grep "status:" | awk '{print $2}')
-          echo "Parsed status: $STATUS"
-          
-          if [ "$STATUS" = "Accepted" ]; then
-            echo "Notarization successful!"
-            break
-          elif [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
-            echo "Notarization failed with status: $STATUS"
-            xcrun notarytool log "$SUBMISSION_ID" --keychain-profile "notarytool-profile"
-            exit 1
-          fi
-          
-          ATTEMPTS=$((ATTEMPTS + 1))
-          if [ $ATTEMPTS -eq $MAX_ATTEMPTS ]; then
-            echo "Timeout waiting for notarization after 15 minutes"
-            exit 1
-          fi
-          
-          echo "Waiting for notarization to complete... (Attempt $ATTEMPTS of $MAX_ATTEMPTS)"
-          sleep 30
-        done
-
-        # Show notarization history for debugging
-        xcrun notarytool history --keychain-profile "notarytool-profile"
-        
-
-    # Staple the Notarization Ticket to Distribution Package (Mac) - 2024.10.25 CLAUDE - All Cases
-    # ==========================================================================================
-    - name: Staple Notarization Ticket
-      if: matrix.os == 'macos-latest'
-      env:
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
-        # [Claude 2026-10-29] All three, as the notarize step checks (was APPLE_ID alone)
-        APPLE_ID: ${{ secrets.APPLE_ID }}
-        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      run: |
-        # Check if notarization was meant to run
-        if [ -z "$APPLE_ID" ] || [ -z "$APPLE_TEAM_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "::error::Notarization secrets are missing on a release tag. Stopping."; exit 1; fi
-          echo "::warning::Notarization credentials not set. Skipping stapling step."
-          exit 0
-        fi
-    
-        # Determine the suffix based on the version
-        SUFFIX=""
-        if [[ "${{ matrix.version }}" == "Demo" ]]; then
-          SUFFIX=".D"
-        fi
-    
-        # Store the installer path
-        INSTALLER_PATH="${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
-    
-        echo "Stapling notarization ticket to installer..."
-        xcrun stapler staple "$INSTALLER_PATH"
-    
-        echo "Validating stapled installer..."
-        xcrun stapler validate "$INSTALLER_PATH"
-    
-        # Additional verification
-        spctl --assess --type install "$INSTALLER_PATH"
-    
-        echo "Stapling process completed successfully."
+      run: bash scripts/mac/sign-notarize.sh --build-dir build
 
 
     # Verify the Final Installers Are Signed (and Stapled) - whenever signing ran; always on a tag
@@ -1134,74 +569,14 @@ jobs:
     # ==========================================================================================
     - name: Verify Mac Installer Is Signed, Notarized and Stapled
       if: matrix.os == 'macos-latest' && needs.preflight.outputs.sign_mac == 'true'
-      env:
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
       shell: bash
-      run: |
-        SUFFIX=""
-        if [[ "${{ matrix.version }}" == "Demo" ]]; then SUFFIX=".D"; fi
-        PKG="${GITHUB_WORKSPACE}/build/${REPOSITORY_NAME}MacInstaller_${wPROJECT_VERSION}${SUFFIX}.pkg"
-        [ -s "$PKG" ] || { echo "::error::Installer not found: $PKG"; exit 1; }
-
-        echo "Installer signature..."
-        SIG=$(pkgutil --check-signature "$PKG")
-        echo "$SIG"
-        grep -q "Developer ID Installer" <<< "$SIG" || { echo "::error::$PKG is not signed with a Developer ID Installer certificate"; exit 1; }
-
-        echo "Notarization ticket stapled, and Gatekeeper accepts it..."
-        xcrun stapler validate "$PKG"
-        spctl --assess --type install -vv "$PKG"
-
-        echo "Every bundle inside the installer is signed (Developer ID Application, hardened runtime)..."
-        X="$RUNNER_TEMP/pkg-expanded"
-        rm -rf "$X"
-        pkgutil --expand-full "$PKG" "$X"
-        for want in $wFORMATS; do
-          case "$want" in
-            VST3) ext="vst3" ;;
-            AU) ext="component" ;;
-            Standalone) ext="app" ;;
-            *) continue ;;
-          esac
-          FOUND=$(find "$X" -type d -name "*.${ext}" -prune | head -n 1)
-          [ -n "$FOUND" ] || { echo "::error::No .${ext} found inside $PKG (wFORMATS lists $want)"; exit 1; }
-          codesign --verify --deep --strict --verbose=2 "$FOUND"
-          INFO=$(codesign -dv --verbose=2 "$FOUND" 2>&1)
-          grep -q "Authority=Developer ID Application" <<< "$INFO" || { echo "::error::$FOUND is not signed with Developer ID Application"; exit 1; }
-          grep -q "runtime" <<< "$INFO" || { echo "::error::$FOUND is not signed with the hardened runtime"; exit 1; }
-          # [Claude 2026-10-30] V-08: the standalone keeps its audio-input entitlement and microphone text
-          if [ "$ext" = "app" ]; then
-            APP_ENT=$(codesign --display --entitlements - --xml "$FOUND" 2>/dev/null)
-            grep -q "com.apple.security.device.audio-input" <<< "$APP_ENT" \
-              || { echo "::error::$FOUND has no audio-input entitlement (macOS would give it no audio input)"; exit 1; }
-            /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "$FOUND/Contents/Info.plist" >/dev/null \
-              || { echo "::error::$FOUND has no microphone permission text (NSMicrophoneUsageDescription)"; exit 1; }
-          fi
-          echo "Ã¢Å“â€œ $(basename "$FOUND")"
-        done
-
-        shasum -a 256 "$PKG" | awk '{print $1}' > "$PKG.sha256"
-        echo "Ã¢Å“â€œ Mac installer verified: $(basename "$PKG")  sha256 $(cat "$PKG.sha256")"
+      run: bash scripts/mac/verify-installer.sh --build-dir build --require-signed   # [Claude 2026-10-31] B-05, unchanged checks
 
 
     - name: Verify Windows Installer and Binaries Are Signed
       if: matrix.os == 'windows-latest' && needs.preflight.outputs.sign_win == 'true'
       shell: pwsh
-      run: |
-        $ErrorActionPreference = 'Stop'
-        $exe = @(Get-ChildItem "build\*WinInstaller_$($env:wPROJECT_VERSION).exe")
-        if ($exe.Count -ne 1) { Write-Host "::error::Expected one Windows installer for $($env:wPROJECT_VERSION), found $($exe.Count)"; exit 1 }
-        $artefacts = "build\plugin\$($env:wPLUGIN_NAME)_artefacts\Release"
-        $files = @($exe[0].FullName) + @(Get-ChildItem $artefacts -Recurse -File -Include *.exe,*.vst3 | ForEach-Object FullName)
-        if ($files.Count -lt 2) { Write-Host "::error::No plug-in or app binaries found under $artefacts"; exit 1 }
-        foreach ($f in $files) {
-          $sig = Get-AuthenticodeSignature $f
-          if ($sig.Status -ne 'Valid') { Write-Host "::error::Not validly signed ($($sig.Status)): $f"; exit 1 }
-          Write-Host "OK  $f  ($($sig.SignerCertificate.Subject))"
-        }
-        $hash = (Get-FileHash $exe[0].FullName -Algorithm SHA256).Hash.ToLower()
-        [IO.File]::WriteAllText("$($exe[0].FullName).sha256", $hash)
-        Write-Host "Windows installer verified: $($exe[0].Name)  sha256 $hash"
+      run: pwsh scripts/win/Verify-Installer.ps1 -BuildDir build -Config ${{ matrix.build_type }} -RequireSigned   # [Claude 2026-10-31] B-05, unchanged checks
 
 
     # UPLOAD ARTIFACTS - All Cases
@@ -1695,6 +1070,8 @@ jobs:
     concurrency:
       group: web-demo-${{ startsWith(github.ref, 'refs/tags/v') && 'release' || format('staging-{0}', github.run_id) }}
       cancel-in-progress: false
+    env:
+      WONDERLAB_DIR: ${{ github.workspace }}/Wonderlab
 
     steps:
 
@@ -1755,101 +1132,22 @@ jobs:
           libwebkit2gtk-4.1-dev libgtk-3-dev
 
 
-    # Generate BinaryData (native CMake configure only)
+    # Build the web demo: BinaryData, WebAssembly, assembled page, and build/web-bundle (Mac/Linux/Windows alike)
+    # [Claude 2026-10-31] scripts/web/build-web.sh (B-06): was "Generate BinaryData", "Build WebAssembly", "Assemble Web
+    # App" and "Collect the Web Demo Files". It runs plugin/tests/web/build.mjs without the test inspector (the same
+    # native BinaryData configure, Wonderlab CMake project, processor header/class from config, and
+    # plugin/web/assemble.mjs with plugin/web_demo.json and build id = the commit's first 8 characters; a desk build runs
+    # the same script, run_local/ having been retired), then scripts/web/bundle.mjs: the same build/web-bundle with build-commit.txt and
+    # build-manifest.sha256 (sha256sum format) that the deploy and the tag release check below use.
+    # ffmpeg makes the MP3 copies of the demo tracks.
     # ==========================================================================================
-    - name: Generate BinaryData
-      run: |
-        echo "Running native CMake configure + BinaryData build..."
-        cmake -S . -B build -DBUILD_DEMO=OFF
-        cmake --build build --target ${wPLUGIN_NAME}BinaryData
-        echo "Locating BinaryData.h..."
-        find build -name "BinaryData.h" -type f
-        echo "BinaryData generated."
-
-
-    # Build WebAssembly
-    # ==========================================================================================
-    - name: Build WebAssembly
-      env:
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
-      shell: bash
-      run: |
-        set -e
-
-        WONDERLAB_DIR="${GITHUB_WORKSPACE}/Wonderlab"
-        PLUGIN_SRC_DIR="${GITHUB_WORKSPACE}/plugin/source"
-        WEB_BUILD_DIR="${GITHUB_WORKSPACE}/build/web"
-        echo "Plugin:  ${wPLUGIN_NAME} v${wPROJECT_VERSION}"
-        echo "Sources: ${PLUGIN_SRC_DIR}"
-        echo ""
-
-        # Find BinaryData.h dynamically (path varies by platform)
-        BINARY_DATA_DIR=$(dirname "$(find ${GITHUB_WORKSPACE}/build -name 'BinaryData.h' -type f | head -1)")
-        if [ -z "${BINARY_DATA_DIR}" ] || [ ! -f "${BINARY_DATA_DIR}/BinaryData.h" ]; then
-          echo "ERROR: BinaryData.h not found anywhere in build/"
-          find ${GITHUB_WORKSPACE}/build -name "BinaryData*" 2>/dev/null
-          exit 1
-        fi
-        echo "BinaryData found at: ${BINARY_DATA_DIR}"
-
-        # Create build directory
-        mkdir -p "${WEB_BUILD_DIR}"
-        cd "${WEB_BUILD_DIR}"
-
-        # Generate CMakeLists.txt
-        echo "Generating CMakeLists.txt..."
-        {
-          echo 'cmake_minimum_required(VERSION 3.15)'
-          echo "project(${wPLUGIN_NAME}Web LANGUAGES C CXX)"
-          echo 'set(CMAKE_CXX_STANDARD 20)'
-          echo 'set(CMAKE_CXX_STANDARD_REQUIRED ON)'
-          echo ''
-          echo "set(PLUGIN_NAME \"${wPLUGIN_NAME}\")"
-          echo "set(PLUGIN_VERSION \"${wPROJECT_VERSION}\")"
-          echo "set(PLUGIN_SRC_DIR \"${PLUGIN_SRC_DIR}\")"
-          echo "set(WONDERLAB_DIR \"${WONDERLAB_DIR}\")"
-          echo 'set(PLUGIN_PROCESSOR_HEADER "PluginProcessor.h")'
-          echo 'set(PLUGIN_PROCESSOR_CLASS audio_plugin::AudioPluginAudioProcessor)'
-          echo "set(PLUGIN_EXTRA_INCLUDE_DIRS \"${BINARY_DATA_DIR}\")"
-          echo "set(PLUGIN_EXTRA_SOURCE_DIRS \"${BINARY_DATA_DIR}\")"
-          echo ''
-          echo 'include("${PLUGIN_SRC_DIR}/../web/wonderlab.cmake")'
-        } > CMakeLists.txt
-
-        # Configure with Emscripten
-        echo "Configuring Emscripten..."
-        emcmake cmake -G Ninja -S . -B . -DCMAKE_BUILD_TYPE=Release
-
-        # Build
-        echo "Compiling WebAssembly..."
-        emmake ninja
-
-        WASM_SIZE=$(stat -c%s "${REPOSITORY_NAME}Web.wasm" 2>/dev/null || echo "unknown")
-        echo "WASM size: ${WASM_SIZE} bytes"
-
-
-    # Assemble Web App
-    # ==========================================================================================
-    # [Claude 2026-10-27] The assembly now runs Wonderlab/scripts/assemble-web.js, the same
-    # script the local run_local builds use. It copies index.html and the tracks as before,
-    # and also writes a build id (so browsers can cache the WASM between visits), an MP3 copy
-    # of each WAV (about 1/6 the size; the page falls back to the WAV), track durations, and
-    # the phone zoom regions from plugin/web_demo.json. ffmpeg is only needed for the MP3s.
     - name: Install ffmpeg (MP3 copies of the demo tracks)
       run: sudo apt-get install -y -q ffmpeg
 
-    - name: Assemble Web App
+    - name: Build the Web Demo
       shell: bash
       run: |
-        set -e
-        node "${GITHUB_WORKSPACE}/plugin/web/assemble.mjs" --wonderlab "${GITHUB_WORKSPACE}/Wonderlab" \
-          --name "${wPLUGIN_NAME}" \
-          --build "${GITHUB_WORKSPACE}/build/web" \
-          --samples "${GITHUB_WORKSPACE}/plugin/sample_audio" \
-          --extra "${GITHUB_WORKSPACE}/plugin/web_demo.json" \
-          --build-id "${GITHUB_SHA::8}"
-
-        # List final web app contents
+        bash scripts/web/build-web.sh
         echo ""
         echo "Web app contents:"
         ls -la "${GITHUB_WORKSPACE}/build/web/"
@@ -1918,39 +1216,6 @@ jobs:
     # The folder names come from config.cmake (wWEB_STAGING_DIR, wWEB_LIVE_DIR); the defaults are below.
     # ==========================================================================================
 
-    # Collect the Web Demo Files (one folder, exactly what gets deployed, with its commit and checksums)
-    # ==========================================================================================
-    - name: Collect the Web Demo Files
-      shell: bash
-      run: |
-        set -euo pipefail
-        SRC="${GITHUB_WORKSPACE}/build/web"
-        B="${GITHUB_WORKSPACE}/build/web-bundle"
-        rm -rf "$B"
-        mkdir -p "$B"
-        for f in index.html plugin-config.js "${wPLUGIN_NAME}Web.js" "${wPLUGIN_NAME}Web.wasm"; do
-          cp "${SRC}/${f}" "${B}/"
-        done
-        if [ -f "${SRC}/${wPLUGIN_NAME}WebFallback.js" ]; then
-          cp "${SRC}/${wPLUGIN_NAME}WebFallback.js" "${SRC}/${wPLUGIN_NAME}WebFallback.wasm" "${B}/"
-        fi
-        if [ -d "${SRC}/audio" ]; then
-          mkdir -p "${B}/audio"
-          cp -a "${SRC}/audio/." "${B}/audio/"
-        fi
-        # File names the checksum list and the remote commands can carry safely (no backslash, quote or newline)
-        NL=$'\n'
-        bad=$(cd "$B" && find . -type f \( -name '*\\*' -o -name "*'*" -o -name '*"*' -o -name "*${NL}*" \) -print)
-        if [ -n "$bad" ]; then
-          echo "::error::Web demo file names must not contain a backslash, a quote or a newline: ${bad}"
-          exit 1
-        fi
-        echo "${GITHUB_SHA}" > "${B}/build-commit.txt"
-        ( cd "$B" && find . -type f ! -name build-manifest.sha256 -printf '%P\0' | sort -z | xargs -0 sha256sum > build-manifest.sha256 )
-        echo "Web demo bundle (commit ${GITHUB_SHA}):"
-        cat "${B}/build-manifest.sha256"
-
-
     # Check the Web Demo Folder Names (from config.cmake)
     # ==========================================================================================
     - name: Check the Web Demo Folder Names
@@ -1983,45 +1248,9 @@ jobs:
         REPOSITORY_NAME: ${{ github.event.repository.name }}
         STAGING_DIR: ${{ steps.webdirs.outputs.staging_dir }}
       shell: bash
-      run: |
-        set -euo pipefail
-        B="${GITHUB_WORKSPACE}/build/web-bundle"
-        CE_SERVER="CaulfieldEngineering.com"
-        BASE="/home/caulfiel/public_html/plug-ins/${REPOSITORY_NAME}"
-        STG="${BASE}/${STAGING_DIR}"
-        INC="${STG}.incoming-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-        URL="https://caulfieldengineering.com/plug-ins/${REPOSITORY_NAME}/${STAGING_DIR}/"
-
-        # The preview's .htaccess: the demo's headers, plus noindex so search engines never list it
-        HT="${RUNNER_TEMP}/staging-htaccess"
-        cat "${GITHUB_WORKSPACE}/Wonderlab/web/htaccess" > "$HT"
-        printf '\n# Staging preview: never indexed\nHeader always set X-Robots-Tag "noindex, nofollow, noarchive"\n' >> "$HT"
-
-        # A slower, older staging run must not replace a newer preview: deploy only if staging is still this commit
-        HEAD_SHA=$(git -C "$GITHUB_WORKSPACE" ls-remote origin refs/heads/staging | cut -f1) || HEAD_SHA=""
-        if [ "$HEAD_SHA" != "$GITHUB_SHA" ]; then
-          echo "::notice::staging is now ${HEAD_SHA:-unknown}, not ${GITHUB_SHA}; this older build does not replace the preview."
-          echo "Web demo preview not updated: staging moved on to \`${HEAD_SHA:-unknown}\`." >> "$GITHUB_STEP_SUMMARY"
-          exit 0
-        fi
-
-        echo "Uploading the preview to ${CE_SERVER}:${INC}"
-        ssh "$CE_SERVER" "rm -rf '${INC}' && mkdir -p '${INC}'"
-        scp -r "${B}/"* "${CE_SERVER}:${INC}/"
-        scp "$HT" "${CE_SERVER}:${INC}/.htaccess"
-
-        # Swap the whole folder, so no file from an older preview is left behind (it would be promoted on the tag)
-        ssh "$CE_SERVER" "rm -rf '${STG}.old' && if [ -d '${STG}' ]; then mv '${STG}' '${STG}.old'; fi && [ ! -e '${STG}' ] && mv '${INC}' '${STG}' && rm -rf '${STG}.old'"
-
-        echo "Staging preview: ${URL}"
-        {
-          echo "### Web demo preview (staging)"
-          echo ""
-          echo "Preview: ${URL}"
-          echo ""
-          echo "Commit \`${GITHUB_SHA}\`, build id \`${GITHUB_SHA::8}\`. Not indexed, linked from nowhere."
-          echo "The live demos were not changed; a v* tag promotes these exact files."
-        } >> "$GITHUB_STEP_SUMMARY"
+      # [Claude 2026-10-31] scripts/web/deploy-staging.sh (B-07): the same noindex .htaccess, "staging is still this
+      # commit" check, upload to <staging>.incoming-<run> and whole-folder swap, and summary. Private preview only.
+      run: bash scripts/web/deploy-staging.sh
 
 
     # Still the Newest Release (tag only): a re-run of an older release must not put its demo back live

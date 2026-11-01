@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 
-from common import PLATFORM, ROOT, au_reset, host_version, identity, local_path, running, staged
+from common import PLATFORM, ROOT, au_reset, host_version, identity, local_path, running, staged, tool
 
 
 def planned(r, id, detail):
@@ -113,7 +113,7 @@ def quit_mac(app, pid):
 
 
 def reaper(r, args):
-    exe = host(r, 'REAPER', [os.environ.get('WLA_REAPER'),
+    exe = host(r, 'REAPER', [os.environ.get('WLA_REAPER'), tool('reaper', install=False),
         r'C:\Program Files\REAPER (x64)\reaper.exe' if PLATFORM == 'win' else '/Applications/REAPER.app/Contents/MacOS/REAPER'],
         'reaper.exe' if PLATFORM == 'win' else 'REAPER')
     if not exe:
@@ -451,7 +451,7 @@ def web(r, args):
 
 
 def reaper_exe(r):
-    return host(r, 'REAPER', [os.environ.get('WLA_REAPER'),
+    return host(r, 'REAPER', [os.environ.get('WLA_REAPER'), tool('reaper', install=False),
         r'C:\Program Files\REAPER (x64)\reaper.exe' if PLATFORM == 'win' else '/Applications/REAPER.app/Contents/MacOS/REAPER'],
         'reaper.exe' if PLATFORM == 'win' else 'REAPER')
 

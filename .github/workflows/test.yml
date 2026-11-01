@@ -21,7 +21,12 @@
 # and keyboard events. The hosted runners have a desktop session (Windows) and a window server (macOS), so no virtual
 # display is needed. A failure prints each failing check with its scenario and test-plan IDs, and the failing lines
 # also go in the run's summary page.
-#   compare      compares the renders of all three: they should sound the same
+#   compare      compares the renders of all three: they should sound the same, and checks that scripts/sequence.json
+#                (the build steps) and these workflows still agree (scripts/lib/check-sequence.py)
+#
+# [Claude 2026-10-31] Builds go through the same scripts as a desk build (scripts/README.md): scripts/win/Build-Plugin.ps1,
+# scripts/mac/build-plugin.sh and scripts/web/build-web.sh. pluginval comes from scripts/lib/tools.json (same v1.0.4,
+# checksum-checked, into .tools/) instead of a separate download here.
 #   web          compiles the Wonderlab web demo and runs the Playwright audio, control and screenshot tests
 #                (a missing CE_GITHUB_PAT fails clearly; the check never silently skips or deploys)
 #
@@ -53,6 +58,9 @@ env:
   JUCE_TAG: 8.0.8            # Same as CMakeLists.txt
   PLUGINVAL_TAG: v1.0.4
   STRICTNESS: 10             # pluginval strictness (5 is the usual minimum for host compatibility)
+  # [Claude 2026-10-31] Build-step results (scripts/lib/report.py) go next to the test results, so each job's existing
+  # results upload carries them too.
+  WLA_BUILD_RESULTS: tests/results/build
 
 jobs:
 
@@ -70,8 +78,7 @@ jobs:
         git clone --depth 1 --branch "$JUCE_TAG" https://github.com/juce-framework/JUCE.git "$RUNNER_TEMP/juce"
         brew list ninja >/dev/null 2>&1 || brew install ninja
         brew list ccache >/dev/null 2>&1 || brew install ccache
-        curl -sL -o "$RUNNER_TEMP/pv.zip" "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_TAG/pluginval_macOS.zip"
-        unzip -q -o "$RUNNER_TEMP/pv.zip" -d "$RUNNER_TEMP/pv"
+        python3 scripts/lib/tools.py path pluginval
 
     - name: Compiler cache
       uses: actions/cache@v4
@@ -80,16 +87,11 @@ jobs:
         key: ccache-mac-${{ github.sha }}
         restore-keys: ccache-mac-
 
-    - name: Configure (universal, macOS 11)
+    - name: Configure and build (universal, macOS 11)
       run: |
-        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
-          -DWLA_REVIEW_RENDER=ON -DWLA_TESTS=ON \
-          -DCPM_JUCE_SOURCE="$RUNNER_TEMP/juce" \
-          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-
-    - name: Build
-      run: cmake --build build --target Tertiary_VST3 Tertiary_AU Tertiary_Standalone ReviewRender TertiaryTests HostTest UiTest   # [Claude 2026-10-30] + the standalone, for its V-08 checks
+        bash scripts/mac/build-plugin.sh --build-dir build --generator Ninja --universal --tests --review-render \
+          --juce-source "$RUNNER_TEMP/juce" --ccache \
+          --target Tertiary_VST3,Tertiary_AU,Tertiary_Standalone,ReviewRender,TertiaryTests,HostTest,UiTest   # [Claude 2026-10-30] + the standalone, for its V-08 checks
 
     - name: Collect the built files
       run: |
@@ -104,8 +106,6 @@ jobs:
         cp "$A/UiTest_artefacts/Release/UiTest" out/
 
     - name: Check, test and render
-      env:
-        WLA_PLUGINVAL: ${{ runner.temp }}/pv/pluginval.app/Contents/MacOS/pluginval
       run: bash tests/mac/run-all.sh --profile ci --build-dir out --results-dir tests/results/ci --expect-demo
 
     - name: Print test summary
@@ -155,13 +155,10 @@ jobs:
 
     - name: Get pluginval
       run: |
-        curl -sL -o "$RUNNER_TEMP/pv.zip" "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_TAG/pluginval_macOS.zip"
-        unzip -q -o "$RUNNER_TEMP/pv.zip" -d "$RUNNER_TEMP/pv"
+        python3 scripts/lib/tools.py path pluginval
         chmod +x out/ReviewRender out/TertiaryTests out/HostTest out/UiTest out/Tertiary.app/Contents/MacOS/Tertiary
 
     - name: Check, test and render
-      env:
-        WLA_PLUGINVAL: ${{ runner.temp }}/pv/pluginval.app/Contents/MacOS/pluginval
       run: bash tests/mac/run-all.sh --profile ci --build-dir out --results-dir tests/results/ci --expect-demo
 
     - name: Print test summary
@@ -199,15 +196,14 @@ jobs:
       run: |
         T=$(cygpath -m "$RUNNER_TEMP")   # forward slashes, so CMake doesn't read \ as escapes
         git clone --depth 1 --branch "$JUCE_TAG" https://github.com/juce-framework/JUCE.git "$T/juce"
-        curl -sL -o "$T/pv.zip" "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_TAG/pluginval_Windows.zip"
-        unzip -q -o "$T/pv.zip" -d "$T/pv"
+        python scripts/lib/tools.py path pluginval
 
     - name: Configure and build
-      shell: bash
+      shell: pwsh
       run: |
-        T=$(cygpath -m "$RUNNER_TEMP")
-        cmake -S . -B build -A x64 -DWLA_REVIEW_RENDER=ON -DWLA_TESTS=ON -DCPM_JUCE_SOURCE="$T/juce"
-        cmake --build build --config Release --target Tertiary_VST3 Tertiary_Standalone ReviewRender TertiaryTests HostTest UiTest -- -m
+        $T = $env:RUNNER_TEMP -replace '\\', '/'
+        pwsh scripts/win/Build-Plugin.ps1 -BuildDir build -Tests -ReviewRender -JuceSource "$T/juce" `
+          -Targets Tertiary_VST3,Tertiary_Standalone,ReviewRender,TertiaryTests,HostTest,UiTest
 
     # [Claude 2026-10-29] The UI tests (T2-02, T2-04 to T2-13, R-01 to R-08; see plugin/tests/UiTest.cpp)
     - name: Install Windows test dependencies
@@ -218,8 +214,6 @@ jobs:
     - name: Run Windows test scripts
       if: always()
       shell: pwsh
-      env:
-        WLA_PLUGINVAL: ${{ runner.temp }}/pv/pluginval.exe
       run: pwsh tests/win/Run-All.ps1 -Profile ci -BuildDir build -ResultsDir tests/results/ci -ExpectDemo
 
     - name: Print test summary
@@ -266,6 +260,9 @@ jobs:
           --tolerance 1e-3 --report compare-windows-vs-mac-arm64.txt | tee -a "$GITHUB_STEP_SUMMARY"
         python3 plugin/tests/regression/compare_renders.py results/results-windows/ci/renders results/results-mac-x86_64/ci/renders \
           --tolerance 1e-3 --report compare-windows-vs-mac-x86_64.txt | tee -a "$GITHUB_STEP_SUMMARY"
+
+    - name: Build steps and workflows agree (scripts/sequence.json)
+      run: python3 scripts/lib/check-sequence.py --github
 
     - name: Upload the comparison
       if: always()
@@ -337,9 +334,7 @@ jobs:
 
     - name: Build the web demo
       shell: bash
-      run: |
-        set -euo pipefail
-        node plugin/tests/web/build.mjs 2>&1 | tee plugin/tests/web/out/build.log
+      run: bash scripts/web/build-web.sh --test   # also writes plugin/tests/web/out/build.log, as before
 
     - name: Install browser tests
       working-directory: plugin/tests/web
@@ -425,9 +420,7 @@ jobs:
 
     - name: Build the web demo
       shell: bash
-      run: |
-        set -euo pipefail
-        node plugin/tests/web/build.mjs 2>&1 | tee plugin/tests/web/out/build.log
+      run: bash scripts/web/build-web.sh --test   # also writes plugin/tests/web/out/build.log, as before
 
     - name: Install WebKit
       working-directory: plugin/tests/web

@@ -21,6 +21,19 @@ PLATFORM = 'win' if sys.platform == 'win32' else 'mac' if sys.platform == 'darwi
 CODES = {'PASS': 0, 'FAIL': 1, 'SKIP': 2, 'PLANNED': 3}
 
 
+def tool(name, install=True):
+    """[Claude 2026-10-31] A pinned tool from scripts/lib/tools.json: its override env var, else <repo>/.tools/,
+    else (for auto tools such as pluginval) downloaded there now with its checksum checked. None when unavailable."""
+    sys.path.insert(0, str(ROOT / 'scripts' / 'lib'))
+    try:
+        import tools
+        return tools.find(name, install=install)
+    except Exception:
+        return None
+    finally:
+        sys.path.pop(0)
+
+
 def now():
     return dt.datetime.now().astimezone().isoformat(timespec='seconds')
 

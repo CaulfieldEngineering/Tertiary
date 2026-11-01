@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import sys
 
-from common import PLATFORM, ROOT, au_reset, identity, running, staged
+from common import PLATFORM, ROOT, au_reset, identity, running, staged, tool
 
 
 def metric(r, name, actual):
@@ -123,7 +123,9 @@ def architectures(r):
 
 
 def validator(r):
-    candidates = [os.environ.get('WLA_PLUGINVAL'),
+    # [Claude 2026-10-31] Portable: WLA_PLUGINVAL overrides; else the pinned pluginval (scripts/lib/tools.json, the same
+    # v1.0.4 as CI) in .tools/, downloaded on first use; the old build-folder and /Applications places stay as fallbacks.
+    candidates = [os.environ.get('WLA_PLUGINVAL'), tool('pluginval'),
                   r.build_dir / ('pluginval/pluginval.exe' if PLATFORM == 'win' else 'pluginval/pluginval.app/Contents/MacOS/pluginval'),
                   '/Applications/pluginval.app/Contents/MacOS/pluginval']
     return next((Path(p) for p in candidates if p and Path(p).is_file()), None)
