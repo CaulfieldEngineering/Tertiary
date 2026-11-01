@@ -55,6 +55,24 @@ if ($macHost) {
     $mac = Start-Process -PassThru -WindowStyle Hidden -FilePath 'ssh' -RedirectStandardOutput $macLog -RedirectStandardError "$macLog.err" `
         -ArgumentList @('-o', 'BatchMode=yes', $macHost, "bash $macRepo/tests/mac/release-check.sh $commit $stamp")
 }
+New-Item -ItemType Directory -Force (Join-Path $Root 'tests/results') | Out-Null
+# A fresh checkout has no build folder, web packages or Cubase input audio (none are in git). Make them here so the
+# release check runs from a clean pull, as Joe wants (2026-10-31: "remove the folders that are not in git so it looks like a fresh pull").
+if (-not (Test-Path (Join-Path $Root 'build-tests/CMakeCache.txt'))) {
+    Say 'Windows: configuring build-tests (fresh checkout)'
+    cmake -S $Root -B (Join-Path $Root 'build-tests') -DWLA_TESTS=ON -DWLA_REVIEW_RENDER=ON -DWLA_COPY_PLUGIN_AFTER_BUILD=OFF | Out-File (Join-Path $Root "tests/results/$stamp-win-configure.log")
+    if ($LASTEXITCODE) { Fail 'Windows configure failed' }
+}
+if (-not $NoWeb -and -not (Test-Path (Join-Path $Root 'plugin/tests/web/node_modules'))) {
+    Say 'Web: installing test packages (fresh checkout)'
+    Push-Location plugin/tests/web; npm ci *> (Join-Path $Root "tests/results/$stamp-web-setup.log"); npx playwright install chromium webkit firefox *>> (Join-Path $Root "tests/results/$stamp-web-setup.log"); $setupCode = $LASTEXITCODE; Pop-Location
+    if ($setupCode) { Fail 'web test setup failed' }
+}
+if (-not (Test-Path (Join-Path $Root 'plugin/tests/daw/cubase/Tertiary harness/Audio/harness-input.wav'))) {
+    Say 'Cubase: making the harness input audio (fresh checkout)'
+    python (Join-Path $Root 'plugin/tests/daw/cubase/tertiary_harness_build.py') audio *> (Join-Path $Root "tests/results/$stamp-cubase-media.log")
+    if ($LASTEXITCODE) { Fail 'Cubase harness audio could not be made' }
+}
 Say 'Windows: building'
 cmake --build build-tests --config Release -j 8 | Out-File (Join-Path $Root "tests/results/$stamp-win-build.log")
 if ($LASTEXITCODE) { Fail 'Windows build failed' }
