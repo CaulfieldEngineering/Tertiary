@@ -64,7 +64,7 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .detail { padding: var(--sp-4) var(--sp-4) var(--sp-6) 92px; border-bottom: 1px solid var(--line); }
 .facts { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-6); font-size: var(--fs-small); color: var(--muted); margin-bottom: var(--sp-4); }
-.facts b { color: var(--text); font-weight: 500; }
+.facts b { color: var(--text); font-weight: 500; } .facts span { min-width: 0; overflow-wrap: anywhere; }
 .check { display: grid; grid-template-columns: 16px 220px minmax(0, 1fr); gap: var(--sp-4); font-size: var(--fs-small); padding: 2px 0; align-items: start; }
 .check .ic { width: 14px; height: 14px; margin-top: 2px; }
 .check .d { color: var(--muted); overflow-wrap: anywhere; }
@@ -170,7 +170,7 @@ function planned(state) {
 function machineRows(m) {
   const rows = new Map(); let start = null, end = null;
   for (const e of m.events) {
-    if (e.event === 'run-start') start = e;
+    if (e.event === 'run-start' && !start) start = e;   // a retried test appends its own run-start; the run began at the first
     if (e.event === 'run-end') end = e;
     if (e.event === 'test-start') rows.set(e.id, {id: e.id, title: e.title, status: 'RUNNING', t0: e.time});
     if (e.event === 'test-finish') rows.set(e.id, Object.assign(rows.get(e.id) || {id: e.id, title: e.id}, {status: e.status, counts: e.counts, seconds: e.seconds, t1: e.time}));
