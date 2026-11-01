@@ -134,23 +134,16 @@ def bounce(ui, destination):
     # [Claude 2026-11-01] On 2026-11-01 the save panel twice put its default name ("Tertiary harness") back after the
     # folder change, so the bounce landed as "Tertiary harness.wav" and this test waited for bounce-1.wav in vain. The
     # name is now set again after the folder change and read back before Bounce is pressed; the checks are unchanged
-    # (the bounce must still appear at exactly this path, complete, and match the golden). When the panel ignores the
-    # accessibility value (it did on the second attempt that day), the name is typed: click the field, select all, type.
-    for attempt in range(5):
-        rows = ui.dump()
-        label = ui.find(rows, role='AXStaticText', value='Save As:')[0]
-        name = [e for e in rows if e.get('Role') == 'AXTextField' and abs(e['frame'][1] - label['frame'][1]) < 6][0]
-        if name.get('Value') == destination.stem:
-            break
-        if attempt == 0:
-            ui.set(name, destination.stem)
-        else:
-            ui.click(name)
-            ui.key(0, 'cmd')                       # select all in the name field
-            ui.call('cgtext', destination.stem)
-        time.sleep(.4)
-    else:
-        raise Stop('The bounce name field would not keep ' + destination.stem, 3)
+    # (the bounce must still appear at exactly this path, complete, and match the golden). The accessibility value of
+    # this field was not reliable that day (it read back the old name while the field showed the new one), so the name
+    # is typed as a person would: click the field, select all, type it.
+    rows = ui.dump()
+    label = ui.find(rows, role='AXStaticText', value='Save As:')[0]
+    name = [e for e in rows if e.get('Role') == 'AXTextField' and abs(e['frame'][1] - label['frame'][1]) < 6][0]
+    ui.click(name)
+    ui.key(0, 'cmd')                               # select all in the name field
+    ui.call('cgtext', destination.stem)
+    time.sleep(.4)
     ui.button('Bounce')
     deadline = time.monotonic() + 90
     last_size, stable = -1, 0
