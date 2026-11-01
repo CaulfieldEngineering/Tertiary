@@ -47,7 +47,7 @@ def main():
                         continue   # Windows signing stays in the pinned Azure action; the Mac half is the script
                     problems.append(f'{row["id"]}: {flow} job {job} does not call ' + ' or '.join('scripts/' + s for s in row['scripts'].values()))
     for flow, text in flows.items():
-        for path in sorted(set(re.findall(r'scripts/(?:win|mac|web|lib)/[A-Za-z0-9_.-]+', text))):
+        for path in sorted(set(p.rstrip('.') for p in re.findall(r'scripts/(?:win|mac|web|lib)/[A-Za-z0-9_.-]+', text))):   # a sentence's full stop is not part of a path
             if not (ROOT / path).is_file():
                 problems.append(f'{flow} calls {path}, which does not exist')
     for p in problems:
