@@ -16,7 +16,10 @@
 # overrides only (2026-10-31): tools default to the pinned copies in .tools (scripts/lib/tools.json).
 # The Mac comes from config.cmake (wTEST_DASHBOARD_MAC, wTEST_DASHBOARD_MAC_REPO).
 param([Parameter(Mandatory)][string]$Report, [string]$Branch = 'development', [switch]$NoWeb)
-$ErrorActionPreference = 'Stop'
+# [Claude 2026-11-02] Continue, not Stop: in Windows PowerShell 5.1 a native command's stderr (a Python or CMake warning)
+# becomes an error record, and under Stop that ended the script with no FAIL line. Every step is judged by its exit code;
+# the trap below turns anything else that throws into the usual FAIL line and run time.
+$ErrorActionPreference = 'Continue'
 $Root = Split-Path $PSScriptRoot -Parent
 Set-Location $Root
 $Python = if ($env:WLA_TEST_PYTHON) { $env:WLA_TEST_PYTHON } else { 'python' }
@@ -28,6 +31,7 @@ $RunStart = Get-Date
 function RunTime { $end = Get-Date; $t = $end - $RunStart
     Say ("Release check started {0:yyyy-MM-dd HH:mm:ss}, ended {1:yyyy-MM-dd HH:mm:ss}, took {2} h {3} min {4} s" -f $RunStart, $end, [int][math]::Floor($t.TotalHours), $t.Minutes, $t.Seconds) }
 function Fail($text) { Say "FAIL: $text"; RunTime; exit 1 }
+trap { Fail "unexpected error: $_" }
 
 # 1. Commit and dashboard ----------------------------------------------------------------------------
 $commit = (git rev-parse HEAD).Trim()
@@ -47,7 +51,7 @@ Start-Process 'http://127.0.0.1:4120/?plan=all'
 # 2. Same commit on the Mac, then both machines at once -----------------------------------------------
 $mac = $null
 if ($macHost) {
-    $macHead = (ssh -o BatchMode=yes $macHost "cd $macRepo && git rev-parse HEAD").Trim()
+    $macHead = "$(ssh -o BatchMode=yes $macHost "cd $macRepo && git rev-parse HEAD")".Trim()
     if ($LASTEXITCODE) { Fail "the Mac ($macHost) is not reachable" }
     if ($macHead -ne $commit) {
         $bundle = Join-Path $env:TEMP "release-$stamp.bundle"
@@ -76,14 +80,15 @@ if (-not $NoWeb -and -not (Test-Path (Join-Path $Root 'plugin/tests/web/node_mod
     Push-Location plugin/tests/web; npm ci *> (Join-Path $Root "tests/results/$stamp-web-setup.log"); npx playwright install chromium webkit firefox *>> (Join-Path $Root "tests/results/$stamp-web-setup.log"); $setupCode = $LASTEXITCODE; Pop-Location
     if ($setupCode) { Fail 'web test setup failed' }
 }
-if (-not (Test-Path (Join-Path $Root 'plugin/tests/daw/cubase/Tertiary harness/Audio/harness-input.wav'))) {
-    Say 'Cubase: making the harness input audio (fresh checkout)'
-    python (Join-Path $Root 'plugin/tests/daw/cubase/tertiary_harness_build.py') audio *> (Join-Path $Root "tests/results/$stamp-cubase-media.log")
-    if ($LASTEXITCODE) { Fail 'Cubase harness audio could not be made' }
-}
 Say 'Windows: building'
 cmake --build build-tests --config Release -j 8 | Out-File (Join-Path $Root "tests/results/$stamp-win-build.log")
 if ($LASTEXITCODE) { Fail 'Windows build failed' }
+# [Claude 2026-11-02] After the build: the harness audio is rendered by HostTest, which a fresh checkout has only now.
+if (-not (Test-Path (Join-Path $Root 'plugin/tests/daw/cubase/Tertiary harness/Audio/harness-input.wav'))) {
+    Say 'Cubase: making the harness input audio (fresh checkout)'
+    & $Python (Join-Path $Root 'plugin/tests/daw/cubase/tertiary_harness_build.py') audio *> (Join-Path $Root "tests/results/$stamp-cubase-media.log")
+    if ($LASTEXITCODE) { Fail "Cubase harness audio could not be made; see tests/results/$stamp-cubase-media.log" }
+}
 if (-not $NoWeb) {
     # [Claude 2026-10-31] The one web build script (scripts/web/build-web.ps1 -Test: the same plugin/tests/web/build.mjs as
     # `npm run build`). It takes Emscripten and Wonderlab from WLA_EMSDK_ENV / EMSDK and WONDERLAB_DIR when env.ps1 sets
@@ -119,8 +124,9 @@ $slug = ((git remote get-url origin) -replace '.*github\.com[:/]', '' -replace '
 $headers = @{ Accept = 'application/vnd.github+json'; Authorization = "Bearer $token" }
 $runId = $null
 for ($i = 0; $i -lt 240; $i++) {
-    $found = (Invoke-RestMethod -Headers $headers "https://api.github.com/repos/$slug/actions/runs?head_sha=$commit&branch=$Branch&event=push").workflow_runs |
-        Where-Object { $_.name -like 'Tests*' } | Select-Object -First 1
+    # [Claude 2026-11-02] A dropped request while waiting is retried on the next poll, not a FAIL.
+    $found = try { (Invoke-RestMethod -Headers $headers "https://api.github.com/repos/$slug/actions/runs?head_sha=$commit&branch=$Branch&event=push").workflow_runs |
+        Where-Object { $_.name -like 'Tests*' } | Select-Object -First 1 } catch { Say "GitHub API did not answer ($($_.Exception.Message)); retrying"; $null }
     if ($found) {
         $runId = $found.id
         if ($found.status -eq 'completed') { break }
