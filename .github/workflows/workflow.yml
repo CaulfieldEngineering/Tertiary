@@ -45,6 +45,8 @@ jobs:
   # ==========================================================================================
   preflight:
     runs-on: ubuntu-latest
+    # [Claude 2026-11-02] Every job has a time limit (GitHub's default is 6 hours; staging run 41507414115 hung for 2.5).
+    timeout-minutes: 15
     permissions:
       contents: read
     outputs:
@@ -314,6 +316,8 @@ jobs:
             cmake_arch: -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
 
     runs-on: ${{ matrix.os }}
+    # Longest so far: 13 min (Mac, before 2026-10-31), 28 min (Windows with its tests, 2026-11-02).
+    timeout-minutes: 90
 
 
 
@@ -737,6 +741,7 @@ jobs:
     needs: [preflight, build]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     # [Claude 2026-10-30] Codex RC review: two tags publishing at once could leave the older one live. One publish at a
     # time (a second waits, never cancelled part-way), and the tag is checked again just before anything goes live.
     concurrency:
@@ -1002,6 +1007,7 @@ jobs:
     needs: [preflight, build, publish]
     if: failure() && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
@@ -1063,6 +1069,7 @@ jobs:
     needs: [build, publish]
     if: ${{ !cancelled() && needs.build.result == 'success' && (needs.publish.result == 'success' || needs.publish.result == 'skipped') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
     # [Claude 2026-10-30] Releases deploy one at a time. Staging runs are not queued (a queued run can be replaced

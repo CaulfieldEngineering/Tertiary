@@ -45,7 +45,12 @@ if [ "$CONFIGURE" = 1 ]; then
   [ ${#EXTRA[@]} -gt 0 ] && A+=("${EXTRA[@]}")
   run_logged "$CMAKE" "${A[@]}" || fail "CMake configure failed"
 fi
-B=(--build "$DIR" --config "$CONFIG" --parallel)
+# [Claude 2026-11-02] A job count, always: a bare --parallel is "make -j" under Unix Makefiles (the default
+# generator, workflow.yml's staging build), which starts every ready compile at once. On GitHub's 3-CPU, 7 GB Mac
+# the universal build then swapped the runner to a standstill (staging run 41507414115: 2.5 h, no log). Ninja
+# (test.yml) already bounds itself; this is the same bound for every generator.
+JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
+B=(--build "$DIR" --config "$CONFIG" --parallel "$JOBS")
 for t in ${TARGETS[@]+"${TARGETS[@]}"}; do B+=(--target "$t"); done
 run_logged "$CMAKE" "${B[@]}" || fail "build failed"
 [ "$DRY_RUN" = 1 ] && step_end SKIP "dry run: commands printed, nothing built"

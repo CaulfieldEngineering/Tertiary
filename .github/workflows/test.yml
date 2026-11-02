@@ -241,6 +241,7 @@ jobs:
   compare:
     needs: [mac-build, mac-intel, windows]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -453,6 +454,7 @@ jobs:
     if: always()
     needs: [mac-build, mac-intel, windows, compare, web, web-mobile]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
     - name: Require every test job
       env:
