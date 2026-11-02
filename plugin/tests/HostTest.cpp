@@ -1065,7 +1065,10 @@ struct DawLikeHost
     explicit DawLikeHost(const juce::File& bundle)
     {
         using namespace Steinberg;
-        const auto binary = bundle.getChildFile("Contents").getChildFile("x86_64-win").getChildFile(bundle.getFileName());
+        // [Claude 2026-11-02] A bundle folder (a build) or the single-file VST3 the Windows installer puts in
+        // Common Files\VST3 (R-17); the installer test failed here with "can't load ...\Contents\x86_64-win\..."
+        const auto binary = bundle.existsAsFile() ? bundle
+                          : bundle.getChildFile("Contents").getChildFile("x86_64-win").getChildFile(bundle.getFileName());
         module = LoadLibraryW(binary.getFullPathName().toWideCharPointer());
         if (module == nullptr) { error = "can't load " + binary.getFullPathName(); return; }
         using GetFactory = IPluginFactory* (PLUGIN_API*)();
