@@ -119,14 +119,21 @@ git push origin "${commit}:refs/heads/$Branch"
 if ($LASTEXITCODE) { Fail "push to $Branch was refused (not a fast-forward?)" }
 
 # 4. The GitHub run for that push, then the one report -------------------------------------------------
-$token = (("protocol=https`nhost=github.com`n`n" | git credential fill) | Where-Object { $_ -like 'password=*' }) -replace '^password=', ''
+# [Claude 2026-11-02] The token comes the dashboard's way (server.py github_token, git credential fill from Python):
+# piped from Windows PowerShell 5.1, git refused the request ("missing protocol field"), the token was empty and
+# GitHub answered every "Bearer " request with 401. No token, or a token GitHub refuses: ask the public API without one.
+$token = "$(& $Python -c "import sys;sys.path.insert(0,'tests/dashboard');from server import github_token;print(github_token() or '')")".Trim()
 $slug = ((git remote get-url origin) -replace '.*github\.com[:/]', '' -replace '\.git$', '')
-$headers = @{ Accept = 'application/vnd.github+json'; Authorization = "Bearer $token" }
+$headers = @{ Accept = 'application/vnd.github+json' }
+if ($token) { $headers.Authorization = "Bearer $token" } else { Say 'No GitHub token from git credential; using the public API without one' }
 $runId = $null
 for ($i = 0; $i -lt 240; $i++) {
     # [Claude 2026-11-02] A dropped request while waiting is retried on the next poll, not a FAIL.
     $found = try { (Invoke-RestMethod -Headers $headers "https://api.github.com/repos/$slug/actions/runs?head_sha=$commit&branch=$Branch&event=push").workflow_runs |
-        Where-Object { $_.name -like 'Tests*' } | Select-Object -First 1 } catch { Say "GitHub API did not answer ($($_.Exception.Message)); retrying"; $null }
+        Where-Object { $_.name -like 'Tests*' } | Select-Object -First 1 } catch {
+        if ($headers.Authorization -and "$($_.Exception.Message)" -match '\(401\)') { $headers.Remove('Authorization'); Say 'GitHub refused the token (401); using the public API without one' }
+        else { Say "GitHub API did not answer ($($_.Exception.Message)); retrying" }
+        $null }
     if ($found) {
         $runId = $found.id
         if ($found.status -eq 'completed') { break }
