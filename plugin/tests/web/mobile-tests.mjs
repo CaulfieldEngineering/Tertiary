@@ -79,7 +79,7 @@ export async function testMobile({context,check,shot,outDir,meta,engine}) {
     if(!loaded){await ctx?.close();continue;}
     try {
       await check(`M-02-${id}`,'One TAP unlocks audio and starts audible playback',async()=>{
-        await page.locator('#big-play').tap();
+        await page.locator('#btn-play').tap();   // [Claude 2026-11-03] no Play overlay any more (see start in browser.mjs)
         await page.waitForFunction(()=>audioCtx?.state==='running'&&juceReady&&playing,null,{timeout:20000});
         const audio=await audioSummary(page,1200);assert.ok(audio.mean>.0001,`Silent mobile output: ${JSON.stringify(audio)}`);return audio;
       });

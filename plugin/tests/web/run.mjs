@@ -145,8 +145,11 @@ try {
     let ctx,errors;
     const ok=await check(`W-01-${view.name}`,'Loads, ready, correct config build ID and isolation',async()=>{
       ({ctx,errors}=await context(view));
-      const state=await page.evaluate(()=>({id:WONDERLAB_CONFIG.buildId,isolated:crossOriginIsolated,state:audioCtx?.state||'not-created',playing}));
+      const state=await page.evaluate(()=>({id:WONDERLAB_CONFIG.buildId,isolated:crossOriginIsolated,state:audioCtx?.state||'not-created',playing,
+        overlay:!!document.querySelector('#shield')&&!document.querySelector('#shield').hidden&&getComputedStyle(document.querySelector('#shield')).display!=='none'}));
       assert.equal(state.id,meta.commit.slice(0,8)); assert.equal(state.isolated,true);
+      // [Claude 2026-11-03] Joe: no "Play demo" overlay to press first; once loaded the plugin is in view at once
+      assert.equal(state.overlay,false,'The Play overlay is still over the plugin after it loaded');
       assert.equal(state.playing,false); assert.notEqual(state.state,'running');
       assert.deepEqual(errors,[]); return state;
     });
