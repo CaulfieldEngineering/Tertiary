@@ -107,6 +107,11 @@ def begin(results, step_id, title):
     if os.environ.get('WLA_BUILD_NESTED') != '1':
         run_start(results, step_id)
     progress(results, 'test-start', id=step_id, title=title)
+    try:   # [Claude 2026-11-03] the step and its limit, for the step watch (stepwatch.py); never fails the step
+        import stepwatch
+        stepwatch.beat(f'{step_id} {title} (build, {PLATFORM})', stepwatch.limit(step_id))
+    except Exception:
+        pass
     (results / f'.{step_id}.start').write_text(json.dumps(dict(t=time.time(), started=now(), title=title)), encoding='utf-8')
 
 

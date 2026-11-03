@@ -12,6 +12,8 @@ if [ "$(uname -s)" = Darwin ] && [ "$(launchctl managername)" != Aqua ]; then
       "WLA_TEST_REFERENCE=${WLA_TEST_REFERENCE:-}" "WLA_LOGIC_MEDIA=${WLA_LOGIC_MEDIA:-}" \
       \
       "WLA_TEST_CMAKE=${WLA_TEST_CMAKE:-}" \
+      "WLA_WATCHDOG_JOB=${WLA_WATCHDOG_JOB:-}" "WLA_WATCHDOG=${WLA_WATCHDOG:-}" \
+      "WLA_WATCHDOG_DIR=${WLA_WATCHDOG_DIR:-$HOME/.wla-test/watchdog}" \
       "$PYTHON" "$HERE/../lib/run.py" "$@"
   fi
   echo "No logged-in desktop session; GUI checks will report SKIP."

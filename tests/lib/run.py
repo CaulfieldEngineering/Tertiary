@@ -14,7 +14,57 @@ import time
 import traceback
 from urllib.parse import quote
 
-from common import CODES, PLATFORM, ROOT, Report, config, host_lock, now, running, write_json, local_path
+from common import CODES, PLATFORM, ROOT, SO_FAR, Report, config, host_lock, now, running, write_json, local_path
+sys.path.append(str(ROOT / 'scripts' / 'lib'))
+import stepwatch  # noqa: E402  [Claude 2026-11-03] each test reports its step and limit, and is stopped at its limit
+
+
+def limit_minutes(row):
+    """[Claude 2026-11-03] The row's limit_minutes in sequence.json: recent durations with generous headroom.
+    Doubled on GitHub, whose shared runners are slower than the desk machines the durations come from."""
+    return float(row.get('limit_minutes') or 30) * (2 if os.environ.get('GITHUB_ACTIONS') == 'true' else 1)
+
+
+def launch(command, minutes, step):
+    """One test script under its limit (scripts/lib/stepwatch.py): reports the step, stops it and all it started
+    when it runs over. Returns .returncode (124 after a timeout) and .timed_out."""
+    return stepwatch.run_limited(command, minutes, step=step, cwd=ROOT)
+
+
+class StepTimeout(Exception):
+    pass
+
+
+def timeout_result(row, args, results, error, started):
+    """[Claude 2026-11-03] The result of a test stopped at its limit: the checks it got through (its result file when its
+    cleanup wrote one, else the checks it kept on disk as it went), then a "timeout" FAIL. Artifacts stay where they are."""
+    target, work = results / (row['id'] + '.json'), results / (row['id'] + '-artifacts')
+    data = None
+    try:
+        data = json.loads(target.read_text(encoding='utf-8')) if target.exists() else None
+        if not (data and data.get('id') == row['id'] and isinstance(data.get('checks'), list)):
+            data = None
+    except ValueError:
+        pass
+    if data is None:
+        checks = []
+        try:
+            checks = json.loads((work / SO_FAR).read_text(encoding='utf-8')) if (work / SO_FAR).exists() else []
+            (work / SO_FAR).unlink()
+        except (OSError, ValueError):
+            pass
+        artifacts = sorted(os.path.relpath(p, results).replace(os.sep, '/') for p in work.rglob('*') if p.is_file()) if work.exists() else []
+        data = dict(id=row['id'], name=row['id'], title=row.get('name', row['id']), suite_ids=row.get('suite_ids', []),
+                    profile=args.profile, platform=PLATFORM, status='FAIL', started=started, finished=None,
+                    build={'path': '', 'id': 'not recorded: stopped at its limit'}, host={'name': row['id'], 'version': 'not detected'},
+                    checks=checks, artifacts=artifacts)
+    data['checks'].append(dict(test_id=row['id'], id='timeout', status='FAIL', detail=str(error)))
+    data.update(status='FAIL', finished=now())
+    write_json(target, data)
+    for c in data['checks']:
+        print(f"{c['status']:7} {row['id']} / {c['id']}: {c['detail']}", flush=True)
+    print(f"TIMEOUT {row['id']} {row.get('name', row['id'])}: {error}", flush=True)
+    return data
 
 
 # [Claude 2026-10-31] Live progress (Joe: watch the whole sequence live; the final report is what he watched).
@@ -234,14 +284,22 @@ def _child(row, args, results):
     target = results / (row['id'] + '.json')
     if target.exists():
         target.unlink()  # An earlier PASS can never cover a failed launch.
+    started = now()
     try:
         if row.get('unregistered') and args.profile == 'ci':
             raise ValueError('No registered CI checkbox for product script; not executed: ' + str(script))
-        code = subprocess.run(command_for(script, args, results), cwd=ROOT, timeout=5400).returncode
+        minutes = limit_minutes(row)
+        done = launch(command_for(script, args, results), minutes, f"{row['id']} {row.get('name', row['id'])} ({PLATFORM})")
+        if getattr(done, 'timed_out', False):
+            raise StepTimeout(f'ran past its limit of {minutes:g} min and was stopped, with everything it started'
+                              ' (the limit is limit_minutes in tests/sequence.json)')
+        code = done.returncode
         if row.get('unregistered'):
             raise ValueError('Executed product script, but it has no Blocks ID/metadata in sequence.json: ' + str(script))
         data = json.loads(target.read_text(encoding='utf-8'))
         validate_result(data, row, code)
+    except StepTimeout as error:
+        data = timeout_result(row, args, results, error, started)
     except Exception as error:
         report = Report(row['id'], results, args.build_dir, row, args.profile)
         report.check('runner', 'FAIL', repr(error))
@@ -297,7 +355,11 @@ def _run_all(args, results, rows):
     if product_target.exists():
         product_target.unlink()
     try:
-        code = subprocess.run(command_for(product_script, args, results), cwd=ROOT, timeout=14400).returncode
+        minutes = sum(limit_minutes(r) for r in product_rows(rows) if not excluded(r, args)) + 10
+        done = launch(command_for(product_script, args, results), minutes, f'product tests ({PLATFORM})')
+        if getattr(done, 'timed_out', False):
+            raise ValueError(f'the product runner ran past its limit of {minutes:g} min and was stopped')
+        code = done.returncode
         products = json.loads(product_target.read_text(encoding='utf-8'))
         if code != int(products['status'] == 'FAIL'):
             raise ValueError('Product summary/exit mismatch')
@@ -339,6 +401,8 @@ def main():
     def interrupted(signum, frame):
         raise KeyboardInterrupt('signal ' + str(signum))
     signal.signal(signal.SIGTERM, interrupted)
+    if hasattr(signal, 'SIGBREAK'):
+        signal.signal(signal.SIGBREAK, interrupted)   # [Claude 2026-11-03] a Windows step stopped at its limit gets Ctrl+Break first
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('name')
     parser.add_argument('--results-dir')
@@ -351,6 +415,13 @@ def main():
     args = parser.parse_args()
     rows = sequence()
     results = result_folder(args.results_dir)
+    # [Claude 2026-11-03] The outermost runner names the watchdog job (or joins the one the release check made);
+    # the scripts it launches join it, and only the one that named it closes it.
+    with stepwatch.job(f'{args.name}-{results.name}'):
+        return _main(args, rows, results)
+
+
+def _main(args, rows, results):
     if args.dashboard and os.environ.get(NESTED) != '1':
         # [Claude 2026-10-31] Detached, so it keeps serving after the run; a second copy just fails to bind.
         flags = dict(creationflags=0x00000008 | 0x00000200) if PLATFORM == 'win' else dict(start_new_session=True)
@@ -366,6 +437,14 @@ def main():
                    if (p := results / (r['id'] + '.json')).exists()]
         return summary(results, reports, profile=args.profile)
     row = next(r for r in rows if r['id'] == args.name)
+    if os.environ.get(NESTED) != '1' and args.profile == 'local':
+        # [Claude 2026-11-03] A script run alone goes through the same launch as in Run-All, so it reports its step
+        # and is stopped at its limit too. On GitHub (profile ci) it runs here as before, under the job's own timeout.
+        started = run_started(results, row['id'], args)
+        data = child(row, args, results)
+        summary(results, [data], profile=args.profile)
+        run_ended(results, row['id'], started, CODES[data['status']])
+        return CODES[data['status']]
     single = run_started(results, row['id'], args)
     if single is not None:
         progress(results, 'test-start', id=row['id'], title=row.get('name', row['id']))

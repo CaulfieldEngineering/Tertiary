@@ -1,6 +1,9 @@
 # [Claude 2026-10-31] Shared helpers for scripts/win/*.ps1 and scripts/web/*.ps1. Dot-source it; it sets $Root and
 # $Cfg (config.cmake as a hashtable) and reports each step the way tests/ does (scripts/lib/report.py:
 # progress.jsonl and <ID>.json). Windows PowerShell 5.1 or PowerShell 7. Nothing here needs admin rights.
+# [Claude 2026-11-03] Each step also reports itself to the step watch (lib/stepwatch.py) with its limit_minutes from
+# sequence.json, and on a desk every Invoke-Logged command runs under what is left of that limit: past it, the command
+# and everything it started is stopped and the step FAILs as a timeout. On GitHub the job's own timeout applies.
 #
 #   . (Join-Path $PSScriptRoot '..\lib\common.ps1')
 #   Start-Step 'B-01' 'Plug-in'
@@ -28,6 +31,9 @@ $script:StepId = ''
 $script:StepLog = ''
 $script:StepArtifacts = @()
 $script:DryRunMode = $false
+$script:StepLimit = 30
+$script:StepDeadline = $null
+$script:OwnJob = $false
 
 function In-CI { return $env:GITHUB_ACTIONS -eq 'true' }
 function On-Tag { return ($env:GITHUB_REF -like 'refs/tags/v*') }
@@ -46,6 +52,10 @@ function Start-Step([string]$Id, [string]$Title, [switch]$DryRun) {
     $script:StepLog = Join-Path $art ($Id.ToLower() + '.log')
     Set-Content -Path $script:StepLog -Value '' -Encoding utf8
     $script:StepArtifacts = @($script:StepLog)
+    # [Claude 2026-11-03] A step run alone names the watchdog job; under Build-All it joins Build-All's.
+    $script:StepLimit = [double]((& $Python (Join-Path $LibDir 'stepwatch.py') limit $Id | Select-Object -Last 1).Trim())
+    $script:StepDeadline = (Get-Date).AddMinutes($script:StepLimit)
+    if (-not $env:WLA_WATCHDOG_JOB) { $env:WLA_WATCHDOG_JOB = "tertiary-win-$Id-$(Get-Date -Format 'yyyy-MM-dd_HHmmss')"; $script:OwnJob = $true }
     & $Python (Join-Path $LibDir 'report.py') begin --id $Id --title $Title --results $env:WLA_BUILD_RESULTS
     Say ("$Id $Title" + $(if ($DryRun) { ' (dry run)' } else { '' }))
 }
@@ -56,6 +66,7 @@ function Complete-Step([ValidateSet('PASS', 'FAIL', 'SKIP', 'PLANNED')][string]$
     $a = @()
     foreach ($p in $script:StepArtifacts) { if (Test-Path $p) { $a += @('--artifact', $p) } }
     & $Python (Join-Path $LibDir 'report.py') end --id $script:StepId --status $Status --detail $Detail --results $env:WLA_BUILD_RESULTS @a
+    if ($script:OwnJob) { & $Python (Join-Path $LibDir 'stepwatch.py') done --note $Status | Out-Null }
     $code = @{ PASS = 0; FAIL = 1; SKIP = 2; PLANNED = 3 }[$Status]
     if ((In-CI) -and $code -gt 1) { $code = 0 }
     exit $code
@@ -64,7 +75,7 @@ function Complete-Step([ValidateSet('PASS', 'FAIL', 'SKIP', 'PLANNED')][string]$
 function Fail-Step([string]$Detail) { Err $Detail; Complete-Step FAIL $Detail }
 
 # Runs a native command with its output on the console and in the step log; returns its exit code.
-# In a dry run it only prints the command.
+# In a dry run it only prints the command. On a desk it runs under what is left of the step's limit (above).
 function Invoke-Logged([string]$Exe, [string[]]$Arguments = @()) {
     $line = '> ' + $Exe + ' ' + ($Arguments -join ' ')
     Write-Host $line
@@ -73,9 +84,17 @@ function Invoke-Logged([string]$Exe, [string[]]$Arguments = @()) {
     $old = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        & $Exe @Arguments 2>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $script:StepLog -Append | Out-Host
+        if ((In-CI) -or -not $script:StepDeadline) {
+            & $Exe @Arguments 2>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $script:StepLog -Append | Out-Host
+        } else {
+            $left = [Math]::Max(1, [Math]::Round(($script:StepDeadline - (Get-Date)).TotalMinutes, 1))
+            & $Python (Join-Path $LibDir 'stepwatch.py') run --minutes $left -- $Exe @Arguments 2>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $script:StepLog -Append | Out-Host
+        }
         $code = $LASTEXITCODE
     } finally { $ErrorActionPreference = $old }
+    if ($code -eq 124 -and -not (In-CI)) {
+        Fail-Step "timeout: $(Split-Path -Leaf $Exe) ran past the step's limit of $($script:StepLimit) min (limit_minutes in scripts/sequence.json) and was stopped"
+    }
     return $code
 }
 

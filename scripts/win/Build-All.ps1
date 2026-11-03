@@ -16,6 +16,9 @@ $ra = @()
 if ($env:WLA_BUILD_RESULTS) { $ra = @('--results', $env:WLA_BUILD_RESULTS) }
 $env:WLA_BUILD_RESULTS = (& $Python (Join-Path $LibDir 'report.py') run-start --run build-all @ra | Select-Object -Last 1).Trim()
 $env:WLA_BUILD_NESTED = '1'
+# [Claude 2026-11-03] One watchdog job for the whole build (lib/stepwatch.py); each step reports itself into it.
+$ownJob = -not $env:WLA_WATCHDOG_JOB
+if ($ownJob) { $env:WLA_WATCHDOG_JOB = "tertiary-win-build-all-$(Split-Path -Leaf $env:WLA_BUILD_RESULTS)" }
 Say "Build-All: results in $env:WLA_BUILD_RESULTS"
 
 $rows = Get-Content (Join-Path $Root 'scripts\sequence.json') -Raw | ConvertFrom-Json
@@ -44,6 +47,7 @@ foreach ($row in $rows) {
 }
 & $Python (Join-Path $LibDir 'report.py') run-end --run build-all --results $env:WLA_BUILD_RESULTS
 $code = $LASTEXITCODE
+if ($ownJob) { & $Python (Join-Path $LibDir 'stepwatch.py') done --note "exit $code" | Out-Null }
 $t = (Get-Date) - $Started
 Say ("Build-All started {0:yyyy-MM-dd HH:mm:ss}, ended {1:yyyy-MM-dd HH:mm:ss}, took {2} h {3} min {4} s" -f $Started, (Get-Date), [int][math]::Floor($t.TotalHours), $t.Minutes, $t.Seconds)
 exit $code

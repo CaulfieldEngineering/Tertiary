@@ -19,6 +19,7 @@ import time
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORM = 'win' if sys.platform == 'win32' else 'mac' if sys.platform == 'darwin' else sys.platform
 CODES = {'PASS': 0, 'FAIL': 1, 'SKIP': 2, 'PLANNED': 3}
+SO_FAR = 'checks-so-far.json'   # [Claude 2026-11-03] Report.check keeps it; finish removes it
 
 
 def tool(name, install=True):
@@ -118,6 +119,11 @@ class Report:
         assert state in CODES
         self.data['checks'].append(dict(test_id=self.row['id'], id=id, status=state, detail=str(detail)))
         print(f'{state:7} {self.row["id"]} / {id}: {detail}', flush=True)
+        # [Claude 2026-11-03] The checks so far, on disk: a test stopped at its limit (run.py) still shows how far it got.
+        try:
+            write_json(self.work / SO_FAR, self.data['checks'])
+        except OSError:
+            pass
 
     def artifact(self, path):
         value = os.path.relpath(Path(path).resolve(), self.results).replace(os.sep, '/')
@@ -202,6 +208,7 @@ class Report:
         return code, text
 
     def finish(self):
+        (self.work / SO_FAR).unlink(missing_ok=True)
         self.data['status'] = status(self.data['checks'])
         self.data['finished'] = now()
         for path in self.work.rglob('*'):

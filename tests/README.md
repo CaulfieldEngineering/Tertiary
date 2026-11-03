@@ -189,7 +189,7 @@ before validation and after restoration. Standalone runs directly from the repo 
 was moved from `HQ/scripts/mac-day-build-checks.sh`: four scales, actual window pixels, a temporary Retina display
 when needed, settings restored and the temporary display released. It does not certify visual design approval.
 
-Every child has a timeout. Screenshots and logs accompany failures. Cubase normally quits through its own
+Every child has a time limit (`limit_minutes`, "Step watch" below). Screenshots and logs accompany failures. Cubase normally quits through its own
 Ctrl+Q, answering only the copied harness's exact Save / Don't Save / Cancel prompt. If that fails, the wrapper
 tries normal Quit for 30 seconds, captures the dialog, and **only then** terminates the PID it started. This is
 the documented last-resort fallback; it makes the test FAIL. It never kills a Cubase session found open at
@@ -311,6 +311,47 @@ single report opens with the whole run's start, end and total, and gives Started
 per GitHub job and for the GitHub run, and a Duration per test; the dashboard shows the run's start with a live
 elapsed clock, each machine's and the GitHub run's elapsed time, and each test's duration. All come from the
 `time` and `seconds` fields above.
+
+## Step watch: limits, timeouts and progress (2026-11-03)
+
+Joe, 2026-11-03: "is this watchdog AI-operated or AI-built? i'd prefer if its built into the testing suite/scripts".
+A release agent had sat waiting on a GitHub run that had finished long before. The scripts now catch that themselves,
+with `scripts/lib/stepwatch.py`; no agent has to remember to check in.
+
+- **Every step reports the step it is on and its limit.** Each test run by `run.py` (in Run-All, the product runner,
+  or a script run alone), each build step (`scripts/`, through `report.py begin`), each stage of
+  `Run-Release-Check.ps1` and `tests/mac/release-check.sh`, and each call of the Mac Safari helper
+  (`tests/mac/safari-step.sh`). The limit is `limit_minutes` on the row in `sequence.json` (tests) or
+  `scripts/sequence.json` (builds): the slowest recent duration (`tests/results`, `scripts/results`, rc-1.1.1) with
+  generous headroom, for example W-02 HostTest 10 min (52 s seen), WEB-01 45 (8 min), T2-03 30 (9 min).
+  Rows still PLANNED have the limit their real test should need.
+- **A step past its limit is stopped and FAILs as a timeout.** Gently first, so the test's own cleanup restores what
+  it staged: SIGTERM to its process group on the Mac, Ctrl+Break to its process group on Windows (`run.py` turns
+  both into `interrupted`). After 90 seconds everything the step started is killed (its process group; on Windows a
+  job object, so orphans go too). The test's result keeps the checks it got through and gains a `timeout` FAIL:
+  `ran past its limit of 15 min and was stopped, with everything it started (the limit is limit_minutes in
+  tests/sequence.json)`. It shows in `summary.md`, the dashboard and the release report like any failed check, and
+  the console prints `TIMEOUT <ID> <name>: ...`. A build step FAILs with `timeout: <tool> ran past the step's limit
+  of N min`; a release-check stage FAILs with `<stage> ran past its limit of N min and was stopped; see <log>`.
+- **A wait on a GitHub run polls the run itself**, returns as soon as it has completed, and gives up at its limit:
+  `python scripts/lib/stepwatch.py gh-wait --minutes 120 (--run ID | --sha SHA --branch B --workflow "Tests*")`
+  prints `RUN <id> <status> <conclusion> <url>` and exits 0 on success, 1 on another conclusion, 124 when still
+  running at the limit, 4 when no run appeared. The release check waits this way.
+- **One job per run feeds the HQ Step Watchdog** (`HQ\scripts\watchdog`, every 5 minutes), the backstop for a stop
+  that did not work. The job's expectation is the step's limit plus 10 minutes. The run that starts first names the
+  job (`WLA_WATCHDOG_JOB`, for example `tertiary-win-release-<stamp>`, `tertiary-win-all-<results folder>`) and
+  closes it; everything it launches joins it. Windows writes into `HQ\scripts\watchdog\jobs` beside this repo (none
+  when HQ is not there); the Mac writes `~/.wla-test/watchdog`, which the HQ check reads over SSH. `WLA_WATCHDOG_DIR`
+  moves it, `WLA_WATCHDOG=0` turns the reporting off; on GitHub there is no reporting and the profile `ci` keeps the
+  jobs' own `timeout-minutes` (a script run alone with `--profile ci` runs in place, as before).
+
+One command under a limit, for anything else a desk runs by hand:
+
+```text
+python scripts/lib/stepwatch.py run --step "Download the signed installer" --minutes 10 [--log FILE] -- gh run download ...
+```
+
+Agents only register the waits they do themselves, outside these scripts, with the HQ watchdog (HQ `agent/README.md`).
 
 ## Live dashboard (2026-10-31)
 

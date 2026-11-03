@@ -13,7 +13,8 @@ scripts/
   win/                     Build-Plugin.ps1, Sign-Windows.ps1, Build-Installer.ps1, Verify-Installer.ps1, Build-All.ps1
   mac/                     build-plugin.sh, sign-plugin.sh, build-installer.sh, sign-notarize.sh, verify-installer.sh, build-all.sh
   web/                     build-web.ps1/.sh, bundle.mjs, deploy-staging.ps1/.sh (the private web-staging preview only)
-  lib/                     common.ps1/.sh (config.cmake, step reporting), report.py, tools.py + tools.json, check-sequence.py
+  lib/                     common.ps1/.sh (config.cmake, step reporting), report.py, tools.py + tools.json, check-sequence.py,
+                           stepwatch.py (limits, timeouts, GitHub waits, the HQ watchdog job; tests/README.md, "Step watch")
   results/YYYY-MM-DD_HHMM/ progress.jsonl, <ID>.json, <ID>-artifacts/, summary.md/json (ignored by git)
   draft-changelog.mjs      unrelated helper (CHANGELOG drafts)
 ```
@@ -74,6 +75,16 @@ The same shape as `tests/` (`tests/README.md`, "Results" and "Live progress"): e
 Build-All / build-all.sh add `run-start` / `run-end` (with `"kind": "build"`) and `summary.md/json`, and print the
 start, end and duration. `WLA_BUILD_RESULTS` picks the folder (GitHub uses `tests/results/build`, so each job's
 results upload carries it). The test dashboard can read these folders the same way as test runs.
+
+## Limits and timeouts (2026-11-03)
+
+Each step has `limit_minutes` in `sequence.json` (B-01 and B-06 90, B-04 notarization 60, the others 20). On a desk,
+`Start-Step` / `step_begin` report the step and its limit to the step watch (`lib/stepwatch.py`), and every
+`Invoke-Logged` / `run_logged` command runs under what is left of it: past the limit the command and everything it
+started is stopped and the step FAILs with `timeout: <tool> ran past the step's limit of N min (limit_minutes in
+scripts/sequence.json) and was stopped`. Build-All / build-all.sh hold one watchdog job for the whole build; a step
+run alone makes its own. On GitHub nothing changes: the jobs' `timeout-minutes` apply. Details in `tests/README.md`,
+"Step watch".
 
 ## Tools: portable, pinned, repo-local
 

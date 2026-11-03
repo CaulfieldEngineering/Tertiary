@@ -20,6 +20,9 @@ STARTED=$(date +%s); STARTED_AT=$(date '+%Y-%m-%d %H:%M:%S')
 [ -n "$RESULTS" ] && { case "$RESULTS" in /*) ;; *) RESULTS="$ROOT/$RESULTS" ;; esac; export WLA_BUILD_RESULTS="$RESULTS"; }
 WLA_BUILD_RESULTS="$("$PYTHON" "$LIB_DIR/report.py" run-start --run build-all ${WLA_BUILD_RESULTS:+--results "$WLA_BUILD_RESULTS"})"
 export WLA_BUILD_RESULTS WLA_BUILD_NESTED=1
+# [Claude 2026-11-03] One watchdog job for the whole build (lib/stepwatch.py); each step reports itself into it.
+OWN_ALL_JOB=0
+[ -z "${WLA_WATCHDOG_JOB:-}" ] && { export WLA_WATCHDOG_JOB="tertiary-$PLATFORM-build-all-$(basename "$WLA_BUILD_RESULTS")"; OWN_ALL_JOB=1; }
 say "build-all: results in $WLA_BUILD_RESULTS"
 
 ROWS=$("$PYTHON" - "$ROOT/scripts/sequence.json" <<'PY'
@@ -58,6 +61,7 @@ while IFS=$'\t' read -r id name script bdir web extra; do
   fi
 done <<< "$ROWS"
 "$PYTHON" "$LIB_DIR/report.py" run-end --run build-all --results "$WLA_BUILD_RESULTS"; code=$?
+[ "$OWN_ALL_JOB" = 1 ] && "$PYTHON" "$LIB_DIR/stepwatch.py" done --note "exit $code"
 T=$(( $(date +%s) - STARTED ))
 say "build-all started $STARTED_AT, ended $(date '+%Y-%m-%d %H:%M:%S'), took $((T / 3600)) h $((T % 3600 / 60)) min $((T % 60)) s"
 exit $code

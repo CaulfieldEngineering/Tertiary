@@ -2,6 +2,9 @@
 # [Claude 2026-10-31] Shared helpers for scripts/mac/*.sh and scripts/web/*.sh. Source it; it sets ROOT and the
 # config.cmake values (wPLUGIN_NAME, wPROJECT_VERSION, wFORMATS, ...) and reports each step the way tests/ does
 # (scripts/lib/report.py: progress.jsonl and <ID>.json). Nothing here needs sudo or changes the system.
+# [Claude 2026-11-03] Each step also reports itself to the step watch (lib/stepwatch.py) with its limit_minutes from
+# sequence.json, and on a desk every run_logged command runs under what is left of that limit: past it, the command and
+# everything it started is stopped and the step FAILs as a timeout. On GitHub the job's own timeout applies.
 #
 #   . "$(dirname "$0")/../lib/common.sh"
 #   step_begin B-01 "Plug-in"
@@ -29,6 +32,9 @@ DRY_RUN=0
 STEP_ID=""
 STEP_LOG=""
 STEP_ARTIFACTS=()
+STEP_LIMIT=30
+STEP_DEADLINE=""
+OWN_JOB=0
 
 say() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
 in_ci() { [ "${GITHUB_ACTIONS:-}" = "true" ]; }
@@ -46,6 +52,10 @@ step_begin() {
   STEP_LOG="$WLA_BUILD_RESULTS/$STEP_ID-artifacts/$(printf '%s' "$STEP_ID" | tr 'A-Z' 'a-z').log"
   : > "$STEP_LOG"
   STEP_ARTIFACTS=("$STEP_LOG")
+  # A step run alone names the watchdog job; under build-all it joins build-all's.
+  STEP_LIMIT="$("$PYTHON" "$LIB_DIR/stepwatch.py" limit "$STEP_ID" | tr -d '\r')"
+  STEP_DEADLINE=$(( $(date +%s) + ${STEP_LIMIT%.*} * 60 ))
+  if [ -z "${WLA_WATCHDOG_JOB:-}" ]; then export WLA_WATCHDOG_JOB="tertiary-$PLATFORM-$STEP_ID-$(date +%Y-%m-%d_%H%M%S)"; OWN_JOB=1; fi
   "$PYTHON" "$LIB_DIR/report.py" begin --id "$STEP_ID" --title "$title" --results "$WLA_BUILD_RESULTS"
   say "$STEP_ID $title$([ "$DRY_RUN" = 1 ] && echo ' (dry run)')"
 }
@@ -55,6 +65,7 @@ step_end() {
   local status="$1" detail="$2" a args=()
   for a in "${STEP_ARTIFACTS[@]}"; do [ -e "$a" ] && args+=(--artifact "$a"); done
   "$PYTHON" "$LIB_DIR/report.py" end --id "$STEP_ID" --status "$status" --detail "$detail" --results "$WLA_BUILD_RESULTS" "${args[@]}"
+  [ "$OWN_JOB" = 1 ] && "$PYTHON" "$LIB_DIR/stepwatch.py" done --note "$status"
   case "$status" in
     PASS) exit 0 ;;
     FAIL) exit 1 ;;
@@ -66,14 +77,22 @@ step_end() {
 fail() { err "$*"; step_end FAIL "$*"; }
 
 # run_logged CMD...: runs it, output to the console and the step log; returns its exit code.
-# In a dry run it only prints the command.
+# In a dry run it only prints the command. On a desk it runs under what is left of the step's limit (above).
 run_logged() {
   printf '> %s\n' "$*" | tee -a "$STEP_LOG"
   [ "$DRY_RUN" = 1 ] && return 0
   set -o pipefail
-  "$@" 2>&1 | tee -a "$STEP_LOG"
+  if in_ci || [ -z "$STEP_DEADLINE" ]; then
+    "$@" 2>&1 | tee -a "$STEP_LOG"
+  else
+    local left=$(( (STEP_DEADLINE - $(date +%s)) / 60 )); [ "$left" -lt 1 ] && left=1
+    "$PYTHON" "$LIB_DIR/stepwatch.py" run --minutes "$left" -- "$@" 2>&1 | tee -a "$STEP_LOG"
+  fi
   local code=${PIPESTATUS[0]}
   set +o pipefail
+  if [ "$code" = 124 ] && ! in_ci; then
+    fail "timeout: $(basename "$1") ran past the step's limit of $STEP_LIMIT min (limit_minutes in scripts/sequence.json) and was stopped"
+  fi
   return "$code"
 }
 

@@ -128,7 +128,7 @@ class Contracts(unittest.TestCase):
             (out / 'broken.json').write_text('{"status":"PASS"}')
             rows = [dict(id=name, name=name, scope='universal', ci_ok=True, suite_ids=['SU-01'], scripts={common.PLATFORM: name + '.ps1'}) for name in ('broken', 'later')]
             calls = []
-            def child(command, **kwargs):
+            def child(command, *args, **kwargs):
                 if any('Run-All-Product' in str(c) or 'run-all-product' in str(c) for c in command):
                     run.summary(out, [], product=True)
                     return argparse.Namespace(returncode=0)
@@ -139,12 +139,51 @@ class Contracts(unittest.TestCase):
                 r = common.Report(name, out, row=rows[len(calls)-1])
                 r.check('future', 'PLANNED', 'future')
                 return argparse.Namespace(returncode=r.finish())
-            with patch('run.subprocess.run', side_effect=child):
+            with patch('run.launch', side_effect=child):
                 code = run.run_all(argparse.Namespace(build_dir=None, no_logic=False, profile='local', expect_demo=False), out, rows)
             self.assertEqual(code, 1)
             self.assertEqual(calls, ['broken', 'later'])
             report = json.loads((out / 'summary.json').read_text())
             self.assertEqual([r['status'] for r in report['results']], ['FAIL', 'PLANNED'])
+
+    def test_a_test_past_its_limit_fails_as_a_timeout_and_keeps_its_checks(self):
+        # [Claude 2026-11-03] stepwatch stopped it; the checks its cleanup wrote stay, plus a timeout FAIL.
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp)
+            row = dict(id='hang', name='Hangs', scope='universal', ci_ok=True, suite_ids=[], limit_minutes=1,
+                       scripts={common.PLATFORM: 'hang.ps1'})
+            def stopped(command, minutes, step):
+                self.assertEqual(minutes, 1)
+                self.assertIn('hang Hangs', step)
+                r = common.Report('hang', out, row=row)
+                r.check('got-this-far', 'PASS', 'before the hang')
+                r.check('interrupted', 'FAIL', 'test interrupted; cleanup attempted')
+                r.finish()
+                return argparse.Namespace(returncode=124, timed_out=True)
+            with patch('run.launch', side_effect=stopped):
+                data = run.child(row, argparse.Namespace(build_dir=None, no_logic=False, profile='local', expect_demo=False), out)
+            self.assertEqual(data['status'], 'FAIL')
+            self.assertEqual([c['id'] for c in data['checks']], ['got-this-far', 'interrupted', 'timeout'])
+            self.assertIn('limit of 1 min', data['checks'][-1]['detail'])
+            self.assertEqual(json.loads((out / 'hang.json').read_text())['status'], 'FAIL')
+
+    def test_a_test_killed_before_its_cleanup_still_shows_how_far_it_got(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp)
+            row = dict(id='hang', name='Hangs', scope='universal', ci_ok=True, suite_ids=[], limit_minutes=1,
+                       scripts={common.PLATFORM: 'hang.ps1'})
+            def killed(command, minutes, step):
+                r = common.Report('hang', out, row=row)
+                r.check('staged', 'PASS', 'plugin staged')    # then killed: no finish, no result file
+                return argparse.Namespace(returncode=124, timed_out=True)
+            with patch('run.launch', side_effect=killed):
+                data = run.child(row, argparse.Namespace(build_dir=None, no_logic=False, profile='local', expect_demo=False), out)
+            self.assertEqual([c['id'] for c in data['checks']], ['staged', 'timeout'])
+            run.validate_result(data, row, 1)
+            self.assertFalse((out / 'hang-artifacts' / common.SO_FAR).exists())
+
+    def test_every_row_has_a_limit(self):
+        self.assertTrue(all(r.get('limit_minutes', 0) > 0 for r in run.sequence()))
 
     def test_every_manifest_row_has_script(self):
         self.assertGreater(len(run.sequence()), 10)
@@ -180,7 +219,7 @@ class Contracts(unittest.TestCase):
             out = root / 'results'
             out.mkdir()
             args = argparse.Namespace(build_dir=None, no_logic=False, profile='local', expect_demo=False)
-            with patch('run.ROOT', root), patch('run.subprocess.run', return_value=argparse.Namespace(returncode=0)) as proc:
+            with patch('run.ROOT', root), patch('run.launch', return_value=argparse.Namespace(returncode=0, timed_out=False)) as proc:
                 rows = run.product_rows([])
                 self.assertEqual(len(rows), 1)
                 self.assertEqual(run.run_product(args, out, []), 1)
@@ -207,7 +246,7 @@ class Contracts(unittest.TestCase):
             out = root / 'results'
             out.mkdir()
             args = argparse.Namespace(build_dir=None, no_logic=False, profile='ci', expect_demo=False)
-            with patch('run.ROOT', root), patch('run.subprocess.run') as proc:
+            with patch('run.ROOT', root), patch('run.launch') as proc:
                 self.assertEqual(run.run_product(args, out, []), 1)
                 proc.assert_not_called()
             result = json.loads((out / 'product-summary.json').read_text())
