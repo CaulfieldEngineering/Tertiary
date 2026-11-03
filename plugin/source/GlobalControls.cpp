@@ -67,27 +67,35 @@ GlobalControls::GlobalControls(audio_plugin::AudioPluginAudioProcessor& p)
 
 }
 
+// [Claude 2026-10-29] The demo's bypass: the band controls fade evenly and keep their colours (and stop taking the mouse)
+// instead of being disabled, which drew them as bright grey keys that looked lit (Joe: "green lit for your proposal")
+void GlobalControls::showBypass(bool bypassed)
+{
+    if (bypassed == mShowingBypass)
+        return;
+    mShowingBypass = bypassed;
+    for (auto* c : { (juce::Component*) &lowBandControls, (juce::Component*) &midBandControls, (juce::Component*) &highBandControls,
+                     (juce::Component*) &inputGain, (juce::Component*) &outputGain })
+    {
+        c->setAlpha(bypassed ? 0.35f : 1.f);
+        c->setInterceptsMouseClicks(! bypassed, ! bypassed);
+    }
+    if (onDemoBypassChanged)
+        onDemoBypassChanged(bypassed);
+}
+
 void GlobalControls::timerCallback()
 {
-    //#ifdef DEMO_VERSION
-	if (mIsDemoVersion)
-	{
-        auto isEnabled = audioProcessor.getIsDemoModeEnabled();
+    // the demo bypasses for 10 s of every minute; the activated version never does
+    showBypass(mIsDemoVersion && ! audioProcessor.getIsDemoModeEnabled());
 
-        if (!isEnabled)
-        {
-              lowBandControls.setEnabled(false);
-              midBandControls.setEnabled(false);
-              highBandControls.setEnabled(false);
-        }
-        else
-        {
-              lowBandControls.setEnabled(true);
-              midBandControls.setEnabled(true);
-              highBandControls.setEnabled(true);
-        }
+    if (! lowBandControls.isEnabled())
+    {
+        // [Claude 2026-10-27] Activated during the demo's silent gap: the controls stayed greyed out until reload
+        lowBandControls.setEnabled(true);
+        midBandControls.setEnabled(true);
+        highBandControls.setEnabled(true);
     }
-    //#endif
 }
 
 void GlobalControls::paint(juce::Graphics& g)
@@ -108,7 +116,7 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
 
     auto controlLabelsFontJustification = FontEditor::ControlLabels::getJustification();
     auto controlLabelsFontTypeface = FontEditor::ControlLabels::getTypeface();
-    auto controlLabelsFontSize = std::min(border2.getHeight(), border2.getWidth()) * 0.175f;
+    auto controlLabelsFontSize = std::min(border2.getHeight(), border2.getWidth()) * 0.15f;
     auto controlLabelsFontStyle = FontEditor::ControlLabels::getFontStyle();
     auto controlLabelsFontColor = FontEditor::ControlLabels::getFontColor();
     auto controlLabelsFontTransparency = FontEditor::ControlLabels::getFontTransparency();
@@ -117,6 +125,16 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
                                 controlLabelsFontSize,
                                 controlLabelsFontStyle);
 
+    g.setGradientFill(BACKGROUND_GRADIENT(bounds));
+
+    // [Claude 2026-10-29] The label column takes the same shade as the band columns (BandControls darkens itself by
+    // 35 % black), so the four columns match (Joe: "a different background than the 2nd column")
+    g.setColour(juce::Colours::black.withAlpha(0.22f));  // [Claude 2026-10-29] a touch lighter (Joe: "The whole UI seems pretty dark"); was 0.35
+    // [Claude 2026-10-29] on whole pixels, as the frames now are (the band columns sit on fractional x)
+    g.fillRect(snapToScreenPixels(g, border2, this));
+    g.fillRect(snapToScreenPixels(g, border3, this));
+    g.fillRect(snapToScreenPixels(g, border4, this));
+    g.fillRect(snapToScreenPixels(g, border5, this));
     g.setGradientFill(BACKGROUND_GRADIENT(bounds));
 
     auto windowBorderColor = ColorScheme::WindowBorders::getWindowBorderColor();
@@ -130,95 +148,64 @@ void GlobalControls::paintWindowBorders(juce::Graphics& g)
     auto spacerHeightScale = 5.f / 250.f;
     auto spacerHeight = bounds.getHeight() * spacerHeightScale;
 
-    // Shape
-    // ==================================================================
-    auto shapeBorder = labelBorder;
-    shapeBorder.setY(lowBandControls.getWaveBounds().getY() - spacerHeight / 2);
-    paintBorder(g, dividerBorderColor, shapeBorder);
-    shapeBorder.setWidth(border2.getWidth());
-    g.setColour(controlLabelsFontColor);
-    g.setOpacity(controlLabelsFontTransparency);
-    g.setFont(myFont);
-    g.drawFittedText("Shape", shapeBorder.toNearestInt(), juce::Justification::centred, 1);
+    // [Claude 2026-10-29] One line between rows, running across the labels and the three bands, in place of a boxed
+    // cell per label (whose borders doubled up between rows); the label sits on its row's centre (Joe: "Don't need
+    // the double-borders ... match up these horizontal lines")
+    const auto top = (float) lowBandControls.getY();
+    const juce::Rectangle<int> rows[] = { lowBandControls.getWaveBounds(), lowBandControls.getSkewBounds(),
+                                          lowBandControls.getDepthBounds(), lowBandControls.getRhythmBounds(),
+                                          lowBandControls.getPhaseBounds(), lowBandControls.getGainBounds() };
+    const char* names[] = { "Shape", "Skew", "Depth", "Rhythm", "Phase", "Gain" };
+    const int n = 6;
+    const float pitch = (rows[n - 1].getCentreY() - rows[0].getCentreY()) / (float) (n - 1);
+    const PixelGrid grid(g, this);   // [Claude 2026-10-29] the row lines and labels on whole screen pixels at every window size
 
-    // Skew
-    // ==================================================================
-    auto skewBorder = labelBorder;
-    skewBorder.setY(lowBandControls.getSkewBounds().getY() - spacerHeight / 2);
-    paintBorder(g, dividerBorderColor, skewBorder);
-    skewBorder.setWidth(border2.getWidth());
-    g.setColour(controlLabelsFontColor);
-    g.setOpacity(controlLabelsFontTransparency);
-    g.setFont(myFont);
-    g.drawFittedText("Skew", skewBorder.toNearestInt(), juce::Justification::centred, 1);
-    
-    // Depth
-    // ==================================================================
-    auto depthBorder = labelBorder;
-    depthBorder.setY(lowBandControls.getDepthBounds().getY() - spacerHeight / 2);
-    paintBorder(g, dividerBorderColor, depthBorder);
-    depthBorder.setWidth(border2.getWidth());
-    g.setColour(controlLabelsFontColor);
-    g.setOpacity(controlLabelsFontTransparency);
-    g.setFont(myFont);
-    g.drawFittedText("Depth", depthBorder.toNearestInt(), juce::Justification::centred, 1);
+    for (int i = 0; i < n; ++i)
+    {
+        const float yc = top + rows[i].getCentreY();
+        g.setColour(controlLabelsFontColor);
+        g.setOpacity(controlLabelsFontTransparency);
+        g.setFont(myFont);
+        drawTextOnPixels(g, grid, names[i], juce::Rectangle<float>((float) border2.getX(), yc - pitch / 2.f, (float) border2.getWidth(), pitch),
+                         juce::Justification::centred);
 
-    // Rhythm
-    // ==================================================================
-    auto rhythmBorder = labelBorder;
-    rhythmBorder.setY(lowBandControls.getRhythmBounds().getY() - spacerHeight / 2);
-    paintBorder(g, dividerBorderColor, rhythmBorder);
-    rhythmBorder.setWidth(border2.getWidth());
-    g.setColour(controlLabelsFontColor);
-    g.setOpacity(controlLabelsFontTransparency);
-    g.setFont(myFont);
-    g.drawFittedText("Rhythm", rhythmBorder.toNearestInt(), juce::Justification::centred, 1);
-    
-    // Phase
-    // ==================================================================
-    auto phaseBorder = labelBorder;
-    phaseBorder.setY(lowBandControls.getPhaseBounds().getY() - spacerHeight / 2);
-    paintBorder(g, dividerBorderColor, phaseBorder);
-    phaseBorder.setWidth(border2.getWidth());
-    g.setColour(controlLabelsFontColor);
-    g.setOpacity(controlLabelsFontTransparency);
-    g.setFont(myFont);
-    g.drawFittedText("Phase", phaseBorder.toNearestInt(), juce::Justification::centred, 1);
+        // drawn inside each column only, so the columns' frames run unbroken top to bottom (Joe: "split sections
+        // instead of a continuous frame")
+        const float yLine = yc + pitch / 2.f;
+        for (auto col : { border2, border3, border4, border5 })
+        {
+            const auto c = col.toFloat().reduced(3.f, 0.f);
+            const auto dark = grid.hLine(yLine - 0.5f, c.getX(), c.getRight());
+            g.setColour(juce::Colours::black.withAlpha(0.55f));
+            g.fillRect(dark);
+            g.setColour(juce::Colours::white.withAlpha(0.04f));
+            g.fillRect(dark.translated(0.f, dark.getHeight()));
+        }
+    }
 
-    // Gain
-    // ==================================================================
-    auto gainBorder = labelBorder;
-    gainBorder.setY(lowBandControls.getGainBounds().getY() - spacerHeight / 2);
-    paintBorder(g, dividerBorderColor, gainBorder);
-    gainBorder.setWidth(border2.getWidth());
-    g.setColour(controlLabelsFontColor);
-    g.setOpacity(controlLabelsFontTransparency);
-    g.setFont(myFont);
-    g.drawFittedText("Gain", gainBorder.toNearestInt(), juce::Justification::centred, 1);
-    
     // Input Gain Border
     // ==================================================================
-    paintBorder(g, windowBorderColor, border1);
+    paintBorder(g, windowBorderColor, border1, this);
 
     // Text Labels Border
     // ==================================================================
-    paintBorder(g, windowBorderColor, border2);
+    paintBorder(g, windowBorderColor, border2, this);
     
     // Low-Band Border
     // ==================================================================
-    paintBorder(g, windowBorderColor, border3);
+    paintBorder(g, windowBorderColor, border3, this);
     
     // Mid-Band Border
     // ==================================================================
-    paintBorder(g, windowBorderColor, border4);
+    paintBorder(g, windowBorderColor, border4, this);
     
     // High-Band Border
     // ==================================================================
-    paintBorder(g, windowBorderColor, border5);
+    paintBorder(g, windowBorderColor, border5, this);
     
     // Output Gain Border
     // ==================================================================
-    paintBorder(g, windowBorderColor, border6);
+    paintBorder(g, windowBorderColor, border6, this);
 }
 
 void GlobalControls::paintBandLabels(juce::Graphics& g)
@@ -231,10 +218,12 @@ void GlobalControls::paintBandLabels(juce::Graphics& g)
 
     // Beware of Magic Numbers
     // ==================================
-    auto controlLabelsFontSize = 23.f * (getHeight() / 250.f);
+    // [Claude 2026-10-29] Text hierarchy (Joe: "Let's do the text hierarchy"): values plain and clear, labels quieter, band names small and spaced.
+    const float unit = (float) getWidth() / 750.f;  // [Claude 2026-10-29] from the width, so a shorter window keeps the size
+    auto controlLabelsFontSize = 16.f * unit;  // a step up again (Joe: "a little more emphasized")
 
     auto controlLabelsFontStyle = juce::Font::FontStyleFlags::bold;
-    auto controlLabelsFontColor = juce::Colours::white.withAlpha(0.65f);
+    auto controlLabelsFontColor = juce::Colours::white.withAlpha(0.58f);
 
     g.setColour(controlLabelsFontColor);
 
@@ -243,26 +232,33 @@ void GlobalControls::paintBandLabels(juce::Graphics& g)
                                     controlLabelsFontStyle);
     
     int x = border3.getX();
-    int height = getHeight() * 0.155f;
-    int y = bounds.getBottom() - height;
+    // [Claude 2026-10-29] The names centred in the space between the keys and the bottom of the column (Joe: "fix the
+    // asymmetrical spacing on the LOW MID HIGH labels"); the extra letter spacing is taken off the right so the word
+    // sits in the middle too
+    const int keysBottom = lowBandControls.getY() + lowBandControls.getButtonRowBounds().getBottom();
+    const int columnBottom = border3.getBottom() - (int) (4.f * unit);
+    int y = keysBottom;
+    int height = juce::jmax(1, columnBottom - keysBottom);
     int width = border3.getWidth();
 
     
+    titleFont.setExtraKerningFactor(0.18f);
     g.setFont(titleFont);
     g.setColour(controlLabelsFontColor);
-    
-    auto lowLabelBounds = juce::Rectangle<int>{x, y, width, height};
-    g.drawFittedText("LOW", lowLabelBounds, juce::Justification::centred, 1);
-    
+    const PixelGrid grid(g, this);   // [Claude 2026-10-29] the names on whole screen pixels, the same in each column
+
+    auto lowLabelBounds = juce::Rectangle<int>{x + (int) (titleFont.getHeight() * 0.18f / 2.f), y, width, height};
+    drawTextOnPixels(g, grid, "LOW", lowLabelBounds.toFloat(), juce::Justification::centred);
+
     x = border4.getX();
-    
-    auto midLabelBounds = juce::Rectangle<int>{x, y, width, height};
-    g.drawFittedText("MID", midLabelBounds, juce::Justification::centred, 1);
-    
+
+    auto midLabelBounds = juce::Rectangle<int>{x + (int) (titleFont.getHeight() * 0.18f / 2.f), y, width, height};
+    drawTextOnPixels(g, grid, "MID", midLabelBounds.toFloat(), juce::Justification::centred);
+
     x = border5.getX();
-    
-    auto highLabelBounds = juce::Rectangle<int>{x, y, width, height};
-    g.drawFittedText("HIGH", highLabelBounds, juce::Justification::centred, 1);
+
+    auto highLabelBounds = juce::Rectangle<int>{x + (int) (titleFont.getHeight() * 0.18f / 2.f), y, width, height};
+    drawTextOnPixels(g, grid, "HIGH", highLabelBounds.toFloat(), juce::Justification::centred);
 }
 
 void GlobalControls::resized()

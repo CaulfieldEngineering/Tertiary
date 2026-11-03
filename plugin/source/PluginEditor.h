@@ -8,6 +8,7 @@
 #include "TopBanner.h"
 #include "UtilityFunctions.h"
 #include "AboutWindow.h"
+#include "PresetBar.h"   // [Claude 2026-10-27]
 
 // For DPI Awareness...
 #if JUCE_WINDOWS
@@ -19,7 +20,9 @@ namespace audio_plugin {
 
 class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                      public juce::Timer,
-                                     public juce::Button::Listener {
+                                     public juce::Button::Listener,
+                                     public juce::ChangeListener {   // [Claude 2026-10-27] hears the license check
+    friend struct ::UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
     public:
         AudioPluginAudioProcessorEditor(AudioPluginAudioProcessor&);
         ~AudioPluginAudioProcessorEditor() override;
@@ -50,6 +53,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
 		/* Used by GUI and self to update the state, upon Key Checking or GUI Activation */
         void updateDemoState(bool newDemoState);
+
+        /* [Claude 2026-10-27] The weekly license re-check finished (LicenseCheck.h) */
+        void changeListenerCallback(juce::ChangeBroadcaster* source) override;
+        void showLicenseCheckResult();
 
     private:
         juce::String mNameSpace{"PluginEditor"};
@@ -82,6 +89,30 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         TopBanner topBanner;
 
         AboutWindow aboutWindow;
+
+        PresetBar presetBar{audioProcessor};
+        // [Claude 2026-10-29] the ☰ menu
+        juce::PopupMenu buildMainMenu();
+        void showMainMenu();
+        std::unique_ptr<juce::Component> mMenuPreview;
+
+        // [Claude 2026-10-29] The window can be any size (Joe: "make the UI resizable or offer a 150%"). The whole UI is
+        // laid out once at 750 x 478 inside `content`, which is scaled to fill the window, so text, lines and images
+        // are drawn sharp at every size rather than stretched.
+        struct Content : juce::Component
+        {
+            std::function<void(juce::Graphics&)> onPaint;
+            void paint(juce::Graphics& g) override { if (onPaint) onPaint(g); }
+        };
+        Content content;
+        static constexpr int baseWidth = 750, baseHeight = 478;
+        float uiScale { 1.f };   // [Claude 2026-10-30] the size chosen from the menu (or remembered); never the host's idea of it
+        void paintContent(juce::Graphics& g);
+        void setUiScale(float scale);
+
+        juce::Rectangle<int> wantedSize() const;   // [Claude 2026-10-30] the UI's size at the chosen scale
+        static float loadUiScale();
+        void saveUiScale();   // review renders only   // [Claude 2026-10-27] top left of the banner
 
         /* Header displayed in top corner */
         juce::Label companyTitle;

@@ -1,0 +1,7 @@
+
+# [Codex 2026-10-30] Shell scripts must also run when copied from a Windows checkout.
+tests/** text=auto eol=lf
+plugin/tests/ci/ui_tests.sh text eol=lf
+tests/**/*.bat text eol=crlf
+# [Claude 2026-10-31] Build scripts run on the Mac and on Linux runners from a Windows checkout too.
+scripts/**/*.sh text eol=lf

@@ -121,6 +121,10 @@ struct InOutLookAndFeel : juce::LookAndFeel_V4
 							float sliderPos, float minSliderPos, float maxSliderPos,
 							const juce::Slider::SliderStyle sliderStyle, juce::Slider& slider) override;
 
+	// [Claude 2026-10-29] half the cap's height: the cap's centre travels to within this of each end of the slot, so
+	// the cap reaches the top and bottom (Joe: "The fader's don't scroll all the way up to the top and bottom")
+	int getSliderThumbRadius(juce::Slider& slider) override { return juce::roundToInt(slider.getWidth() * 0.31f) + 1; }
+
 private:
 	juce::Image imageFader;
 };
@@ -132,6 +136,32 @@ struct CrossoverLookAndFeel : juce::LookAndFeel_V4
     void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height,
                            float sliderPosProportional, float rotaryStartAngle,
                            float rotaryEndAngle, juce::Slider&) override;
+};
+
+// [Claude 2026-10-29] Pop-up menus in the house style, like the Options dropdown: the header's grey, sharp corners,
+// a light row under the mouse, a check for the chosen item (Joe: the new ☰ menu, "yeah let's update it")
+struct HouseMenuLookAndFeel : juce::LookAndFeel_V4
+{
+	void drawPopupMenuBackground(juce::Graphics&, int width, int height) override;
+	void drawPopupMenuItem(juce::Graphics&, const juce::Rectangle<int>& area, bool isSeparator, bool isActive,
+	                       bool isHighlighted, bool isTicked, bool hasSubMenu, const juce::String& text,
+	                       const juce::String& shortcutKeyText, const juce::Drawable* icon, const juce::Colour* textColour) override;
+	void drawPopupMenuSectionHeader(juce::Graphics&, const juce::Rectangle<int>& area, const juce::String& sectionName) override;
+	juce::Font getPopupMenuFont() override { return juce::Font(12.5f); }
+	int getPopupMenuBorderSize() override { return 4; }
+	void getIdealPopupMenuItemSize(const juce::String& text, bool isSeparator, int standardMenuItemHeight, int& idealWidth, int& idealHeight) override;
+
+	static HouseMenuLookAndFeel& get() { static HouseMenuLookAndFeel look; return look; }
+};
+
+// [Claude 2026-10-29] Labels (the slider values, the crossover's frequency labels, the About window's status line) drawn
+// with their text on whole screen pixels, like the rest of the window (UtilityFunctions: drawTextOnPixels). Set on
+// those labels; everything else about them is the default look.
+struct HouseLabelLookAndFeel : juce::LookAndFeel_V4
+{
+	void drawLabel(juce::Graphics& g, juce::Label& label) override;
+
+	static HouseLabelLookAndFeel& get() { static HouseLabelLookAndFeel look; return look; }
 };
 
 struct ButtonOptionsLookAndFeel : juce::LookAndFeel_V4
@@ -146,6 +176,10 @@ struct ButtonOptionsLookAndFeel : juce::LookAndFeel_V4
 							juce::TextButton& button,
 							bool shouldDrawButtonAsHighlighted, 
 							bool shouldDrawButtonAsDown) override;
+
+	// [Claude 2026-10-29] The menu's rows: a check where the option is on, the name, a light row under the mouse
+	void drawToggleButton(	juce::Graphics& g, juce::ToggleButton& button,
+							bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
 };
 
 struct CustomSlider : juce::Component, juce::Slider::Listener, juce::Label::Listener
@@ -208,7 +242,7 @@ private:
 
 };
 
-struct MultComboLookAndFeel : juce::LookAndFeel_V4
+struct MultComboLookAndFeel : HouseMenuLookAndFeel   // [Claude 2026-10-29] its pop-up in the house menu style (Joe: "can we style these dropdowns?")
 {
     MultComboLookAndFeel();
     
@@ -227,7 +261,7 @@ private:
     
 };
 
-struct WaveComboLookAndFeel : juce::LookAndFeel_V4
+struct WaveComboLookAndFeel : HouseMenuLookAndFeel   // [Claude 2026-10-29] its pop-up in the house menu style
 {
     void drawComboBox (juce::Graphics& g, int width, int height, bool isButtonDown,
                        int buttonX, int buttonY, int buttonW, int buttonH,

@@ -22,6 +22,17 @@
 
 
 
+// [Claude 2026-10-29] The house typeface, one family for the whole window (Joe: "let's do all of these"):
+// Segoe UI on Windows, Helvetica Neue on the Mac
+inline juce::String houseTypeface()
+{
+   #if JUCE_WINDOWS
+    return "Segoe UI";
+   #else
+    return "Helvetica Neue";
+   #endif
+}
+
 namespace FontEditor::CompanyTitle
 {
     using namespace juce;
@@ -32,7 +43,7 @@ namespace FontEditor::CompanyTitle
 
     /* Company Title - Typeface */
     inline juce::String getTypeface()
-    {return "Helvetica"; }
+    {return houseTypeface(); }  // [Claude 2026-10-29] one family everywhere (was "Helvetica")
 
     /* Company Title - Font Size */
     inline float getFontSize() {
@@ -63,7 +74,7 @@ namespace FontEditor::ControlLabels
 
     /* All Control Labels - Typeface */
     inline juce::String getTypeface()
-    {return "Helvetica"; }
+    {return houseTypeface(); }  // [Claude 2026-10-29] one family everywhere (was "Helvetica")
 
     /* All Control Labels - Font Size */
     inline float getFontSize() {
@@ -100,7 +111,7 @@ namespace FontEditor::ParameterLabels
 
     /* All Param Labels - Typeface */
     inline juce::String getTypeface()
-    {return "Helvetica"; }
+    {return houseTypeface(); }  // [Claude 2026-10-29] one family everywhere (was "Helvetica")
 
     /* All Param Labels - Font Size */
     inline float getFontSize() {
@@ -109,9 +120,10 @@ namespace FontEditor::ParameterLabels
     }
 
     /* All Param Labels - Bold */
+    // [Claude 2026-10-29] Text hierarchy (Joe: "Let's do the text hierarchy"): values plain and clear, labels quieter, band names small and spaced.
     inline juce::Font::FontStyleFlags getFontStyle()
     {
-        bool isBold = 1;
+        bool isBold = 0;
         
         if (isBold)
             return juce::Font::bold;
@@ -120,7 +132,7 @@ namespace FontEditor::ParameterLabels
 
     /* All Param Labels - Font Color */
     inline juce::Colour getFontColor()
-    {return juce::Colour(0xff5b5353); }
+    {return juce::Colour(0xffb4b6bc); }
 
     /* All Param Labels - Transparency */
     inline float getFontTransparency()
@@ -147,19 +159,38 @@ namespace ColorScheme::BandColors
 {
     /* Low Band Color Coordination */
     inline juce::Colour getLowBandBaseColor()
-    { return juce::Colour(0xff7eff7e); }
+    { return juce::Colour(0xff56bd77); }  // [Claude 2026-10-29] Triad, around the Wonderland green (was 0xff7eff7e)
 
     /* Mid Band Color Coordination */
     inline juce::Colour getMidBandBaseColor()
-    { return juce::Colour(0xff7e7efd); }
+    { return juce::Colour(0xff64a6fa); }  // blue (was 0xff7e7efd)
 
     /* High Band Color Coordination */
     inline juce::Colour getHighBandBaseColor()
-    { return juce::Colour(0xffff7eff); }
+    { return juce::Colour(0xffc886dd); }  // purple (was 0xffff7eff)
 
     /* Bypass Band Color Coordination */
     inline juce::Colour getBypassBaseColor()
     { return juce::Colour(0xff808080); }
+
+    /* [Claude 2026-10-29] The same colour at the perceived brightness of a reference, so the three bands' fills read
+       equally bright (green is perceived much brighter than blue at the same HSV value; Joe: "let's do all of these") */
+    inline float relativeLuminance(juce::Colour c)
+    {
+        auto f = [](float v) { return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f); };
+        return 0.2126f * f(c.getFloatRed()) + 0.7152f * f(c.getFloatGreen()) + 0.0722f * f(c.getFloatBlue());
+    }
+    inline juce::Colour matchLuminance(juce::Colour c, juce::Colour reference)
+    {
+        const float target = relativeLuminance(reference);
+        float lo = 0.f, hi = 1.f;
+        for (int i = 0; i < 18; ++i)
+        {
+            const float mid = 0.5f * (lo + hi);
+            (relativeLuminance(c.withBrightness(mid)) < target ? lo : hi) = mid;
+        }
+        return c.withBrightness(0.5f * (lo + hi));
+    }
 
     /* Converts Base Color Into Stroked Outline */
     inline juce::Colour makeOutlineColor(juce::Colour baseColor, bool isBypassed=false)
@@ -175,7 +206,7 @@ namespace ColorScheme::ScrollPadColors
 {
     /* Scroll Pad Slider Color */
     inline juce::Colour getScrollPadBaseColor ()
-    { return juce::Colour(0xff7a97f3); }
+    { return juce::Colour(0xff64a6fa); }  // [Claude 2026-10-29] the mid blue (was 0xff7a97f3)
 }
 
 namespace Gradients::FrequencyResponse
@@ -366,6 +397,10 @@ namespace Gradients::BarSliders
         if (type == "HIGH")
             gradientBaseColor = ColorScheme::BandColors::getHighBandBaseColor();
         
+        // [Claude 2026-10-29] each stop matched to the high band's brightness at the same stop
+        const auto ref = ColorScheme::BandColors::getHighBandBaseColor();
+        auto even = [&](juce::Colour c, float k) { return ColorScheme::BandColors::matchLuminance(c, ref.withMultipliedBrightness(k)); };
+        auto evenB = [&](juce::Colour c, float v) { return ColorScheme::BandColors::matchLuminance(c, ref.withBrightness(v)); };
         // bookmark
         float p1 = 0.3f;
         float p2 = 0.7f;
@@ -373,13 +408,13 @@ namespace Gradients::BarSliders
         float gStep1 = 0.6f;
         float gStep2 = 0.7f;
         
-        auto gradient = ColourGradient( gradientBaseColor.withMultipliedBrightness(0.5f),
+        auto gradient = ColourGradient( even(gradientBaseColor, 0.5f),
                                         bounds.getBottomLeft(),
-                                        gradientBaseColor.withMultipliedBrightness(0.8f),
+                                        even(gradientBaseColor, 0.8f),
                                         bounds.getTopRight(), false);
 
-        gradient.addColour(p1, gradientBaseColor.withBrightness(gStep1));
-        gradient.addColour(p2, gradientBaseColor.withBrightness(gStep2));
+        gradient.addColour(p1, evenB(gradientBaseColor, gStep1));
+        gradient.addColour(p2, evenB(gradientBaseColor, gStep2));
 
         return gradient;
     }
@@ -400,6 +435,10 @@ namespace Gradients::BarSliders
             gradientBaseColor = ColorScheme::BandColors::getHighBandBaseColor();
         
         
+        // [Claude 2026-10-29] each stop matched to the high band's brightness at the same stop
+        const auto ref = ColorScheme::BandColors::getHighBandBaseColor();
+        auto even = [&](juce::Colour c, float k) { return ColorScheme::BandColors::matchLuminance(c, ref.withMultipliedBrightness(k)); };
+        auto evenB = [&](juce::Colour c, float v) { return ColorScheme::BandColors::matchLuminance(c, ref.withBrightness(v)); };
         float p1 = 0.3f;
         float p2 = 0.5f;
         float p3 = 0.8f;
@@ -408,14 +447,14 @@ namespace Gradients::BarSliders
         float gStep2 = 0.35f;
         float gStep3 = 0.75f;
         
-        auto gradient = ColourGradient( gradientBaseColor.withMultipliedBrightness(0.9f),
+        auto gradient = ColourGradient( even(gradientBaseColor, 0.9f),
                                         bounds.getTopLeft(),
-                                        gradientBaseColor.withMultipliedBrightness(0.9f),
+                                        even(gradientBaseColor, 0.9f),
                                         bounds.getBottomRight(), false);
 
-        gradient.addColour(p1, gradientBaseColor.withBrightness(gStep1));
-        gradient.addColour(p2, gradientBaseColor.withBrightness(gStep2));
-        gradient.addColour(p3, gradientBaseColor.withBrightness(gStep3));
+        gradient.addColour(p1, evenB(gradientBaseColor, gStep1));
+        gradient.addColour(p2, evenB(gradientBaseColor, gStep2));
+        gradient.addColour(p3, evenB(gradientBaseColor, gStep3));
 
         return gradient;
     }
@@ -544,10 +583,12 @@ namespace AllColors
 	namespace PluginEditorColors
 	{
 		// GRADIENT ITEMS FOR MAIN BACKGROUND ==============================================================
-		inline Colour GRADIENT1() { return Colour(0xff000000); }
-		inline Colour GRADIENT2() { return Colour(0xff000000); }
-		inline Colour GRADIENT3() { return Colour(0xff221313); }
-		inline Colour GRADIENT4() { return Colour(0xd71e2038); }
+		// [Claude 2026-10-29] The window behind the sections is the header's grey (Joe: the gutters and the separator);
+		// was black to a red-brown and a blue
+		inline Colour GRADIENT1() { return Colour(0xff202127); }
+		inline Colour GRADIENT2() { return Colour(0xff202127); }
+		inline Colour GRADIENT3() { return Colour(0xff202127); }
+		inline Colour GRADIENT4() { return Colour(0xff202127); }
 
 		// BACKGROUND GRADIENT ==========================================================
 		inline ColourGradient BACKGROUND_GRADIENT(juce::Rectangle<float> bounds)
@@ -768,7 +809,7 @@ namespace AllColors
 		inline float gStep3 = 0.75f;
 		inline float gStep4 = 0.9f;
 
-		inline Colour BASE_COLOR() { return Colour(0xff181212); }
+		inline Colour BASE_COLOR() { return Colour(0xff03010d); }  // [Claude 2026-10-29] the crossover's near-black, so the two displays match (Joe); was 0xff181212
 
 
 		inline ColourGradient BACKGROUND_GRADIENT(Rectangle<float> bounds)
@@ -779,7 +820,7 @@ namespace AllColors
 			auto gradient = ColourGradient(	BASE_COLOR(),
 											bounds.getCentre(),
 											BASE_COLOR().withMultipliedAlpha(gStep1),
-											bounds.getTopLeft(), false);
+											bounds.getTopLeft(), true);
 
 			gradient.addColour( p1, BASE_COLOR().withMultipliedAlpha(gStep3));
 			gradient.addColour( p2, BASE_COLOR().withMultipliedAlpha(gStep4));

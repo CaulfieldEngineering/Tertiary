@@ -1,0 +1,463 @@
+# Tests (build and check only, never deploys)
+# ==========================================================================================
+# [Claude 2026-10-27] New file, for Tertiary 1.1. Tests on real Macs without owning one.
+#
+# Runs on a push to any work branch (everything except staging and production, which have their own pipeline in
+# workflow.yml, and claude/installer-test*, which run installer-test.yml), and by hand (Actions tab, "Run workflow").
+# [Claude 2026-10-29] Was release-* and claude/* only, so pushes to ui-house-style and ui-tests ran nothing.
+# It never signs or deploys. The web check needs CE_GITHUB_PAT to read Wonderlab. The deploy pipeline is
+# workflow.yml (staging and v* tags) and is not touched by this file.
+#
+#   mac-build    Apple Silicon (macos-15): builds the universal VST3, AU, ReviewRender, the unit tests and the UI
+#                tests, checks both chip types and macOS 11, runs the unit tests, the UI tests, auval (T1-13),
+#                pluginval on the VST3 and the AU, a short render. [Claude 2026-10-30] Also builds the standalone .app
+#                and checks its microphone text and its signing with the audio-input entitlement (V-08)
+#   mac-intel    Intel (macos-15-intel; macos-13 was retired by GitHub in late 2025): no build, tests the
+#                same universal files on Intel: unit tests, UI tests, auval (T1-13), pluginval, render
+#   windows      builds the VST3 and the standalone, runs the unit tests, the UI tests, the standalone smoke test
+#                (UI Automation), pluginval and the render
+#
+# [Claude 2026-10-29] The UI tests (UiTest) open the real editor in a window off the screen and drive it with mouse
+# and keyboard events. The hosted runners have a desktop session (Windows) and a window server (macOS), so no virtual
+# display is needed. A failure prints each failing check with its scenario and test-plan IDs, and the failing lines
+# also go in the run's summary page.
+#   compare      compares the renders of all three: they should sound the same, and checks that scripts/sequence.json
+#                (the build steps) and these workflows still agree (scripts/lib/check-sequence.py)
+#
+# [Claude 2026-10-31] Builds go through the same scripts as a desk build (scripts/README.md): scripts/win/Build-Plugin.ps1,
+# scripts/mac/build-plugin.sh and scripts/web/build-web.sh. pluginval comes from scripts/lib/tools.json (same v1.0.4,
+# checksum-checked, into .tools/) instead of a separate download here.
+#   web          compiles the Wonderlab web demo and runs the Playwright audio, control and screenshot tests
+#                (a missing CE_GITHUB_PAT fails clearly; the check never silently skips or deploys)
+#
+# Mac minutes count 10x on private repos, so the Intel job reuses the Apple Silicon build.
+# ==========================================================================================
+
+name: Tests (no deploy)
+
+on:
+  push:
+    branches:
+      - '**'
+      - '!staging'                  # workflow.yml (the deploy pipeline)
+      - '!production'
+      - '!claude/installer-test*'   # those run installer-test.yml instead
+    # [Codex 2026-10-30] Every work-branch push runs the browser regression suite, including docs-only pushes.
+    # Specifying branches without tags means tag pushes do not run this workflow.
+  workflow_dispatch:
+
+# A newer push to the same branch cancels the run still going
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  JUCE_TAG: 8.0.8            # Same as CMakeLists.txt
+  PLUGINVAL_TAG: v1.0.4
+  STRICTNESS: 10             # pluginval strictness (5 is the usual minimum for host compatibility)
+  # [Claude 2026-10-31] Build-step results (scripts/lib/report.py) go next to the test results, so each job's existing
+  # results upload carries them too.
+  WLA_BUILD_RESULTS: tests/results/build
+
+jobs:
+
+  # Job: Mac build and test (Apple Silicon)
+  # ==========================================================================================
+  mac-build:
+    runs-on: macos-15   # Apple Silicon. Was macos-14; on 2026-10-27 GitHub had no capacity for it twice in a row
+    timeout-minutes: 60
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Get JUCE and tools
+      run: |
+        git clone --depth 1 --branch "$JUCE_TAG" https://github.com/juce-framework/JUCE.git "$RUNNER_TEMP/juce"
+        brew list ninja >/dev/null 2>&1 || brew install ninja
+        brew list ccache >/dev/null 2>&1 || brew install ccache
+        python3 scripts/lib/tools.py path pluginval
+
+    - name: Compiler cache
+      uses: actions/cache@v4
+      with:
+        path: ~/Library/Caches/ccache
+        key: ccache-mac-${{ github.sha }}
+        restore-keys: ccache-mac-
+
+    - name: Configure and build (universal, macOS 11)
+      run: |
+        bash scripts/mac/build-plugin.sh --build-dir build --generator Ninja --universal --tests --review-render \
+          --juce-source "$RUNNER_TEMP/juce" --ccache \
+          --target Tertiary_VST3,Tertiary_AU,Tertiary_Standalone,ReviewRender,TertiaryTests,HostTest,UiTest   # [Claude 2026-10-30] + the standalone, for its V-08 checks
+
+    - name: Collect the built files
+      run: |
+        A=build/plugin
+        mkdir -p out
+        cp -R "$A/Tertiary_artefacts/Release/VST3/Tertiary.vst3" out/
+        cp -R "$A/Tertiary_artefacts/Release/AU/Tertiary.component" out/
+        cp -R "$A/Tertiary_artefacts/Release/Standalone/Tertiary.app" out/
+        cp "$A/ReviewRender_artefacts/Release/ReviewRender" out/
+        cp "$A/TertiaryTests_artefacts/Release/TertiaryTests" out/
+        cp "$A/HostTest_artefacts/Release/HostTest" out/
+        cp "$A/UiTest_artefacts/Release/UiTest" out/
+
+    - name: Check, test and render
+      run: bash tests/mac/run-all.sh --profile ci --build-dir out --results-dir tests/results/ci --expect-demo
+
+    - name: Print test summary
+      if: always()
+      shell: bash
+      run: |
+        if [ -f tests/results/ci/summary.md ]; then
+          cat tests/results/ci/summary.md | tee -a "$GITHUB_STEP_SUMMARY"
+        else
+          echo "Tests did not produce a summary; see the failed build/test step." | tee -a "$GITHUB_STEP_SUMMARY"
+        fi
+
+
+    - name: Upload the built files (for the Intel job)
+      uses: actions/upload-artifact@v4
+      with:
+        retention-days: 7
+        name: mac-universal-build
+        path: out/
+
+
+    - name: Upload logs and renders
+      if: always()
+      continue-on-error: true
+      uses: actions/upload-artifact@v4
+      with:
+        retention-days: 7
+        name: results-mac-arm64
+        path: tests/results/
+
+
+  # Job: Mac test (Intel), using the universal build above
+  # ==========================================================================================
+  mac-intel:
+    needs: mac-build
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download the universal build
+      uses: actions/download-artifact@v4
+      with:
+        name: mac-universal-build
+        path: out
+
+    - name: Get pluginval
+      run: |
+        python3 scripts/lib/tools.py path pluginval
+        chmod +x out/ReviewRender out/TertiaryTests out/HostTest out/UiTest out/Tertiary.app/Contents/MacOS/Tertiary
+
+    - name: Check, test and render
+      run: bash tests/mac/run-all.sh --profile ci --build-dir out --results-dir tests/results/ci --expect-demo
+
+    - name: Print test summary
+      if: always()
+      shell: bash
+      run: |
+        if [ -f tests/results/ci/summary.md ]; then
+          cat tests/results/ci/summary.md | tee -a "$GITHUB_STEP_SUMMARY"
+        else
+          echo "Tests did not produce a summary; see the failed build/test step." | tee -a "$GITHUB_STEP_SUMMARY"
+        fi
+
+
+    - name: Upload logs and renders
+      if: always()
+      continue-on-error: true
+      uses: actions/upload-artifact@v4
+      with:
+        retention-days: 7
+        name: results-mac-x86_64
+        path: tests/results/
+
+
+  # Job: Windows build and test
+  # ==========================================================================================
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Get JUCE and pluginval
+      shell: bash
+      run: |
+        T=$(cygpath -m "$RUNNER_TEMP")   # forward slashes, so CMake doesn't read \ as escapes
+        git clone --depth 1 --branch "$JUCE_TAG" https://github.com/juce-framework/JUCE.git "$T/juce"
+        python scripts/lib/tools.py path pluginval
+
+    - name: Configure and build
+      shell: pwsh
+      run: |
+        $T = $env:RUNNER_TEMP -replace '\\', '/'
+        pwsh scripts/win/Build-Plugin.ps1 -BuildDir build -Tests -ReviewRender -JuceSource "$T/juce" `
+          -Targets Tertiary_VST3,Tertiary_Standalone,ReviewRender,TertiaryTests,HostTest,UiTest
+
+    # [Claude 2026-10-29] The UI tests (T2-02, T2-04 to T2-13, R-01 to R-08; see plugin/tests/UiTest.cpp)
+    - name: Install Windows test dependencies
+      run: python -m pip install --quiet pywinauto pillow
+
+
+
+    - name: Run Windows test scripts
+      if: always()
+      shell: pwsh
+      run: pwsh tests/win/Run-All.ps1 -Profile ci -BuildDir build -ResultsDir tests/results/ci -ExpectDemo
+
+    - name: Print test summary
+      if: always()
+      shell: bash
+      run: |
+        if [ -f tests/results/ci/summary.md ]; then
+          cat tests/results/ci/summary.md | tee -a "$GITHUB_STEP_SUMMARY"
+        else
+          echo "Tests did not produce a summary; see the failed build/test step." | tee -a "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Upload logs and renders
+      if: always()
+      continue-on-error: true
+      uses: actions/upload-artifact@v4
+      with:
+        retention-days: 7
+        name: results-windows
+        path: tests/results/
+
+
+  # Job: Compare the renders across the three machines
+  # ==========================================================================================
+  compare:
+    needs: [mac-build, mac-intel, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download results
+      uses: actions/download-artifact@v4
+      with:
+        pattern: results-*
+        path: results
+
+    - name: Compare Windows with both Macs
+      run: |
+        # Different compilers and chips round floating point differently; 1e-3 (-60 dBFS) is far below
+        # anything audible here, and the report shows the actual numbers.
+        set -o pipefail
+        python3 plugin/tests/regression/compare_renders.py results/results-windows/ci/renders results/results-mac-arm64/ci/renders \
+          --tolerance 1e-3 --report compare-windows-vs-mac-arm64.txt | tee -a "$GITHUB_STEP_SUMMARY"
+        python3 plugin/tests/regression/compare_renders.py results/results-windows/ci/renders results/results-mac-x86_64/ci/renders \
+          --tolerance 1e-3 --report compare-windows-vs-mac-x86_64.txt | tee -a "$GITHUB_STEP_SUMMARY"
+
+    - name: Build steps and workflows agree (scripts/sequence.json)
+      run: python3 scripts/lib/check-sequence.py --github
+
+    - name: Upload the comparison
+      if: always()
+      continue-on-error: true
+      uses: actions/upload-artifact@v4
+      with:
+        retention-days: 7
+        name: render-comparison
+        path: compare-*.txt
+
+
+  # Job: Web demo builds and Playwright tests (Wonderlab), nothing is deployed
+  # [Codex 2026-10-30] Same pinned SDK as the deploy pipeline; local and CI use the same build/test scripts.
+  # Windows matches the locally reviewed Chromium screenshot references (font rendering varies by OS).
+  # ==========================================================================================
+  web:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      WONDERLAB_DIR: ${{ github.workspace }}/Wonderlab
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check Wonderlab access
+      env:
+        PAT: ${{ secrets.CE_GITHUB_PAT }}
+      run: |
+        mkdir -p plugin/tests/web/out
+        if [ -z "$PAT" ]; then
+          echo "::error::CE_GITHUB_PAT is required to build and test the private Wonderlab dependency."
+          echo "Web tests could not run: CE_GITHUB_PAT is missing." > plugin/tests/web/out/build.log
+          exit 1
+        fi
+
+    - name: Checkout Wonderlab
+      uses: actions/checkout@v4
+      with:
+        repository: CaulfieldEngineering/Wonderlab
+        ref: 5248a157cfdf472caf1fafc7b9b71dec09485947
+        path: Wonderlab
+        token: ${{ secrets.CE_GITHUB_PAT }}
+        persist-credentials: false
+
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: npm
+        cache-dependency-path: plugin/tests/web/package-lock.json
+
+    - name: Install Emscripten SDK
+      uses: mymindstorm/setup-emsdk@v14
+      with:
+        version: 5.0.3
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install build dependencies
+      run: |
+        python -m pip install ninja
+        choco install ffmpeg --no-progress -y
+
+    - name: Build the web demo
+      shell: bash
+      run: bash scripts/web/build-web.sh --test   # also writes plugin/tests/web/out/build.log, as before
+
+    - name: Install browser tests
+      working-directory: plugin/tests/web
+      run: |
+        npm ci
+        npx playwright install chromium
+
+    - name: Test the browser demo
+      run: powershell -NoProfile -File tests/web/test-web.ps1 -Profile ci -Engine chromium -ResultsDir tests/results/ci
+
+    - name: Print test summary
+      if: always()
+      shell: bash
+      run: |
+        if [ -f tests/results/ci/summary.md ]; then
+          cat tests/results/ci/summary.md | tee -a "$GITHUB_STEP_SUMMARY"
+        else
+          echo "Tests did not produce a summary; see the failed build/test step." | tee -a "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Upload browser test results
+      if: always()
+      continue-on-error: true
+      uses: actions/upload-artifact@v4
+      with:
+        retention-days: 7
+        name: web-test-results
+        path: tests/results/
+
+  # Windows WebKit has no Web Audio. Build the same sources on macOS for iPhones.
+  # Independent builds also avoid making test execution depend on artifact storage.
+  web-mobile:
+    runs-on: macos-15
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    env:
+      WONDERLAB_DIR: ${{ github.workspace }}/Wonderlab
+    steps:
+    - uses: actions/checkout@v4
+    - name: Check Wonderlab access
+      env:
+        PAT: ${{ secrets.CE_GITHUB_PAT }}
+      run: |
+        mkdir -p plugin/tests/web/out
+        if [ -z "$PAT" ]; then
+          echo "::error::CE_GITHUB_PAT is required to build and test the private Wonderlab dependency."
+          echo "Web tests could not run: CE_GITHUB_PAT is missing." > plugin/tests/web/out/build.log
+          exit 1
+        fi
+
+    - name: Checkout Wonderlab
+      uses: actions/checkout@v4
+      with:
+        repository: CaulfieldEngineering/Wonderlab
+        ref: 5248a157cfdf472caf1fafc7b9b71dec09485947
+        path: Wonderlab
+        token: ${{ secrets.CE_GITHUB_PAT }}
+        persist-credentials: false
+
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: npm
+        cache-dependency-path: plugin/tests/web/package-lock.json
+
+    - name: Install Emscripten SDK
+      uses: mymindstorm/setup-emsdk@v14
+      with:
+        version: 5.0.3
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install build dependencies
+      run: |
+        python -m pip install ninja
+        brew install ffmpeg
+
+    - name: Build the web demo
+      shell: bash
+      run: bash scripts/web/build-web.sh --test   # also writes plugin/tests/web/out/build.log, as before
+
+    - name: Install WebKit
+      working-directory: plugin/tests/web
+      run: |
+        npm ci
+        npx playwright install webkit
+    - name: Test iPhone portrait and landscape with real Web Audio
+      run: bash tests/web/test-web.sh --profile ci --engine webkit --results-dir tests/results/ci
+    - name: Print test summary
+      if: always()
+      shell: bash
+      run: |
+        if [ -f tests/results/ci/summary.md ]; then
+          cat tests/results/ci/summary.md | tee -a "$GITHUB_STEP_SUMMARY"
+        else
+          echo "Tests did not produce a summary; see the failed build/test step." | tee -a "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Upload iPhone results and screenshots
+      if: always()
+      continue-on-error: true
+      uses: actions/upload-artifact@v4
+      with:
+        retention-days: 7
+        name: web-mobile-results
+        path: tests/results/
+
+  # One work-branch gate, including the mobile WebKit/Chromium checks in web.
+  ci-ok:
+    if: always()
+    needs: [mac-build, mac-intel, windows, compare, web, web-mobile]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - name: Require every test job
+      env:
+        RESULTS: ${{ toJSON(needs) }}
+      run: |
+        python3 -c 'import json, os; jobs=json.loads(os.environ["RESULTS"]); assert all(j["result"] == "success" for j in jobs.values()), jobs'

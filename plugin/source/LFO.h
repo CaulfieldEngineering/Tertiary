@@ -39,6 +39,9 @@ public:
     void initializeLFO(double sampleRate);
     void updateLFO(double sampleRate, double hostBPM);
 
+    // [Claude 2026-10-27] Follow a host tempo change without recalculating the whole wavetable
+    void updateTempo(double sampleRate, double hostBPM);
+
 
     float getHostBPM() { return mHostBPM; }
 
@@ -50,6 +53,16 @@ public:
 
     float getPosition() { return mPosition; }
     void setPosition(float newPosition) { mPosition = newPosition; }
+
+    // [Claude 2026-10-29] Jump to a new position without a click: for fadeSamples samples the processor blends from
+    // the gain at the old position (which keeps running) to the new one. Used when a synced LFO re-locks to the host.
+    void jumpTo(float newPosition, int fadeSamples)
+    {
+        if (fadeSamples > 0) { fadeFromPosition = mPosition; fadeLeft = fadeLength = fadeSamples; }
+        mPosition = newPosition;
+    }
+    float fadeFromPosition = 0.f;   // the old position while a jump fades out
+    int fadeLeft = 0, fadeLength = 0;
 
     void setDsp(bool isProcessor) { isLinkedToDsp = isProcessor; }
 

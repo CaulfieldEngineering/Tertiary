@@ -1,0 +1,54 @@
+{
+  "_comment": "[Claude 2026-10-31] Pinned build and test tools, fetched into the repo-local .tools/ folder by tools.py (Joe: 'Anything like pluginval gets installed to a local folder during the script instead of hardcoding its location'). Checksums were taken from the official downloads on 2026-10-31. The env var named in 'override' always wins.",
+  "pluginval": {
+    "version": "v1.0.4",
+    "override": "WLA_PLUGINVAL",
+    "auto": true,
+    "win": {"url": "https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip",
+            "sha256": "c08e61ce3b96db41636f8ec7e76f4c7e2c13ebdac7fa1b5a1f52b4f32ec715ab", "kind": "zip", "exe": "pluginval.exe"},
+    "mac": {"url": "https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_macOS.zip",
+            "sha256": "3c4c533bda0c5059eea3ddaea752d757ee2025041f0f47e6bcb0e87f6082b29f", "kind": "zip",
+            "exe": "pluginval.app/Contents/MacOS/pluginval"}
+  },
+  "innosetup": {
+    "version": "6.7.4",
+    "override": "WLA_ISCC",
+    "auto": true,
+    "win": {"url": "https://github.com/jrsoftware/issrc/releases/download/is-6_7_4/innosetup-6.7.4.exe",
+            "sha256": "a549929319f9120716677c685535ca4671e4b937b5fdc87e2585f32d8eb30e8c", "kind": "inno", "exe": "ISCC.exe"}
+  },
+  "ninja": {
+    "version": "v1.13.2",
+    "override": "WLA_NINJA",
+    "auto": true,
+    "win": {"url": "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-win.zip",
+            "sha256": "07fc8261b42b20e71d1720b39068c2e14ffcee6396b76fb7a795fb460b78dc65", "kind": "zip", "exe": "ninja.exe"},
+    "mac": {"url": "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-mac.zip",
+            "sha256": "c99048673aa765960a99cf10c6ddb9f1fad506099ff0a0e137ad8960a88f321b", "kind": "zip", "exe": "ninja"}
+  },
+  "emsdk": {
+    "version": "5.0.3",
+    "override": "EMSDK",
+    "auto": true,
+    "_comment": "Same Emscripten as CI (mymindstorm/setup-emsdk version 5.0.3) and plugin/tests/web/config.mjs. The git commit is the emsdk 5.0.3 tag; emsdk checks its own downloads.",
+    "git": {"url": "https://github.com/emscripten-core/emsdk.git", "ref": "a620cf1d71c62dfdfbb0c01fe0a371e2af2dda6c"}
+  },
+  "wonderlab": {
+    "version": "5248a15",
+    "override": "WONDERLAB_DIR",
+    "auto": true,
+    "_comment": "Private repo: cloned with this machine's own git credentials. Same commit as the workflows' 'Checkout Wonderlab' steps; change both together.",
+    "git": {"url": "https://github.com/CaulfieldEngineering/Wonderlab.git", "ref": "5248a157cfdf472caf1fafc7b9b71dec09485947"}
+  },
+  "reaper": {
+    "version": "7.84",
+    "override": "WLA_REAPER",
+    "auto": false,
+    "_comment": "Opt-in only (python scripts/lib/tools.py install reaper): REAPER's licence allows a free 60-day evaluation, after which a licence is needed, so it is never fetched behind anyone's back. An installed REAPER is still used when no .tools copy exists.",
+    "win": {"url": "https://www.reaper.fm/files/7.x/reaper784_x64-install.exe",
+            "sha256": "a343286bd67d8515b561e5c6b7cc284a8d258d87a73f5518ec2e233d46ff9755", "kind": "nsis-portable", "exe": "reaper.exe"},
+    "mac": {"url": "https://www.reaper.fm/files/7.x/reaper784_universal.dmg",
+            "sha256": "9f687af53480a1eb5283977e90884539f0e74f41e84ba953455dc7ecd3d42530", "kind": "dmg-app",
+            "exe": "REAPER.app/Contents/MacOS/REAPER"}
+  }
+}

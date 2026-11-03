@@ -1,0 +1,63 @@
+[
+  {
+    "id": "B-01",
+    "name": "Plug-in",
+    "description": "Configure and build the formats in config.cmake (VST3, Standalone; AU on the Mac)",
+    "scripts": {"win": "win/Build-Plugin.ps1", "mac": "mac/build-plugin.sh"},
+    "build_dir": true,
+    "github": {"test.yml": ["mac-build", "windows"], "workflow.yml": ["build"]}
+  },
+  {
+    "id": "B-02",
+    "name": "Sign plug-in",
+    "description": "Windows: Azure Trusted Signing of the .vst3 and .exe. Mac: Developer ID codesign of the VST3, AU and app (the app with the audio-input entitlement). SKIP without credentials.",
+    "scripts": {"win": "win/Sign-Windows.ps1", "mac": "mac/sign-plugin.sh"},
+    "args": {"win": ["-Target", "plugin"]},
+    "build_dir": true,
+    "github": {"workflow.yml": ["build"]},
+    "github_note": "On Windows the workflow keeps the pinned azure/trusted-signing-action for this call; the Mac step runs the script."
+  },
+  {
+    "id": "B-03",
+    "name": "Installer",
+    "description": "Windows: Inno Setup installer. Mac: component packages and the distribution package, each signed with Developer ID Installer when that identity is available.",
+    "scripts": {"win": "win/Build-Installer.ps1", "mac": "mac/build-installer.sh"},
+    "build_dir": true,
+    "github": {"workflow.yml": ["build"]}
+  },
+  {
+    "id": "B-04",
+    "name": "Sign or notarize installer",
+    "description": "Windows: Azure Trusted Signing of the installer. Mac: notarize and staple the distribution package. SKIP without credentials.",
+    "scripts": {"win": "win/Sign-Windows.ps1", "mac": "mac/sign-notarize.sh"},
+    "args": {"win": ["-Target", "installer"]},
+    "build_dir": true,
+    "github": {"workflow.yml": ["build"]},
+    "github_note": "On Windows the workflow keeps the pinned azure/trusted-signing-action for this call; the Mac step runs the script."
+  },
+  {
+    "id": "B-05",
+    "name": "Verify installer",
+    "description": "The final installer and every binary inside it are signed (Mac: notarized and stapled, hardened runtime, the app's entitlement); writes <installer>.sha256. SKIP for an unsigned desk build.",
+    "scripts": {"win": "win/Verify-Installer.ps1", "mac": "mac/verify-installer.sh"},
+    "build_dir": true,
+    "github": {"workflow.yml": ["build"]}
+  },
+  {
+    "id": "B-06",
+    "name": "Web demo",
+    "description": "Wonderlab/Emscripten build of the web demo into build/web (BinaryData, WebAssembly, assembled page)",
+    "scripts": {"win": "web/build-web.ps1", "mac": "web/build-web.sh"},
+    "web": true,
+    "github": {"test.yml": ["web", "web-mobile"], "workflow.yml": ["web-build"]}
+  },
+  {
+    "id": "B-07",
+    "name": "Web staging preview",
+    "description": "Bundle build/web with its commit and checksums, and deploy it to the private, noindex web-staging preview only. Never a live demo.",
+    "scripts": {"win": "web/deploy-staging.ps1", "mac": "web/deploy-staging.sh"},
+    "manual": true,
+    "web": true,
+    "github": {"workflow.yml": ["web-build"]}
+  }
+]

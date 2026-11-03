@@ -99,7 +99,7 @@ void WindowWrapperOscilloscope::resized()
     //if (setDebug)
     //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
 
-    optionsMenu.setTopLeftPosition(4,4);
+    optionsMenu.setTopLeftPosition(8, 7);  // [Claude 2026-10-29] inside the recess, as on the crossover; was (4, 4)
     
     oscilloscope.setSize(getWidth(), getHeight() );
 }
@@ -111,6 +111,16 @@ void WindowWrapperOscilloscope::parameterChanged(const juce::String& parameterID
     //if (setDebug)
     //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
 
+    // [Claude 2026-10-27] This can be called on the audio thread or the host's automation thread. Re-laying out
+    // the scopes there (setBounds, toFront) is GUI work off the message thread: on the Mac it aborted pluginval's
+    // AU "Editor Automation" test. So ask for handleAsyncUpdate() instead, which runs on the message thread.
+    triggerAsyncUpdate();
+}
+
+// [Claude 2026-10-27] Runs on the message thread after parameterChanged()
+// ========================================================
+void WindowWrapperOscilloscope::handleAsyncUpdate()
+{
     updateOptionsParameters();
 }
 

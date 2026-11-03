@@ -1,0 +1,22 @@
+{
+  "harness-input.wav": {
+    "format": {
+      "code": 3,
+      "channels": 2,
+      "rate": 48000,
+      "bits": 32,
+      "frames": 3072000
+    },
+    "pcm_sha256": "0f22e313317a3c3150199f6b017a03964c30d4f60ed741d48510c6da946ca585"
+  },
+  "play-loop.wav": {
+    "format": {
+      "code": 3,
+      "channels": 2,
+      "rate": 48000,
+      "bits": 32,
+      "frames": 8640000
+    },
+    "pcm_sha256": "aa74060ef391c9da99a0971952b96dcea35fa594a14638611ccde760862f3d30"
+  }
+}

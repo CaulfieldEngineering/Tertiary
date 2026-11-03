@@ -53,7 +53,10 @@ namespace audio_plugin {
     }
 
     //==============================================================================
-    AudioPluginAudioProcessor::~AudioPluginAudioProcessor() {}
+    AudioPluginAudioProcessor::~AudioPluginAudioProcessor() {
+      // [Claude 2026-10-27] Cancel any server call in progress and wait for the license thread to finish
+      licenseCheck.stop();
+    }
 
     /* Attaches all parameters to the ParameterLayout */
     //==============================================================================
@@ -154,10 +157,16 @@ namespace audio_plugin {
 	/* Checking the Activation Status */
     //==============================================================================
     void AudioPluginAudioProcessor::checkActivationStatusOnStartup() {
+     #if JUCE_EMSCRIPTEN
+        // The browser demo is free: no stored licence, checks, or demo bypass cycle.
+        mIsDemoVersion = false;
+        return;
+     #endif
       juce::PropertiesFile::Options options;
 		options.applicationName = "Tertiary";
 		options.filenameSuffix = "settings";
 		options.osxLibrarySubFolder = "Application Support";
+		TestHooks::redirectSettings(options);   // [Claude 2026-10-29] UI tests: a temp folder (TestHooks.h); unchanged otherwise
 
 		propertiesFile = std::make_unique<juce::PropertiesFile>(options);
 
@@ -176,7 +185,19 @@ namespace audio_plugin {
 
 	}
 
+	// [Claude 2026-10-27] Starts the weekly serial-key re-check and the daily update check, once per plugin instance.
+	//                      Called by the editor, so nothing goes on the network during host scans or offline renders.
+	//==============================================================================
+	void AudioPluginAudioProcessor::startLicenseCheck() {
+       #if ! JUCE_EMSCRIPTEN
+		licenseCheck.start(*this);
+       #endif
+	}
+
 	void AudioPluginAudioProcessor::setDemoState(bool demoState) {
+       #if JUCE_EMSCRIPTEN
+        demoState = false;
+       #endif
 		mIsDemoVersion = demoState;
 
 		if (mIsDemoVersion) {
@@ -247,7 +268,11 @@ namespace audio_plugin {
         juce::MemoryOutputStream mos(destData,  // Destination
                                     true);     // It is appendable
 
-        apvts.state.writeToStream(mos);  // Write mos to the APVTS
+        // [Claude 2026-10-27] copyState() first copies the latest parameter values into the tree. apvts.state on its
+        // own is only brought up to date by a timer, so a save just after a change (or offline) stored old values.
+        auto state = apvts.copyState();
+        presets.writeToSession(state);   // [Claude 2026-10-27] the current preset's name, saved with the session
+        state.writeToStream(mos);  // Write mos to the APVTS
     }
 
     /* Saves current settings to be recalled at a later date */
@@ -262,6 +287,18 @@ namespace audio_plugin {
 		{
 		apvts.replaceState(
 			tree);  // If valid, load from memory and replace current state
+		// [Claude 2026-10-27] Snap every parameter to a legal value. replaceState() skips a parameter whose stored
+		// value equals what it means now, so an on/off switch left at, say, 0.49 by a host (which acts as off)
+		// stayed at 0.49 after loading a session where it is off. pluginval's state test caught it.
+		for (auto* p : getParameters())
+		  if (auto* r = dynamic_cast<juce::RangedAudioParameter*>(p))
+		  {
+		    const float legal = r->convertTo0to1(r->convertFrom0to1(r->getValue()));
+		    if (legal != r->getValue())
+		      r->setValueNotifyingHost(legal);
+		  }
+
+		presets.restoreFromSession(tree);   // [Claude 2026-10-27] which preset, if any (1.0.x sessions: none)
 		}
 
     }
@@ -652,6 +689,17 @@ namespace audio_plugin {
       inputGain.prepare(spec);
       outputGain.prepare(spec);
 
+      // [Claude 2026-10-29] V-04: the band gains too. They were never prepared, so they had no sample rate and their
+      // 50 ms ramp (updateTremoloSettings) did nothing: every change jumped straight to the new level (zipper noise,
+      // clicks on automation and preset changes). Each starts at its knob's value, as before, so nothing fades in;
+      // only changes from here on are smoothed.
+      for (auto& trem : tremolos) {
+        trem.bandGain.setRampDurationSeconds(0.0);
+        trem.bandGain.prepare(spec);
+        trem.bandGain.setGainDecibels(trem.bandGainParam->get());   // no ramp yet: set at once
+        trem.bandGain.setRampDurationSeconds(0.05);
+      }
+
       /* Pass spec information into filters */
       LP1.prepare(spec);
       HP1.prepare(spec);
@@ -664,13 +712,25 @@ namespace audio_plugin {
         buffer.setSize(spec.numChannels, samplesPerBlock);
       }
 
+      // Size and build the LFO tables off the audio thread. Deferring their generation to the first
+      // processBlock made it much slower than a warm block, including after a sample-rate change.
+      // Clear each flag BEFORE its rebuild so a parameter change during/after it remains pending.
+      // No samples or phase are advanced; updateState still picks up the host's tempo on the first block.
+      lowLFO.initializeLFO(sampleRate);
+      midLFO.initializeLFO(sampleRate);
+      highLFO.initializeLFO(sampleRate);
+      parameterChangedLfoLow = false;
+      lowLFO.updateLFO(sampleRate, hostInfo.bpm);
+      parameterChangedLfoMid = false;
+      midLFO.updateLFO(sampleRate, hostInfo.bpm);
+      parameterChangedLfoHigh = false;
+      highLFO.updateLFO(sampleRate, hostInfo.bpm);
+
 		// Demo Version
 		//#ifdef DEMO_VERSION
-	  if (mIsDemoVersion)
-		{
-			samplesUntilDisable = demoActiveTimeLimit * getSampleRate();
-			samplesUntilEnable = demoBypassTimeLimit * getSampleRate();
-		}
+		// [Claude 2026-10-27] Always set, so they are right if the plugin later returns to demo mode
+		samplesUntilDisable = demoActiveTimeLimit * sampleRate;
+		samplesUntilEnable = demoBypassTimeLimit * sampleRate;
 
 		//#endif
 
@@ -689,6 +749,16 @@ namespace audio_plugin {
       rmsLevelOutputRight.setCurrentAndTargetValue(-100.f);
     }
 
+    /* [Claude 2026-10-29] V-06: a position wrapped into 0 to the table size. fmod keeps the sign, so a negative host
+       beat position (the host starting before bar 1: a pre-roll or count-in) gave a negative position, and the table
+       read at a negative index gives 0: the band was silent until the position crossed 0. */
+    static double wrapToTable(double position, double size) {
+      if (size <= 0)
+        return 0;
+      const double wrapped = position - size * std::floor(position / size);
+      return wrapped < size ? wrapped : 0;
+    }
+
     /* Called upon any change in multiplier value.  Forces all LFO read-back
        positions to be synchronized with each other (when no host BPM), or forces
        all LFO read-back positions to be synchronized with the host grid */
@@ -701,7 +771,8 @@ namespace audio_plugin {
         float playPositionScaled = fmod(playPosition, div);
         float newPhase =
             playPositionScaled * lfo.getWaveMultiplier() * lfo.getWaveTableSize();
-        lfo.setPosition(fmod(newPhase, lfo.getWaveTableSize()));
+        // [Claude 2026-10-29] faded, not set: a hard jump of the gain clicked
+        lfo.jumpTo((float) wrapToTable(newPhase, lfo.getWaveTableSize()), jumpFadeSamples());   // [Claude 2026-10-29] V-06: wrapped, was fmod
       } else if (!hostInfo.isPlaying && lfo.isSyncedToHost()) {
         /* When no host BPM, force LFO position to sync to each other */
         if (lowLFO.isSyncedToHost())
@@ -711,6 +782,42 @@ namespace audio_plugin {
         else if (highLFO.isSyncedToHost())
           lfo.setPosition(highLFO.getPosition());
       }
+    }
+
+    /* [Claude 2026-10-29] While the host plays, a synced LFO follows the host's beat position (Joe: loops and jumps
+       should land on the grid every pass). Each block its position is compared with where the host's beat position
+       says it should be; more than 1 % of a cycle apart (a loop, a locate, a start mid-bar) it jumps there, faded
+       over 10 ms so it does not click. Steady playback agrees to far less than that, so it is left alone. The band's
+       phase offset is added later, as before. Not playing, or no host (the standalone): it free-runs as before. */
+    //==============================================================================
+    void AudioPluginAudioProcessor::relockToHost(LFO& lfo) {
+      if (!hostInfo.isPlaying || !hostPpqValid || !lfo.isSyncedToHost())   // [Claude 2026-10-30] R-15: no beat position, no re-lock
+        return;
+      const double size = lfo.getWaveTableSize();
+      if (size <= 0)
+        return;
+      const double cycles = hostInfo.ppqPosition * lfo.getWaveMultiplier();
+      const double expected = wrapToTable((cycles - std::floor(cycles)) * size, size);   // [Claude 2026-10-29] V-06
+      double diff = expected - wrapToTable(lfo.getPosition(), size);                     // [Claude 2026-10-29] V-06
+      diff -= size * std::round(diff / size);   // the shorter way round
+      if (std::abs(diff) > 0.01 * size)
+        lfo.jumpTo((float) expected, jumpFadeSamples());
+    }
+
+    /* [Claude 2026-10-29] The LFO's gain this sample (its position plus the band's phase offset); during a jump fade,
+       blended from the old position's gain, and the old position kept running */
+    float AudioPluginAudioProcessor::lfoGain(LFO& lfo, float waveTableSize) {
+      // [Claude 2026-10-29] V-06: wrapped into the table (fmod of a negative position gave a negative index: silence)
+      int index = (int) wrapToTable(lfo.getPosition() + lfo.getRelativePhaseInSamples(), waveTableSize);
+      float gain = lfo.getWaveTableScaled()[index];
+      if (lfo.fadeLeft > 0) {
+        int oldIndex = (int) wrapToTable(lfo.fadeFromPosition + lfo.getRelativePhaseInSamples(), waveTableSize);
+        const float a = (float) lfo.fadeLeft / (float) lfo.fadeLength;
+        gain += (lfo.getWaveTableScaled()[oldIndex] - gain) * a;
+        lfo.fadeFromPosition = (float) wrapToTable(lfo.fadeFromPosition + lfo.getIncrement(), waveTableSize);
+        --lfo.fadeLeft;
+      }
+      return gain;
     }
 
     //==============================================================================
@@ -810,6 +917,11 @@ namespace audio_plugin {
           }
         }
       }
+      else if (!effectEnabled) {
+        // [Claude 2026-10-27] Activated during the demo's silent gap: turn the effect back on
+        effectEnabled = true;
+        sampleCounter = 0;
+      }
 	   //#endif
 
 
@@ -827,10 +939,24 @@ namespace audio_plugin {
 
       /* Set Up Host Playhead Data */
       playHead = this->getPlayHead();
-      playPosition = hostInfo.ppqPosition;
 
+      // [Claude 2026-10-30] R-15: getCurrentPosition() fills a missing beat position in as 0, and keeps the last answer
+      // when the host gives none, so the re-lock only trusts a beat position the host really gave this block. The host
+      // is asked ONCE; JUCE's own conversion then runs on that same answer (a host could answer two calls differently).
+      hostPpqValid = false;
       if (playHead != nullptr)
-        playHead->getCurrentPosition(hostInfo);
+        if (const auto position = playHead->getPosition()) {
+          struct SameAnswer : juce::AudioPlayHead {   // on the stack, no allocation
+            juce::Optional<PositionInfo> answer;
+            juce::Optional<PositionInfo> getPosition() const override { return answer; }
+          } same;
+          same.answer = position;
+          hostPpqValid = position->getPpqPosition().hasValue();
+          same.getCurrentPosition(hostInfo);
+        }
+
+      playPosition = hostInfo.ppqPosition;  // [Claude 2026-10-27] Read after the update, not from the previous block
+      if (hostInfo.bpm > 1.0) hostBpmForDisplay.store(hostInfo.bpm);   // [Claude 2026-10-29] for the scope
 
       /* Clear Input Buffers */
       for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
@@ -889,22 +1015,29 @@ namespace audio_plugin {
       for (auto& trem : tremolos)
         trem.updateTremoloSettings();
 
+      // [Claude 2026-10-27] Host tempo changed: synced LFOs follow it (before, only after a parameter change)
+      if (hostInfo.bpm != lastHostBpm) {
+        lowLFO.updateTempo(sampleRate, hostInfo.bpm);
+        midLFO.updateTempo(sampleRate, hostInfo.bpm);
+        highLFO.updateTempo(sampleRate, hostInfo.bpm);
+        lastHostBpm = hostInfo.bpm;
+      }
+
+      // [Claude 2026-10-29] V-05: the flag is cleared BEFORE the rebuild (exchange), not after it. A change that
+      // arrived while the wave was being rebuilt was wiped out with the flag, and the band kept the old setting.
       // Flag to update Low LFO parameters
-      if (parameterChangedLfoLow) {
+      if (parameterChangedLfoLow.exchange(false)) {   // [Claude 2026-10-29] V-05
         lowLFO.updateLFO(sampleRate, hostInfo.bpm);
-        parameterChangedLfoLow = false;
       }
 
       // Flag to update Mid LFO parameters
-      if (parameterChangedLfoMid) {
+      if (parameterChangedLfoMid.exchange(false)) {   // [Claude 2026-10-29] V-05
         midLFO.updateLFO(sampleRate, hostInfo.bpm);
-        parameterChangedLfoMid = false;
       }
 
       // Flag to update High LFO parameters
-      if (parameterChangedLfoHigh) {
+      if (parameterChangedLfoHigh.exchange(false)) {   // [Claude 2026-10-29] V-05
         highLFO.updateLFO(sampleRate, hostInfo.bpm);
-        parameterChangedLfoHigh = false;
       }
 
       // Update Crossover Params
@@ -967,6 +1100,11 @@ namespace audio_plugin {
           setLatchPlay = false;
         }
       }
+
+      // [Claude 2026-10-29] synced LFOs follow the host's beat position (loops, locates)
+      relockToHost(lowLFO);
+      relockToHost(midLFO);
+      relockToHost(highLFO);
     }
 
     /* Updates FFT information for FrequencyResponse Module */
@@ -1032,7 +1170,7 @@ namespace audio_plugin {
 
       // Copy incoming audio into all filter buffers
       for (auto& fb : filterBuffers)
-        fb = inputBuffer;
+        fb.makeCopyOf(inputBuffer, true);  // [Claude 2026-10-27] true = no reallocation on the audio thread when the block size changes
 
       auto fb0Block = juce::dsp::AudioBlock<float>(
           filterBuffers[0]);  // Create audio block for the buffer containing LOWS
@@ -1052,8 +1190,8 @@ namespace audio_plugin {
       AP2.process(fb0Ctx);  // LP1 and AP2 create LOWS
 
       HP1.process(fb1Ctx);  // HP1 splits two ways: MIDS and HIGHS
-      filterBuffers[2] =
-          filterBuffers[1];  // Make a copy before BPF, to prepare for HIGHS
+      filterBuffers[2].makeCopyOf(
+          filterBuffers[1], true);  // Make a copy before BPF, to prepare for HIGHS  [Claude 2026-10-27] no reallocation
       LP2.process(fb1Ctx);   // HP1 and LP2 create BPF
 
       HP2.process(fb2Ctx);  // HP1, and HP2 create HIGHS
@@ -1067,22 +1205,11 @@ namespace audio_plugin {
         auto waveTableSize = lowLFO.getWaveTableSize();
         auto totalNumInputChannels = getTotalNumInputChannels();
 
-        /* Index = Current Position in the Given WaveTable.
-        Apply a single offset based on the Relative Phase Shift.*/
-        int lowIndex =
-            fmod((lowLFO.getPosition() + lowLFO.getRelativePhaseInSamples()),
-                 (float)waveTableSize);
-        int midIndex =
-            fmod((midLFO.getPosition() + midLFO.getRelativePhaseInSamples()),
-                 (float)waveTableSize);
-        int highIndex =
-            fmod((highLFO.getPosition() + highLFO.getRelativePhaseInSamples()),
-                 (float)waveTableSize);
-
-        /* LFO Instantaneous Amplitude, usd to Modulate Input Signal */
-        float mGainLowLFO = lowLFO.getWaveTableScaled()[lowIndex];
-        float mGainMidLFO = midLFO.getWaveTableScaled()[midIndex];
-        float mGainHighLFO = highLFO.getWaveTableScaled()[highIndex];
+        /* LFO Instantaneous Amplitude, usd to Modulate Input Signal: the current position plus the band's phase
+           offset [Claude 2026-10-29] (lfoGain: through a re-lock's fade) */
+        float mGainLowLFO = lfoGain(lowLFO, (float) waveTableSize);
+        float mGainMidLFO = lfoGain(midLFO, (float) waveTableSize);
+        float mGainHighLFO = lfoGain(highLFO, (float) waveTableSize);
 
         /* Update the LFO's Instantaneous Position */
         lowLFO.setPosition(
@@ -1210,27 +1337,40 @@ namespace audio_plugin {
     }
 
     //==============================================================================
+    // [Claude 2026-10-27] The host's program list is the preset list: factory presets, then the user's.
+    // A DAW's preset browser and program-change messages use these.
     int AudioPluginAudioProcessor::getNumPrograms() {
-      return 1;
+      return presets.getNumPresets();
     }
 
     //==============================================================================
     int AudioPluginAudioProcessor::getCurrentProgram() {
-      return 0;
+      return juce::jmax(0, presets.getCurrentIndex());   // [Claude 2026-10-27] "No preset" reports 0
     }
 
     //==============================================================================
-    void AudioPluginAudioProcessor::setCurrentProgram(int index) {}
+    void AudioPluginAudioProcessor::setCurrentProgram(int index) {
+      presets.loadPreset(index);   // [Claude 2026-10-27]
+    }
 
     //==============================================================================
     const juce::String AudioPluginAudioProcessor::getProgramName(int index) {
-      return {};
+      return presets.getPresetName(index);   // [Claude 2026-10-27]
     }
 
     //==============================================================================
     void AudioPluginAudioProcessor::changeProgramName(
         int index,
-                                                   const juce::String& newName) {}
+                                                   const juce::String& newName) {
+      if (presets.renameUser(index, newName))   // [Claude 2026-10-27] only user presets can be renamed
+        presetListChanged();
+    }
+
+    // [Claude 2026-10-27] Called by the preset bar after a save, rename, delete or load
+    //==============================================================================
+    void AudioPluginAudioProcessor::presetListChanged() {
+      updateHostDisplay(ChangeDetails().withProgramChanged(true));
+    }
 
     //==============================================================================
     void AudioPluginAudioProcessor::releaseResources() {
@@ -1300,6 +1440,7 @@ namespace audio_plugin {
           parameterID == params.at(Skew_Low_LFO) ||
           parameterID == params.at(Depth_Low_LFO) ||
           parameterID == params.at(Rate_Low_LFO) ||
+          parameterID == params.at(Sync_Low_LFO) ||   // [Claude 2026-10-29] a loaded sync state reaches the LFO at once
           parameterID == params.at(Multiplier_Low_LFO) ||
           parameterID == params.at(Relative_Phase_Low_LFO) ||
           parameterID == params.at(Invert_Low_LFO)) {
@@ -1311,6 +1452,7 @@ namespace audio_plugin {
           parameterID == params.at(Skew_Mid_LFO) ||
           parameterID == params.at(Depth_Mid_LFO) ||
           parameterID == params.at(Rate_Mid_LFO) ||
+          parameterID == params.at(Sync_Mid_LFO) ||   // [Claude 2026-10-29] a loaded sync state reaches the LFO at once
           parameterID == params.at(Multiplier_Mid_LFO) ||
           parameterID == params.at(Relative_Phase_Mid_LFO) ||
           parameterID == params.at(Invert_Mid_LFO)) {
@@ -1322,6 +1464,7 @@ namespace audio_plugin {
           parameterID == params.at(Skew_High_LFO) ||
           parameterID == params.at(Depth_High_LFO) ||
           parameterID == params.at(Rate_High_LFO) ||
+          parameterID == params.at(Sync_High_LFO) ||   // [Claude 2026-10-29] a loaded sync state reaches the LFO at once
           parameterID == params.at(Multiplier_High_LFO) ||
           parameterID == params.at(Relative_Phase_High_LFO) ||
           parameterID == params.at(Invert_High_LFO)) {

@@ -1,0 +1,9 @@
+{
+    "_about": "Written by Claude (Anthropic), 2026-10-27. Extra settings for the Wonderlab web demo, merged into plugin-config.js by Wonderlab/scripts/assemble-web.js. phoneZoom: the parts of the plugin (in plugin pixels, 750x515) that the Zoom buttons show on a phone.",
+    "phoneZoom": [
+        { "label": "Crossover", "x": 372, "y": 50,  "w": 376, "h": 212 },
+        { "label": "Low",       "x": 108, "y": 258, "w": 206, "h": 257 },
+        { "label": "Mid",       "x": 310, "y": 258, "w": 206, "h": 257 },
+        { "label": "High",      "x": 510, "y": 258, "w": 206, "h": 257 }
+    ]
+}

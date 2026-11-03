@@ -19,6 +19,8 @@ struct ScrollPad :	juce::Component,
 					juce::Slider::Listener,
 					juce::ActionBroadcaster
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
 public:
 
 	ScrollPad(audio_plugin::AudioPluginAudioProcessor& p);
@@ -73,7 +75,7 @@ private:
 
 	bool shouldUpdatePoint1Only, shouldUpdatePoint2Only, shouldCheckPanOrZoom;
 
-	int currentCenter{ 0 };
+	float currentCenter{ 0 };   // [Claude 2026-10-29] float (was int): the view pans and zooms in fractions of a pixel
 	int minWidth{ 80 };
 	int defaultWidth{ 160 };
 	float currentWidth{ 100 };
@@ -85,7 +87,7 @@ private:
 
 
 	int thumbTolerance = 75;
-	int zoomScale{ 1 };
+	float zoomScale{ 1 };       // [Claude 2026-10-29] float (was int)
 	float zoomIncrement = 10;
 
 	float convertSliderToPixelValue(float sliderValue);

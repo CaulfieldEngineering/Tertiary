@@ -22,6 +22,8 @@
 
 struct Oscilloscope :	juce::Component
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
     Oscilloscope(audio_plugin::AudioPluginAudioProcessor& p);
 	~Oscilloscope() override;
 

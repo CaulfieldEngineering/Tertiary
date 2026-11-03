@@ -13,6 +13,8 @@
 
 struct TopBanner : juce::Component
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
 public:
     TopBanner();
     ~TopBanner();
@@ -21,10 +23,20 @@ public:
     void resized() override;
 
 	/* Tells this class whether or not the app is in Demo Version */
-	void setDemoState(bool demoState) {mIsDemoVersion = demoState;}
+	void setDemoState(bool demoState) {mIsDemoVersion = demoState; updateVersionLink();}
+
+	/* [Claude 2026-10-29] While the demo's bypass runs, the DEMO tag says so */
+	void setDemoBypassed(bool b) { if (b != mDemoBypassed) { mDemoBypassed = b; repaint(); } }
+
+	/* [Claude 2026-10-27] Shows a quiet "Version X is available" link (full version only). Empty hides it. */
+	void setUpdateVersion(const juce::String& version);
 
     void mouseEnter(const juce::MouseEvent&) override;
     void mouseExit(const juce::MouseEvent&) override;
+
+    // [Claude 2026-10-29] The new header (Joe's header v4): Activate (demo) and the menu are click targets
+    void mouseUp(const juce::MouseEvent&) override;
+    std::function<void()> onActivate, onMenu;
 
 private:
     // Original source images
@@ -51,4 +63,12 @@ private:
 	bool mIsDemoVersion {true};
 
 	bool mIsMouseOver { false };
+	bool mDemoBypassed { false };
+
+	juce::Rectangle<float> mActivateArea, mMenuArea;
+
+	// [Claude 2026-10-27] "Version X is available" link to the website
+	juce::HyperlinkButton mUpdateLink;
+	juce::String mUpdateVersion;
+	void updateVersionLink();
 };

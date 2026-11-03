@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <installer-script minSpecVersion="1">
   <title>@wPLUGIN_NAME@ v@wPROJECT_VERSION@ (Demo) by @wCOMPANY_NAME@</title>
-  <options customize="always" require-scripts="false" allow-external-scripts="no"/>
+  <!-- [Claude 2026-11-02] hostArchitectures: without it macOS Installer treats the package as Intel-only and, on an
+       Apple Silicon Mac without Rosetta, refuses it ("can't be installed on this computer"; the 1.1.0 customer
+       install check on the Mac mini, macOS 26.6, no Rosetta). The plug-ins are universal. -->
+  <options hostArchitectures="arm64,x86_64" customize="always" require-scripts="false" allow-external-scripts="no"/>
 
   <choices-outline>
     <line choice="vst3"/>
+    <line choice="au"/>
     <line choice="standalone"/>
   </choices-outline>
 
@@ -12,11 +16,17 @@
     <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.vst3"/>
   </choice>
 
+  <!-- [Claude 2026-10-27] AU, for Logic and GarageBand -->
+  <choice id="au" title="@wPLUGIN_NAME@ - AU (Demo)" description="Install the AU (Audio Unit) demo version of @wPLUGIN_NAME@, for Logic Pro and GarageBand" start_selected="true">
+    <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.component"/>
+  </choice>
+
   <choice id="standalone" title="@wPLUGIN_NAME@ - Standalone (Demo)" description="Install the standalone demo version of @wPLUGIN_NAME@" start_selected="true">
     <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.standalone"/>
   </choice>
 
   <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.vst3" version="@wPROJECT_VERSION@">@wPLUGIN_NAME@_VST3_@wPROJECT_VERSION@.D.pkg</pkg-ref>
+  <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.component" version="@wPROJECT_VERSION@">@wPLUGIN_NAME@_AU_@wPROJECT_VERSION@.D.pkg</pkg-ref>
   <pkg-ref id="com.@wCOMPANY_ID@.@wPLUGIN_NAME@.standalone" version="@wPROJECT_VERSION@">@wPLUGIN_NAME@_Standalone_@wPROJECT_VERSION@.D.pkg</pkg-ref>
 
 </installer-script>

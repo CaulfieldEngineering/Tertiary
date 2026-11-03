@@ -9,6 +9,8 @@
 */
 
 #include "FreqLabel.h"
+#include "MyLookAndFeel.h"   // [Claude 2026-10-29] HouseLabelLookAndFeel
+#include "UtilityFunctions.h"
 
 FreqLabel::FreqLabel()
 {
@@ -19,10 +21,12 @@ FreqLabel::FreqLabel()
 
     // Initialize Low-Mid Cutoff Label =======
     mLabel.setColour(juce::Label::ColourIds::backgroundColourId, juce::Colours::black.withAlpha(0.f));
-    mLabel.setColour(juce::Label::ColourIds::textColourId, juce::Colours::white);
+    mLabel.setColour(juce::Label::ColourIds::textColourId, juce::Colour(0xffd9dade));
+    mLabel.setFont(juce::Font(12.f));  // [Claude 2026-10-29] smaller, in the header's style
     mLabel.setColour(juce::Label::ColourIds::textWhenEditingColourId, juce::Colours::antiquewhite);
     mLabel.setJustificationType(juce::Justification::centred);
     mLabel.setEditable(false, true);
+    mLabel.setLookAndFeel(&HouseLabelLookAndFeel::get());   // [Claude 2026-10-29] its text on whole screen pixels
     mLabel.addListener(this);
     mLabel.addMouseListener(this, true);
     addAndMakeVisible(mLabel);
@@ -32,6 +36,7 @@ FreqLabel::FreqLabel()
 
 FreqLabel::~FreqLabel()
 {
+    mLabel.setLookAndFeel(nullptr);   // [Claude 2026-10-29]
 }
 
 void FreqLabel::resized()
@@ -39,7 +44,7 @@ void FreqLabel::resized()
     //if (setDebug)
     //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, "");
 
-    mLabel.setBounds(getBounds());
+    mLabel.setBounds(getLocalBounds());  // [Claude 2026-10-29] local, not the parent's position (it only worked while the size never changed)
 }
 
 void FreqLabel::paint(juce::Graphics& g)
@@ -47,15 +52,16 @@ void FreqLabel::paint(juce::Graphics& g)
     //if (setDebug)
     //    WLDebugger::getInstance().printMessage(mNameSpace, __func__, "");
 
-    // Fill Rectangle
-    g.setColour(juce::Colours::black);
-    g.setOpacity(mLabel.isBeingEdited() ? 1.f : fadeValue);
-    g.fillRoundedRectangle(mLabel.getBounds().toFloat(), 3.f);
-
-    // Draw Outline
-    g.setColour(juce::Colours::darkgrey);
-    g.setOpacity(mLabel.isBeingEdited() ? 1.f : fadeValue);
-    g.drawRoundedRectangle(mLabel.getBounds().toFloat(), 3.f, 1.f);
+    // [Claude 2026-10-29] The header's grey, top-lit, with a fine light border, in place of the black box (Joe: "yes
+    // let's try it")
+    const float a = mLabel.isBeingEdited() ? 1.f : fadeValue;
+    const PixelGrid grid(g, this);   // [Claude 2026-10-29] the border's straight edges on whole screen pixels
+    const auto r = grid.strokeRect(mLabel.getBounds().toFloat());
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff26282e).withMultipliedAlpha(a), r.getX(), r.getY(),
+                                           juce::Colour(0xff17181c).withMultipliedAlpha(a), r.getX(), r.getBottom(), false));
+    g.fillRoundedRectangle(r, 3.f);
+    g.setColour(juce::Colours::white.withAlpha(0.14f * a));
+    g.drawRoundedRectangle(r, 3.f, grid.rulePx());
 }
 
 /* Entry-Validation & Update the Slider Value after Label Change */

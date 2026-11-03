@@ -18,8 +18,11 @@
 struct ScopeChannel :   juce::Component,
                         juce::AudioProcessorValueTreeState::Listener,
                         juce::ActionListener,
-                        juce::ActionBroadcaster
+                        juce::ActionBroadcaster,
+                        private juce::Timer   // [Claude 2026-10-29] follows the tempo and eases the drawn free rate (timerCallback)
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
     ScopeChannel(juce::AudioProcessorValueTreeState& apvts, LFO& lfo, ScrollPad& sliderScroll);
     ~ScopeChannel();
 
@@ -56,6 +59,15 @@ private:
     bool isBandFocused{false};
     bool focusHasChanged {false};
     
+    // [Claude 2026-10-29] The free rate as drawn eases toward the knob's (a one-pole step each frame), so a drag
+    // squeezes or stretches the wave smoothly about the centre instead of in 0.1 Hz steps
+    void timerCallback() override;
+    float targetRate{ 0.f };
+    bool rateShown{ false };
+    double targetBpm{ 120.0 };
+    float targetZoom{ 1.f }, targetCenter{ 0.f };   // [Claude 2026-10-29] the scroll bar's view; scrollZoom/scrollCenter ease to it
+    bool viewShown{ false };   // [Claude 2026-10-29] the host tempo; mHostBpm is the one drawn, eased toward it
+
     bool isBandBypassed{false};
     bool bypassHasChanged{false};
 

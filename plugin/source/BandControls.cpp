@@ -30,7 +30,10 @@ BandControl::BandControl(juce::AudioProcessorValueTreeState& apv)
     
     runOnceOnConstructor = false;
 
-    setBufferedToImage(true);
+    // [Claude 2026-10-29] No longer buffered to an image: at 125 and 150 % the cached picture was laid back down at a
+    // fractional screen position and resampled, which blurred every key, menu and slider in the column (their edges
+    // smeared over three rows at 125 %) and left odd pixels at its border, and it defeated the screen-pixel snapping
+    // inside, which assumed the column's real origin. The column is cheap to paint directly.
 }
 
 BandControl::~BandControl()
@@ -46,7 +49,8 @@ BandControl::~BandControl()
 //============================================================
 void BandControl::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colours::transparentBlack.withAlpha(0.35f));
+    // [Claude 2026-10-29] the column's shade is painted by GlobalControls over the whole column now; filling only this
+    // inset area left a faint edge just inside the bevel (Joe: "Don't need them")
 }
 
 /* Called on resize */
@@ -113,21 +117,31 @@ void BandControl::updateFlexBox()
 
     auto x = bounds.getHeight();
 
-    auto spacer = FlexItem().withHeight(bounds.getHeight() * spacerHeightScale);
+    // [Claude 2026-10-29] Rows sized from the window's width, not this column's height, and half the gap between them,
+    // so the window can be shorter without the controls shrinking (Joe: "reduce all of the padding a bit")
+    const float H = 250.f;   // [Claude 2026-10-29] the layout is always 750 wide now; the window scales it (was from the top-level width)
+    auto spacer = FlexItem().withHeight(H * spacerHeightScale * 0.5f);
 
-    componentColumn.items.add(FlexItem(waveShapeRow).withHeight(bounds.getHeight() * columnItemHeightScale));
+    // [Claude 2026-10-29] The sliders a little shorter than their row, centred in it, so the rows keep their spacing and
+    // line up with the labels (Joe: "making the sliders slightly shorter in height")
+    const float rowH = H * columnItemHeightScale, sliderH = rowH * 0.72f;
+    auto sliderItem = [&](juce::Component& c) { return FlexItem(c).withHeight(sliderH).withMargin(FlexItem::Margin((rowH - sliderH) / 2.f, 0.f, (rowH - sliderH) / 2.f, 0.f)); };
+    // and the menus and keys the same way (Joe: "i meant the dropdowns (and buttons) too")
+    auto sliderItemFlex = [&](juce::FlexBox& f, float h) { const float hh = h * 0.72f; return FlexItem(f).withHeight(hh).withMargin(FlexItem::Margin((h - hh) / 2.f, 0.f, (h - hh) / 2.f, 0.f)); };
+
+    componentColumn.items.add(sliderItemFlex(waveShapeRow, rowH));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(mSliderSkew).withHeight(bounds.getHeight() * columnItemHeightScale));
+    componentColumn.items.add(sliderItem(mSliderSkew));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(mSliderDepth).withHeight(bounds.getHeight() * columnItemHeightScale));
+    componentColumn.items.add(sliderItem(mSliderDepth));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(*placeholder).withHeight(bounds.getHeight() * columnItemHeightScale));
+    componentColumn.items.add(sliderItem(*placeholder));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(mSliderPhase).withHeight(bounds.getHeight() * columnItemHeightScale));
+    componentColumn.items.add(sliderItem(mSliderPhase));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(mSliderBandGain).withHeight(bounds.getHeight() * columnItemHeightScale));
+    componentColumn.items.add(sliderItem(mSliderBandGain));
     componentColumn.items.add(spacer);
-    componentColumn.items.add(FlexItem(buttonRow).withHeight(bounds.getHeight() * buttonRowHeightScale));
+    componentColumn.items.add(sliderItemFlex(buttonRow, H * buttonRowHeightScale));
     
     componentColumn.performLayout(componentBounds);
 
@@ -178,41 +192,32 @@ void BandControl::buildRateOrRhythm()
     addAndMakeVisible(mDropRhythm);
     addAndMakeVisible(mSliderRate);
     
+    // [Claude 2026-10-29] Both always broadcast. Each was wired only in the other's branch (the rate slider's only
+    // while synced, when it is hidden), so a band that opened unsynced had a rate slider the scope never heard (Joe:
+    // "on first startup, the low channel initiated to not-synced. But the frequency slider did not do anything").
+    mSliderRate.slider.onValueChange = [this]()
+    {
+        sendBroadcast("RATE", (juce::String)mSliderRate.slider.getValue());
+    };
+    mDropRhythm.onChange = [this]()
+    {
+        sendBroadcast("RHYTHM", (juce::String)mDropRhythm.getSelectedItemIndex());
+    };
+
     if (isSyncedToHost)
     {
-
         mDropRhythm.setLookAndFeel(&multComboLookAndFeel);
         mDropRhythm.setTextWhenNothingSelected("Rhythm");
-        
+
         placeholder = &mDropRhythm;
         mDropRhythm.setVisible(true);
         mSliderRate.setVisible(false);
-        
-        // Broadcast Rate Changes to Oscilloscope
-        mSliderRate.slider.onValueChange = [this]()
-        {
-            auto paramName = "RATE";
-            auto paramValue = (juce::String)mSliderRate.slider.getValue();
-
-            sendBroadcast(paramName, paramValue);
-        };
-        
     }
     else
     {
         placeholder = &mSliderRate;
         mDropRhythm.setVisible(false);
         mSliderRate.setVisible(true);
-        
-        // Broadcast Rhythm Changes to Oscilloscope
-        mDropRhythm.onChange = [this]()
-        {
-            auto paramName = "RHYTHM";
-
-            auto paramValue = (juce::String)mDropRhythm.getSelectedItemIndex();
-
-            sendBroadcast(paramName, paramValue);
-        };
     }
 
 
@@ -374,6 +379,16 @@ void BandControl::setMode(juce::String bandMode)
     mToggleBypass.setBandMode(mode, "BYP");
     mToggleSolo.setBandMode(mode, "SOLO");
     mToggleMute.setBandMode(mode, "MUTE");
+
+    // [Claude 2026-10-29] Names for screen readers and UI Automation ("Low Depth", "Mid Sync"...): the keys and sliders
+    // had none. Only their accessible names; nothing drawn or done changes. The Windows smoke test finds them by these.
+    const juce::String band = mode == 0 ? "Low" : mode == 1 ? "Mid" : "High";
+    for (auto [c, what] : { std::pair<juce::Component*, const char*> { &mSliderDepth.slider, "Depth" }, { &mSliderSkew.slider, "Skew" },
+                            { &mSliderRate.slider, "Rate" }, { &mSliderPhase.slider, "Phase" }, { &mSliderBandGain.slider, "Gain" },
+                            { &mToggleSync.mToggleButton, "Sync" }, { &mToggleInvert.mToggleButton, "Invert" },
+                            { &mToggleBypass.mToggleButton, "Bypass" }, { &mToggleSolo.mToggleButton, "Solo" },
+                            { &mToggleMute.mToggleButton, "Mute" }, { &mDropWaveshape, "Shape" }, { &mDropRhythm, "Rhythm" } })
+        c->setTitle(band + " " + what);
     
     
 }
@@ -382,7 +397,8 @@ void BandControl::buttonClicked(juce::Button* button)
 {
     if (button == &mToggleSync.mToggleButton)
     {
-        isSyncedToHost = !isSyncedToHost;
+        // [Claude 2026-10-29] from the key's state, not flipped: also right when a preset or session sets it
+        isSyncedToHost = mToggleSync.mToggleButton.getToggleState();
         
         buildRateOrRhythm();
         updateFlexBox();
@@ -429,6 +445,16 @@ void BandControl::broadcastInitialParameters()
 {
     juce::String paramName = "";
     juce::String paramValue = "";
+
+    // [Claude 2026-10-29] Show the rate or the rhythm for the sync state the band opened with (defaults, a preset or
+    // a saved session); it was a flag that started false and flipped on each click, and a state that matched the
+    // default never clicked it
+    if (isSyncedToHost != mToggleSync.mToggleButton.getToggleState())
+    {
+        isSyncedToHost = mToggleSync.mToggleButton.getToggleState();
+        buildRateOrRhythm();
+        updateFlexBox();
+    }
 
     paramName = "SYNC";
     paramValue = mToggleSync.mToggleButton.getToggleStateValue().toString();

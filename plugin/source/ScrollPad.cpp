@@ -9,6 +9,7 @@
 */
 
 #include "ScrollPad.h"
+#include "UtilityFunctions.h"   // [Claude 2026-10-29] PixelGrid
 
 using namespace juce;
 
@@ -163,29 +164,15 @@ void ScrollPad::updatePoints(int x1, int y1)
 				shouldZoom = true;	// Boundary Checking On Zoom Engaged
 		}
 
-		// Apply Zoom... Larger Upward Motion = Larger Zoom Increment
-
+		// Apply Zoom: up shrinks the range (zooms in), down widens it (zooms out)
+		// [Claude 2026-10-29] In proportion to how far the mouse moved (Joe: "When zooming out, the zoom kind of happens
+		// in discrete steps instead of smoothly"). It was a whole 6 to 10 pixels of range for every mouse event, however
+		// small the move, truncated to whole pixels.
 		if (shouldZoom)
 		{
-			zoomScale = juce::jmap(ang, 0.f, 90.f, 0.f, zoomIncrement);
-
-			// When Zooming In... Shrink 'Width' until Min
-			if (yAbs < 0.f)
-			{
-				currentWidth -= zoomScale;
-
-				if (currentWidth < minWidth)
-					currentWidth = minWidth;
-			}
-
-			// When Zooming Out... Expand 'Width' until Max
-			if (yAbs > 0.f)
-			{
-				currentWidth += zoomScale;
-
-				if (currentWidth > maxWidth)
-					currentWidth = maxWidth;
-			}
+			constexpr float rangePerPixel = 3.f;   // about the old speed
+			zoomScale = std::abs(yAbs) * rangePerPixel;
+			currentWidth = juce::jlimit((float) minWidth, (float) maxWidth, currentWidth + (yAbs < 0.f ? -zoomScale : zoomScale));
 		}
 
 		int c0 = (p01 + p02) / 2.f; // Actual Center of Points at time of Downclick
@@ -238,36 +225,26 @@ void ScrollPad::paint(juce::Graphics& g)
 	// Establish Bounds
 	auto bounds = getLocalBounds().toFloat();
 
-	// Draw Slider Track
-	juce::Path track;
-	track.startNewSubPath(bounds.getCentreX() - maxWidth / 2.f, bounds.getCentreY());
-	track.lineTo(bounds.getCentreX() + maxWidth / 2.f, bounds.getCentreY());
-	g.setColour(juce::Colours::darkgrey.withMultipliedBrightness(0.4f));
-	g.strokePath(track, juce::PathStrokeType(6.f, juce::PathStrokeType::JointStyle::beveled,
-		juce::PathStrokeType::EndCapStyle::rounded));
+	// [Claude 2026-10-29] A subtle recessed slot and a crisp thumb (Joe: "sharpen up the slide/scrollbar ... Maybe a
+	// little recess or something. Just subtle."). Was a soft 6 px stroke with a glowing stack of strokes for the thumb.
+	const float h = 5.f, cy = bounds.getCentreY();
+	const PixelGrid grid(g, this);   // [Claude 2026-10-29] the slot's long edges and the two highlights on whole screen pixels
+	const auto slot = grid.snap({ bounds.getCentreX() - maxWidth / 2.f, cy - h / 2.f, (float) maxWidth, h });
+	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff1a1b20), 0.f, slot.getY(), juce::Colour(0xff2a2c32), 0.f, slot.getBottom(), false));
+	g.fillRoundedRectangle(slot, slot.getHeight() / 2.f);
+	g.setColour(juce::Colours::black.withAlpha(0.6f));
+	g.drawRoundedRectangle(grid.strokeRect(slot), slot.getHeight() / 2.f - grid.rulePx() / 2.f, grid.rulePx());
+	g.setColour(juce::Colours::white.withAlpha(0.06f));
+	fillHLine(g, grid, slot.getBottom(), slot.getX() + h / 2.f, slot.getRight() - h / 2.f);
 
-	// Draw Point-To-Point Range
 	juce::Path range;
-	range.startNewSubPath(point1, bounds.getCentreY());
-	range.lineTo(point2, bounds.getCentreY());
-    
-    float totalNumBorders = 6;
-    
-    for (int i = 0; i < (int)totalNumBorders; i++)
-    {
-        //g.setColour(getScrollPadBaseColor().withMultipliedAlpha(1.f/((i*i)+0.75f)));
-        
-
-        float multAlpha = juce::jmap((float)i*i, 0.f, (totalNumBorders*totalNumBorders), 0.1f, 0.95f);
-
-        g.setColour(getScrollPadBaseColor().withMultipliedAlpha(multAlpha));
-        g.strokePath(range, juce::PathStrokeType(6.f - i, juce::PathStrokeType::JointStyle::beveled,
-            juce::PathStrokeType::EndCapStyle::rounded));
-    }
-
-    g.setGradientFill(setScrollBarGradient(range.getBounds().toFloat()));
-
-    g.strokePath(range, juce::PathStrokeType(2.f, juce::PathStrokeType::JointStyle::beveled, juce::PathStrokeType::EndCapStyle::rounded));
+	range.startNewSubPath(point1, cy);
+	range.lineTo(point2, cy);
+	juce::Rectangle<float> thumb = juce::Rectangle<float>::leftTopRightBottom(juce::jmin(point1, point2), cy - 1.5f, juce::jmax(point1, point2), cy + 1.5f);
+	g.setGradientFill(setScrollBarGradient(range.getBounds().toFloat()));
+	g.fillRoundedRectangle(thumb, 1.5f);
+	g.setColour(juce::Colours::white.withAlpha(0.18f));
+	fillHLine(g, grid, std::floor(thumb.getY()), thumb.getX() + 1.5f, thumb.getRight() - 1.5f);
     
     
     

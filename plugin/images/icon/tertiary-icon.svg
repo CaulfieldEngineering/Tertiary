@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256">
+  <!-- Tertiary's icon (Joe, 2026-10-29: C1, then "option 2"): a near-black tile with a thin stepped bevel at its rim,
+       so the whole icon reads as one recess; a white T with one accent per band: low green, mid blue, high purple -->
+  <defs>
+    <linearGradient id="blk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b0c0f"/><stop offset="1" stop-color="#030304"/></linearGradient>
+    <linearGradient id="tee" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0f1f4"/><stop offset="1" stop-color="#c4c6cc"/></linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="54" fill="#2d2d2f"/>
+  <rect x="10" y="10" width="236" height="236" rx="52" fill="#242426"/>
+  <rect x="12" y="12" width="232" height="232" rx="50" fill="#1b1b1c"/>
+  <rect x="14" y="14" width="228" height="228" rx="48" fill="#0e0e0f"/>
+  <rect x="16" y="16" width="224" height="224" rx="46" fill="url(#blk)"/>
+  <path d="M70 76H186V104H143V186H113V104H70Z" fill="url(#tee)"/>
+  <rect x="70" y="109" width="38" height="5" rx="2.5" fill="#56bd77"/>
+  <rect x="148" y="109" width="38" height="5" rx="2.5" fill="#c886dd"/>
+  <rect x="113" y="191" width="30" height="5" rx="2.5" fill="#64a6fa"/>
+</svg>

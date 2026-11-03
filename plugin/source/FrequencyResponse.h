@@ -24,6 +24,8 @@ struct FrequencyResponse :	juce::Component,
 							juce::Slider::Listener,
 							juce::ActionListener
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
 
 	FrequencyResponse(audio_plugin::AudioPluginAudioProcessor& p, juce::AudioProcessorValueTreeState& apv);
 	~FrequencyResponse();
@@ -36,6 +38,7 @@ struct FrequencyResponse :	juce::Component,
 
     void paintResponseRegions(juce::Graphics& g);
 
+	void paintGainTag(juce::Graphics& g, Cursor& cursor, float gainDb);
 	void paintLowRegion(	juce::Graphics& g,
                             juce::Rectangle<float> bounds,
                             float gainPixel,
@@ -112,8 +115,8 @@ private:
 	void buildHighGainSlider();
 
 	Cursor newCursorLM, newCursorMH, newCursorLowGain, newCursorMidGain, newCursorHighGain;
-	float focusAlpha = 0.85f;
-	float noFocusAlpha = 0.65f;
+	float focusAlpha = 0.7f;     // [Claude 2026-10-29] a notch quieter, so the curves and handles lead (was 0.85)
+	float noFocusAlpha = 0.45f;  // (was 0.65)
 	float lowCursorFadeValue{ 1.f };
 	float highCursorFadeValue{ 1.f };
 

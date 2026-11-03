@@ -10,10 +10,127 @@
 
 
 #include "AboutWindow.h"
+#if __has_include("build_id.h")
+#include "build_id.h"   // [Claude 2026-10-29] WLA_BUILD_ID
+#else
+#define WLA_BUILD_ID "unknown"   // [Claude 2026-10-29] builds without the build_id step (the web demo)
+#endif
+#include <cstdlib>
 #include "PluginEditor.h"
 
 
 
+
+// [Claude 2026-10-29] The house style: keys like the header's (green when they activate), fields as recessed wells
+//==============================================================================
+void AboutWindow::Look::drawButtonBackground(juce::Graphics& g, juce::Button& b, const juce::Colour&, bool highlighted, bool down)
+{
+	const PixelGrid grid(g, &b);   // [Claude 2026-10-29] edges and highlight on whole screen pixels
+	auto r = grid.strokeRect(b.getLocalBounds().toFloat());
+	const bool primary = b.getProperties()["primary"];
+	juce::Colour top = primary ? juce::Colour(0xff5bbd7d) : juce::Colour(0xff34363e);
+	juce::Colour bot = primary ? juce::Colour(0xff3f9a5f) : juce::Colour(0xff25272d);
+	if (down) { top = top.darker(0.25f); bot = bot.darker(0.25f); }
+	else if (highlighted) { top = top.brighter(0.08f); bot = bot.brighter(0.08f); }
+	g.setGradientFill(juce::ColourGradient(top, 0.f, r.getY(), bot, 0.f, r.getBottom(), false));
+	g.fillRoundedRectangle(r, 1.5f);
+	g.setColour(juce::Colours::white.withAlpha(primary ? 0.25f : 0.1f));
+	fillHLine(g, grid, r.getY() + grid.rulePx() / 2.f, r.getX() + 1.5f, r.getRight() - 1.5f);
+	g.setColour(juce::Colours::black.withAlpha(0.7f));
+	g.drawRoundedRectangle(r, 1.5f, grid.rulePx());
+}
+
+void AboutWindow::Look::drawButtonText(juce::Graphics& g, juce::TextButton& b, bool highlighted, bool)
+{
+	const bool primary = b.getProperties()["primary"];
+	if (b.getButtonText() == "X")
+	{
+		// the close key: a fine cross
+		auto c = b.getLocalBounds().toFloat().getCentre();
+		g.setColour(juce::Colour(highlighted ? 0xffd9dade : 0xffa9abb3));
+		g.drawLine(c.x - 3.5f, c.y - 3.5f, c.x + 3.5f, c.y + 3.5f, 1.3f);
+		g.drawLine(c.x - 3.5f, c.y + 3.5f, c.x + 3.5f, c.y - 3.5f, 1.3f);
+		return;
+	}
+	g.setColour(primary ? juce::Colour(0xff0f1a12) : juce::Colour(highlighted ? 0xffd9dade : 0xffb4b6bc));
+	g.setFont(juce::Font(13.f));
+	drawTextOnPixels(g, PixelGrid(g, &b), b.getButtonText(), b.getLocalBounds().toFloat(), juce::Justification::centred);   // [Claude 2026-10-29]
+}
+
+void AboutWindow::Look::fillTextEditorBackground(juce::Graphics& g, int w, int h, juce::TextEditor& e)
+{
+	const PixelGrid grid(g, &e);   // [Claude 2026-10-29]
+	auto r = grid.strokeRect(juce::Rectangle<float>(0.f, 0.f, (float) w, (float) h));
+	g.setGradientFill(juce::ColourGradient(juce::Colour(0xff0b0c0f), 0.f, r.getY(), juce::Colour(0xff15161a), 0.f, r.getBottom(), false));
+	g.fillRoundedRectangle(r, 1.5f);
+	g.setColour(juce::Colours::black.withAlpha(0.6f));
+	fillHLine(g, grid, r.getY(), r.getX() + 1.5f, r.getRight() - 1.5f, grid.thick(1.5f));
+}
+
+void AboutWindow::Look::drawTextEditorOutline(juce::Graphics& g, int w, int h, juce::TextEditor& e)
+{
+	const PixelGrid grid(g, &e);   // [Claude 2026-10-29]
+	g.setColour(e.hasKeyboardFocus(true) ? juce::Colour(0xff5bbd7d).withAlpha(0.7f) : juce::Colours::black.withAlpha(0.7f));
+	g.drawRoundedRectangle(grid.strokeRect(juce::Rectangle<float>(0.f, 0.f, (float) w, (float) h)), 1.5f, grid.rulePx());
+	g.setColour(juce::Colours::white.withAlpha(0.06f));
+	fillHLine(g, grid, (float) h - grid.rulePx(), 2.f, (float) w - 2.f);
+}
+
+void AboutWindow::applyLook()
+{
+	for (juce::Component* c : { (juce::Component*) &mButtonClose, (juce::Component*) &mActionButton,
+	                            (juce::Component*) &mTextEditorEmailAddress, (juce::Component*) &mTextEditorSerialKey })
+		c->setLookAndFeel(&look);
+
+	for (auto* e : { &mTextEditorEmailAddress, &mTextEditorSerialKey })
+	{
+		// [Claude 2026-10-29] a whole-number font and indent, in fields that sit on a 4-pixel grid, so the typed text lands
+		// on whole screen pixels at 100 / 125 / 150 / 200 % (it was 13 px in fields at 146 and 178, soft when scaled)
+		e->setFont(juce::Font(12.f));
+		e->setJustification(juce::Justification::centredLeft);
+		e->setIndents(12, 0);
+		e->setColour(juce::TextEditor::textColourId, juce::Colour(0xffd6d7dc));
+		e->setColour(juce::TextEditor::highlightColourId, juce::Colour(0xff3f9a5f).withAlpha(0.5f));
+		e->setColour(juce::CaretComponent::caretColourId, juce::Colour(0xffd6d7dc));
+		e->setColour(juce::TextEditor::backgroundColourId, juce::Colours::transparentBlack);
+		e->setColour(juce::TextEditor::outlineColourId, juce::Colours::transparentBlack);
+		e->setColour(juce::TextEditor::focusedOutlineColourId, juce::Colours::transparentBlack);
+	}
+	mTextEditorEmailAddress.setTextToShowWhenEmpty("Email address", juce::Colour(0xff5d606a));
+	mTextEditorSerialKey.setTextToShowWhenEmpty("Serial key", juce::Colour(0xff5d606a));
+
+	// the fields are always there; activated, they show the email and key greyed out and read-only (Joe: "show the
+	// email and serial boxes but greyed out? with their content?")
+	for (auto* e : { &mTextEditorEmailAddress, &mTextEditorSerialKey })
+	{
+		e->setVisible(true);
+		e->setAlpha(mIsDemoVersion ? 1.f : 0.5f);
+		e->setInterceptsMouseClicks(mIsDemoVersion, mIsDemoVersion);
+	}
+	mActionButton.getProperties().set("primary", mIsDemoVersion);
+	mActionButton.setButtonText(mIsDemoVersion ? "Activate" : "Deactivate this computer");
+   #if JUCE_EMSCRIPTEN
+    // Keep the desktop panel and its house styling, with inactive licence fields.
+    for (auto* field : { &mTextEditorEmailAddress, &mTextEditorSerialKey })
+    {
+        field->setEnabled(false);
+        field->setReadOnly(true);
+        field->setAlpha(0.5f);
+    }
+    mActionButton.setButtonText("Activate");
+    mActionButton.setEnabled(false);
+    mActionButton.setAlpha(0.5f);
+    mLabelStatus.setText("Activation is not needed in the browser demo", juce::dontSendNotification);
+   #endif
+
+	mButtonWebsiteLink.setFont(juce::Font(12.f), false, juce::Justification::centred);
+	mButtonWebsiteLink.setColour(juce::HyperlinkButton::textColourId, juce::Colour(0xff8b8e97));
+	mLabelStatus.setFont(juce::Font(12.f, juce::Font::italic));
+	mLabelStatus.setColour(juce::Label::textColourId, juce::Colour(0xffa9abb3));
+	mLabelStatus.setLookAndFeel(&HouseLabelLookAndFeel::get());   // [Claude 2026-10-29] its text on whole screen pixels
+	resized();
+	repaint();
+}
 
 AboutWindow::AboutWindow(audio_plugin::AudioPluginAudioProcessor& p, audio_plugin::AudioPluginAudioProcessorEditor& e)
     : audioProcessor(p), pluginEditor(e)
@@ -43,152 +160,133 @@ AboutWindow::AboutWindow(audio_plugin::AudioPluginAudioProcessor& p, audio_plugi
     setUpEmailEditor();
     setUpActionButton();
     setUpStatusLabel();
-
+    applyLook();
+    setAlpha(1.f);
 }
 
 AboutWindow::~AboutWindow()
 {
+	for (juce::Component* c : { (juce::Component*) &mButtonClose, (juce::Component*) &mActionButton,
+	                            (juce::Component*) &mTextEditorEmailAddress, (juce::Component*) &mTextEditorSerialKey })
+		c->setLookAndFeel(nullptr);
+	mLabelStatus.setLookAndFeel(nullptr);   // [Claude 2026-10-29]
 
 }
 
 void AboutWindow::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colours::black);
-    auto bounds = getLocalBounds();
-    float scale = getWindowsDPIScale(this);
-    
-    g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
+    // [Claude 2026-10-29] A panel in the header's style: top-lit grey, a thin border, the wordmark and version at the
+    // top, then the licence state (Joe: "yes rebuild it"). Was the title pictures on black in a thick grey frame.
+    auto r = getLocalBounds().toFloat();
+    const PixelGrid grid(g, this);   // [Claude 2026-10-29] hairlines and text on whole screen pixels at every window size
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff222329), 0.f, 0.f, juce::Colour(0xff17181c), 0.f, r.getBottom(), false));
+    g.fillRect(r);
+    g.setColour(juce::Colours::white.withAlpha(0.08f));
+    fillHLine(g, grid, r.getY(), r.getX() + 1.f, r.getRight() - 1.f);
+    g.setColour(juce::Colours::black);
+    g.drawRect(grid.snap(r), grid.rulePx());
 
-    // Draw Company Title (Wonderland Audio logo)
-	// ==========================================================
-    float companyTitleWidth = bounds.getWidth() * 0.75f;
-    float aspectRatio = static_cast<float>(targetCompanyHeight) / static_cast<float>(targetCompanyWidth);
-    float companyTitleHeight = companyTitleWidth * aspectRatio;
-    
-    if (std::abs(lastCompanyTitleScale - scale) > 0.01f || scaledCompanyTitle.isNull())
+    const float x = 20.f;
+
+    // the wordmark and version
+    auto nameFont = juce::Font(17.f, juce::Font::bold);
+    nameFont.setExtraKerningFactor(0.22f);
+    g.setFont(nameFont);
+    g.setColour(juce::Colour(0xffe9e9ec));
+    const juce::String name("TERTIARY");
+    const float nameW = (float) nameFont.getStringWidth(name);
+    drawTextOnPixels(g, grid, name, juce::Rectangle<float>(x, 20.f, nameW + 8.f, 22.f), juce::Justification::centredLeft);
+    g.setFont(juce::Font(12.5f));
+    g.setColour(juce::Colour(0xff8b8e97));
+    drawTextOnPixels(g, grid, "Multiband Tremolo", juce::Rectangle<float>(x, 44.f, 200.f, 16.f), juce::Justification::centredLeft);
+    // [Claude 2026-10-30] a click on the build line copies it (Joe: "it'd be nice to be able to copy that build line
+    // directly"); "Copied" shows in its place for a moment
+    const bool copiedNow = mShowBuildId && mCopiedAt != 0 && juce::Time::getMillisecondCounter() - mCopiedAt < copiedHintMs;
+    if (copiedNow) g.setColour(juce::Colour(0xffc9cbd1));
+    drawTextOnPixels(g, grid, copiedNow ? juce::String("Copied") : mShowBuildId ? juce::String(juce::CharPointer_UTF8("Build " WLA_BUILD_ID)) : "Version " + juce::String(JucePlugin_VersionString), juce::Rectangle<float>(x + 150.f, 44.f, r.getWidth() - x * 2.f - 150.f, 16.f),
+                     juce::Justification::centredRight);
+
+    // the logo, small, at the top right beside the close key
+    if (! imageCompanyTitle.isNull())
     {
-        scaledCompanyTitle = applyResize(imageCompanyTitle, 
-                                       juce::roundToInt(companyTitleWidth * scale), 
-                                       juce::roundToInt(companyTitleHeight * scale));
-        lastCompanyTitleScale = scale;
+        const float h = 12.f, w = h * imageCompanyTitle.getWidth() / (float) imageCompanyTitle.getHeight();
+        // resampled once to the exact device pixels (drawn straight down from 4000 px it aliased)
+        const float sc = (float) g.getInternalContext().getPhysicalPixelScaleFactor();
+        const int pw = juce::roundToInt(w * sc), ph = juce::roundToInt(h * sc);
+        if (scaledCompanyTitle.isNull() || scaledCompanyTitle.getWidth() != pw || scaledCompanyTitle.getHeight() != ph)
+            scaledCompanyTitle = applyResize(imageCompanyTitle, pw, ph);
+        // one picture pixel to one screen pixel, on whole screen pixels (this window sits inside the scaled content, whose
+        // origin is the window's, so its own position is counted); a fractional position smeared it (Joe)
+        const auto snap = [&](float v, int origin) { return std::round((origin + v) * sc) / sc - origin; };
+        g.setImageResamplingQuality(juce::Graphics::lowResamplingQuality);
+        g.drawImage(scaledCompanyTitle, juce::Rectangle<float>(snap(r.getRight() - x - 26.f - w, getX()), snap(25.f, getY()), pw / sc, ph / sc));
     }
 
-    juce::Rectangle<float> companyBounds{
-        bounds.getCentreX() - companyTitleWidth / 2,
-        25,
-        companyTitleWidth,
-        companyTitleHeight
-    };
-    
-    if (!scaledCompanyTitle.isNull())
+    g.setColour(juce::Colours::black.withAlpha(0.5f));
+    const auto rule = grid.hLine(72.f, x, r.getRight() - x);
+    g.fillRect(rule);
+    g.setColour(juce::Colours::white.withAlpha(0.05f));
+    g.fillRect(rule.translated(0.f, rule.getHeight()));
+
+    // the licence state
+    auto line = juce::Rectangle<float>(x, 86.f, r.getWidth() - x * 2.f, 18.f);
+   #if JUCE_EMSCRIPTEN
+    g.setColour(juce::Colour(0xffa9abb3));
+    g.setFont(juce::Font(12.5f));
+    drawTextOnPixels(g, grid, "Browser demo", line, juce::Justification::centredLeft);
+   #else
+    if (mIsDemoVersion)
     {
-        g.drawImage(scaledCompanyTitle, companyBounds);
+        g.setColour(juce::Colour(0xffc886dd));
+        g.setFont(juce::Font(12.f, juce::Font::bold).withExtraKerningFactor(0.12f));
+        drawTextOnPixels(g, grid, "DEMO", line, juce::Justification::centredLeft);
+        g.setColour(juce::Colour(0xffa9abb3));
+        g.setFont(juce::Font(12.5f));
+        // two lines, one font height apart, each on whole screen pixels
+        auto row = line.translated(0.f, 20.f).withHeight(g.getCurrentFont().getHeight());
+        for (const auto& text : { "The effect bypasses for 10 seconds of every minute.", "Activate with the email and serial key from your purchase." })
+        {
+            drawTextOnPixels(g, grid, text, row, juce::Justification::topLeft);
+            row.translate(0.f, row.getHeight());
+        }
     }
-
-    // Draw Plugin Title (TERTIARY)
-	// ==========================================================
-    juce::Rectangle<float> titleBounds{
-        bounds.getCentreX() - targetTitleWidth / 2,
-        companyBounds.getBottom() + 5,
-        static_cast<float>(targetTitleWidth),
-        static_cast<float>(targetTitleHeight)
-    };
-
-    if (std::abs(lastPluginTitleScale - scale) > 0.01f || scaledPluginTitle.isNull())
+    else
     {
-        scaledPluginTitle = applyResize(imagePluginTitle, 
-                                      juce::roundToInt(targetTitleWidth * scale), 
-                                      juce::roundToInt(targetTitleHeight * scale));
-        lastPluginTitleScale = scale;
+        g.setColour(juce::Colour(0xff5bbd7d));
+        g.setFont(juce::Font(12.f, juce::Font::bold).withExtraKerningFactor(0.12f));
+        drawTextOnPixels(g, grid, "ACTIVATED", line, juce::Justification::centredLeft);
+        g.setColour(juce::Colour(0xffa9abb3));
+        g.setFont(juce::Font(12.5f));
+        drawTextOnPixels(g, grid, "Thank you for your purchase!", line.translated(0.f, 20.f), juce::Justification::centredLeft);
     }
-
-    if (!scaledPluginTitle.isNull())
-    {
-        g.drawImage(scaledPluginTitle, titleBounds);
-    }
-
-    // Set up text drawing with DPI scaling
-    float fontSize = 20.0f;
-    g.setFont(fontSize);
-
-    // Draw Version and Release info
-	// ==========================================================
-    g.setColour(juce::Colours::white);
-    #ifdef DEBUG
-        g.setColour(juce::Colours::red);
-    #endif
-
-    juce::Rectangle<int> versionBounds = bounds.removeFromTop(static_cast<int>(titleBounds.getBottom()) + 60)
-                                               .removeFromBottom(60);
-    juce::String versionNumber = JucePlugin_VersionString;
-    
-    juce::String releaseDate = formatBuildDateTime();
-    g.drawFittedText("Version: " + versionNumber, versionBounds.removeFromTop(30), juce::Justification::centred, 1);
-    g.drawFittedText("Release: " + releaseDate, versionBounds, juce::Justification::centred, 1);
-
-    // Draw Demo Version Disclaimer
-	// ==========================================================
-	if (mIsDemoVersion)
-	{
-		g.setFont(fontSize * 0.8f);
-		g.setColour(juce::Colours::lightgrey);
-		juce::Rectangle<int> disclaimerBounds = bounds.removeFromTop(60).reduced(5, 0);
-		g.drawFittedText("Demo Version: Effect is disabled once every\n50 seconds, for 10 seconds.",
-						 disclaimerBounds, juce::Justification::centred, 2);
-	}
-	else
-	{
-		g.setFont(fontSize * 0.8f);
-		g.setColour(juce::Colour(0xff409963)); // 0xff indicates full opacity
-		juce::Rectangle<int> thanksBounds = bounds.removeFromTop(60).reduced(5, 0);
-		g.drawFittedText("Full Version Activated\nThank you for your purchase!",
-						 thanksBounds, juce::Justification::centred, 1);
-
-
-	}
-
-    // Draw Window Border
-	// ==========================================================
-    paintBorder(g, juce::Colours::grey, getLocalBounds().toFloat());
+   #endif
 }
 
 void AboutWindow::resized()
 {
+    // [Claude 2026-10-29] laid out for the rebuilt panel
     auto bounds = getLocalBounds();
+    const int x = 20, w = bounds.getWidth() - x * 2;
 
-    // Position the Close ("X") button in the top-right corner
-    mButtonClose.setBounds(bounds.getRight() - 30, 5, 25, 25);
+    mButtonClose.setBounds(bounds.getRight() - x - 18, 22, 18, 18);
+    mButtonWebsiteLink.setBounds(bounds.getX(), bounds.getBottom() - 32, bounds.getWidth(), 20);
 
-    // Position the website link button at the bottom center
-    mButtonWebsiteLink.setBounds(bounds.getX(), bounds.getBottom() - 50, bounds.getWidth(), 30);
-
-	// ===============================
-	// Position Activation UI Elements
-	// ===============================
-
-	auto editorArea = bounds.withTrimmedTop(bounds.getHeight() * 0.575f).reduced(40, 0);
-
-	// Email Address Field
-	mTextEditorEmailAddress.setBounds(editorArea.removeFromTop(30));
-
-	// Serial Key Field
-	editorArea.removeFromTop(10); // spacing
-	mTextEditorSerialKey.setBounds(editorArea.removeFromTop(30));
-
-	// Action Button
-	auto buttonArea = editorArea.removeFromTop(30).translated(0, 10);
-	mActionButton.setBounds(buttonArea);
-
-	// Status Label
-	auto statusArea = buttonArea.translated(0, 35);
-	statusArea.setHeight(20);
-	mLabelStatus.setBounds(statusArea);
+    // the button and the status line sit in the same place activated or not, so nothing jumps (Joe)
+    // [Claude 2026-10-29] every edge on a multiple of 4 (with the window itself placed on one), so it lands on whole
+    // screen pixels at 125 / 150 / 200 %
+    mTextEditorEmailAddress.setBounds(x, 144, w, 28);
+    mTextEditorSerialKey.setBounds(x, 176, w, 28);
+    mActionButton.setBounds(x, 212, w, 28);
+    mLabelStatus.setBounds(x, 244, w, 28);
 }
 
 
 void AboutWindow::setUpSerialKeyEditor()
 {
     addAndMakeVisible(mTextEditorSerialKey);
+   #if JUCE_EMSCRIPTEN
+    return; // No licence files in the browser; applyLook supplies the disabled style.
+   #endif
 
     mTextEditorSerialKey.setMultiLine(false);
     mTextEditorSerialKey.setTextToShowWhenEmpty("Enter Serial Key...", juce::Colours::darkgrey);
@@ -203,6 +301,7 @@ void AboutWindow::setUpSerialKeyEditor()
     options.applicationName = "Tertiary";
     options.filenameSuffix = "settings";
     options.osxLibrarySubFolder = "Application Support";
+    TestHooks::redirectSettings(options);   // [Claude 2026-10-29] UI tests: a temp folder (TestHooks.h); unchanged otherwise
     juce::PropertiesFile props(options);
 
 
@@ -211,14 +310,20 @@ void AboutWindow::setUpSerialKeyEditor()
     {
         mTextEditorSerialKey.setReadOnly(false);
         mTextEditorSerialKey.setText("");
+        mActivatedKey = {};
     }
     else
     {
         mTextEditorSerialKey.setReadOnly(true);
 
 		juce::String savedKey = props.getValue("licenseKey", "");
+		if (savedKey.isEmpty() && std::getenv("WLA_FOCUS") != nullptr && juce::String(std::getenv("WLA_FOCUS")).contains("ABOUT"))
+			savedKey = "WLA-TERT-4F2C-91AB";  // [Claude 2026-10-29] review renders only: a sample, never saved
+		// [Claude 2026-10-29] the key is kept here for deactivation and shown masked, all but its last four characters
+		// (Joe: "show the serial as like XXX with the last few digits")
+		mActivatedKey = savedKey;
 		if (savedKey.isNotEmpty())
-			savedKey = "Key: " + savedKey;
+			savedKey = "Key: " + juce::String::repeatedString(juce::String(juce::CharPointer_UTF8("•")), 8) + " " + savedKey.getLastCharacters(4);
 
         mTextEditorSerialKey.setText(savedKey);
     }
@@ -227,6 +332,9 @@ void AboutWindow::setUpSerialKeyEditor()
 void AboutWindow::setUpEmailEditor()
 {
     addAndMakeVisible(mTextEditorEmailAddress);
+   #if JUCE_EMSCRIPTEN
+    return;
+   #endif
 
     mTextEditorEmailAddress.setMultiLine(false);
     mTextEditorEmailAddress.setTextToShowWhenEmpty("Enter Email Address...", juce::Colours::darkgrey);
@@ -241,6 +349,7 @@ void AboutWindow::setUpEmailEditor()
     options.applicationName = "Tertiary";
     options.filenameSuffix = "settings";
     options.osxLibrarySubFolder = "Application Support";
+    TestHooks::redirectSettings(options);   // [Claude 2026-10-29] UI tests: a temp folder (TestHooks.h); unchanged otherwise
     juce::PropertiesFile props(options);
 
 
@@ -256,6 +365,8 @@ void AboutWindow::setUpEmailEditor()
 		mTextEditorEmailAddress.setReadOnly(true);
 
 		juce::String savedEmail = props.getValue("licenseEmail", "");
+		if (savedEmail.isEmpty() && std::getenv("WLA_FOCUS") != nullptr && juce::String(std::getenv("WLA_FOCUS")).contains("ABOUT"))
+			savedEmail = "joe@example.com";  // [Claude 2026-10-29] review renders only: a sample, never saved
 		if (savedEmail.isNotEmpty())
 			savedEmail = "Email: " + savedEmail;
 
@@ -268,6 +379,11 @@ void AboutWindow::setUpEmailEditor()
 void AboutWindow::setUpActionButton()
 {
     addAndMakeVisible(mActionButton);
+   #if JUCE_EMSCRIPTEN
+    mActionButton.setEnabled(false);
+    mActionButton.onClick = nullptr;
+    return;
+   #endif
 
     // Custom green: #409963 = RGB(64, 153, 99)
     juce::Colour customGreen(0xff409963);
@@ -395,6 +511,48 @@ void AboutWindow::buttonClicked(juce::Button* button)
 
 }
 
+// [Claude 2026-10-29] A hidden developer detail: Ctrl+Shift+click on the version line swaps it for the exact build
+// (commit, + if it had uncommitted changes, and when it was built), so Joe can check he is testing the build just made
+void AboutWindow::LinkButton::paintButton(juce::Graphics& g, bool highlighted, bool)
+{
+    g.setFont(juce::Font(12.f));
+    g.setColour(juce::Colour(highlighted ? 0xffc9cbd1 : 0xff8b8e97));
+    drawTextOnPixels(g, PixelGrid(g, this), getButtonText(), getLocalBounds().toFloat(), juce::Justification::centred);
+}
+
+void AboutWindow::mouseUp(const juce::MouseEvent& event)
+{
+    // [Claude 2026-10-29] This window listens to its own mouse events (addMouseListener(this, true)), so JUCE calls
+    // mouseUp twice for one click, once directly and once as a listener; it toggled twice and nothing changed (Joe:
+    // "Ctrl+Shift+click doesn't show the build"). One toggle per click now. Cmd+Shift on a Mac does it too.
+    if (event.eventTime == mLastBuildIdClick)
+        return;
+    const auto e = event.getEventRelativeTo(this);
+    const bool onVersion = e.y >= 40 && e.y <= 64 && e.x >= getWidth() / 2;
+    if (onVersion && (e.mods.isCtrlDown() || e.mods.isCommandDown()) && e.mods.isShiftDown())
+    {
+        mLastBuildIdClick = event.eventTime;
+        mShowBuildId = ! mShowBuildId;
+        mCopiedAt = 0;
+        repaint();
+    }
+    else if (onVersion && mShowBuildId)
+    {
+        // [Claude 2026-10-30] a plain click on the shown build line copies the build id, as plain text
+        mLastBuildIdClick = event.eventTime;
+        const juce::String buildId(juce::CharPointer_UTF8(WLA_BUILD_ID));
+       #if WLA_UI_TEST_BUILD
+        TestHooks::copied() = buildId;   // UI tests: recorded, the clipboard is left alone
+       #else
+        juce::SystemClipboard::copyTextToClipboard(buildId);
+       #endif
+        mCopiedAt = juce::jmax((juce::uint32) 1, juce::Time::getMillisecondCounter());
+        repaint();
+        juce::Component::SafePointer<AboutWindow> safe(this);
+        juce::Timer::callAfterDelay((int) copiedHintMs + 50, [safe] { if (safe != nullptr) safe->repaint(); });
+    }
+}
+
 void AboutWindow::mouseExit(const juce::MouseEvent& event)
 {
     //if (!isMouseOver())
@@ -409,10 +567,16 @@ void AboutWindow::mouseExit(const juce::MouseEvent& event)
 
 
 
+// [Claude 2026-10-27] The three server calls below are the same requests as in 1.0.2, now made through
+// licenseServer (LicenseServer.h). Changes: a SafePointer, so a reply that arrives after the window is closed
+// no longer touches a deleted window (that could crash the host); the email is sent exactly as typed, only
+// trimmed ([Claude 2026-10-30] M-01: the server compares it exactly, capitals included; 1.1 had lower-cased it, which
+// gave invalid_email for an order email with capitals); the 5 s timeout now applies (it was set on a copy before); and the instance is a
+// real machine ID (LicenseCheck::getMachineInstance) instead of the computer's model name.
 void AboutWindow::attemptSerialKeyValidation()
 {
     auto serialKey = mTextEditorSerialKey.getText().trim();
-    auto email = mTextEditorEmailAddress.getText().trim();
+    auto email = LicenseCheck::emailFromField(mTextEditorEmailAddress.getText());   // [Claude 2026-10-30] M-01: as typed, the same as activation
 
     if (serialKey.isEmpty())
     {
@@ -422,62 +586,33 @@ void AboutWindow::attemptSerialKeyValidation()
 
     mLabelStatus.setText("Validating...", juce::dontSendNotification);
 
-    juce::Thread::launch([this, serialKey, email]()
+    juce::Component::SafePointer<AboutWindow> safeThis(this);
+    auto server = licenseServer;
+
+    juce::Thread::launch([safeThis, server, serialKey, email]()
     {
-        juce::URL apiURL("https://wonderlandaudio.com/wp-json/wcsn/validate");
-        apiURL = apiURL.withParameter("product_id", "45")
-                       .withParameter("serial_key", serialKey)
-                       .withParameter("request", "validate");
+        auto reply = server->validate(serialKey, email);
 
-        if (email.isNotEmpty())
-            apiURL = apiURL.withParameter("email", email);
-
-        juce::URL::InputStreamOptions options(juce::URL::ParameterHandling::inAddress);
-        options.withConnectionTimeoutMs(5000);
-
-        std::unique_ptr<juce::InputStream> stream(apiURL.createInputStream(options));
-
-        if (stream != nullptr)
+        juce::MessageManager::callAsync([safeThis, reply]()
         {
-            auto responseStr = stream->readEntireStreamAsString();
+            if (safeThis == nullptr)
+                return;
 
-            auto json = juce::JSON::parse(responseStr);
-            if (auto* obj = json.getDynamicObject())
+            if (!reply.reachable)
+                safeThis->mLabelStatus.setText("Connection to server failed.", juce::dontSendNotification);
+
+            // Key is confirmed to be valid
+            else if (reply.code == "key_valid")
             {
-                auto code = obj->getProperty("code").toString();
-                auto message = obj->getProperty("message").toString();
-
-                juce::MessageManager::callAsync([this, code, message, obj]()
-                {
-					// Key is confirmed to be valid
-                    if (code == "key_valid")
-                    {
-                        mLabelStatus.setText("Serial key valid!", juce::dontSendNotification);
-
-                        attemptSerialKeyActivation();
-                    }
-                    else
-                    {
-                        mLabelStatus.setText("Error: " + message, juce::dontSendNotification);
-                        DBG("API Error: " + code + " - " + message);
-                    }
-                });
+                safeThis->mLabelStatus.setText("Serial key valid!", juce::dontSendNotification);
+                safeThis->attemptSerialKeyActivation();
             }
             else
             {
-                juce::MessageManager::callAsync([this]()
-                {
-                    mLabelStatus.setText("Invalid JSON from server.", juce::dontSendNotification);
-                });
+                safeThis->mLabelStatus.setText("Error: " + reply.message, juce::dontSendNotification);
+                DBG("API Error: " + reply.code + " - " + reply.message);
             }
-        }
-        else
-        {
-            juce::MessageManager::callAsync([this]()
-            {
-                mLabelStatus.setText("Connection to server failed.", juce::dontSendNotification);
-            });
-        }
+        });
     });
 }
 
@@ -486,150 +621,90 @@ void AboutWindow::attemptSerialKeyValidation()
 void AboutWindow::attemptSerialKeyActivation()
 {
     auto serialKey = mTextEditorSerialKey.getText().trim();
-    auto email = mTextEditorEmailAddress.getText().trim();
-    juce::String instance = juce::SystemStats::getDeviceDescription();
+    auto email = LicenseCheck::emailFromField(mTextEditorEmailAddress.getText());   // [Claude 2026-10-29] V-01
+
+    juce::PropertiesFile props(LicenseCheck::getSettingsOptions());
+    juce::String instance = LicenseCheck::getMachineInstance(props);
     juce::String platform = juce::SystemStats::getOperatingSystemName();
 
     mLabelStatus.setText("Activating...", juce::dontSendNotification);
 
-    juce::Thread::launch([this, serialKey, email, instance, platform]()
+    juce::Component::SafePointer<AboutWindow> safeThis(this);
+    auto server = licenseServer;
+
+    // [Claude 2026-10-30] M-03: LicenseCheck::activateThisComputer says what really happened. "Reactivation successful!"
+    // was shown for instance_already_activated, when the server had recorded nothing.
+    juce::Thread::launch([safeThis, server, serialKey, email, instance, platform]()
     {
-        juce::URL activateURL("https://wonderlandaudio.com/wp-json/wcsn/activate");
-        activateURL = activateURL.withParameter("product_id", "45")
-                                 .withParameter("serial_key", serialKey)
-                                 .withParameter("instance", instance)
-                                 .withParameter("platform", platform);
+        auto outcome = LicenseCheck::activateThisComputer(*server, serialKey, email, instance, platform);
 
-        if (email.isNotEmpty())
-            activateURL = activateURL.withParameter("email", email);
-
-        auto stream = activateURL.createInputStream(
-            juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
-                .withConnectionTimeoutMs(5000));
-
-        if (stream)
+        juce::MessageManager::callAsync([safeThis, outcome, serialKey, email]()   // [Claude 2026-10-29] V-01: the key and email sent
         {
-            auto responseStr = stream->readEntireStreamAsString();
-            auto json = juce::JSON::parse(responseStr);
+            if (safeThis == nullptr)
+                return;
 
-            if (auto* obj = json.getDynamicObject())
-            {
-                auto code = obj->getProperty("code").toString();
-                auto message = obj->getProperty("message").toString();
+            safeThis->mLabelStatus.setText(outcome.status, juce::dontSendNotification);
 
-				juce::MessageManager::callAsync([this, code, message]()
-				{
-					if (code == "key_activated" || code == "instance_already_activated")
-					{
-						if (code == "instance_already_activated")
-							mLabelStatus.setText("Instance was already activated.  Reactivation successful!", juce::dontSendNotification);
-						else
-							mLabelStatus.setText("Activation successful!", juce::dontSendNotification);
-
-						updateAppOnActivationChange(true);
-					}
-					else
-					{
-						mLabelStatus.setText("Activation error: " + message, juce::dontSendNotification);
-						DBG("API Error: " + code + " - " + message);
-					}
-				});
-            }
+            if (outcome.activated)
+                safeThis->updateAppOnActivationChange(true, serialKey, email, outcome.instance);   // [Claude 2026-10-29] V-01: saves what was sent
             else
-            {
-                juce::MessageManager::callAsync([this]()
-                {
-                    mLabelStatus.setText("Invalid activation response.", juce::dontSendNotification);
-                });
-            }
-        }
-        else
-        {
-            juce::MessageManager::callAsync([this]()
-            {
-                mLabelStatus.setText("Activation connection failed.", juce::dontSendNotification);
-            });
-        }
+                DBG("API Error: " + outcome.code + " - " + outcome.status);
+        });
     });
 }
 
 void AboutWindow::attemptSerialKeyDeactivation()
 {
-	auto serialKey = mTextEditorSerialKey.getText().fromFirstOccurrenceOf("Key: ", false, true).trim();
-	auto email = mTextEditorEmailAddress.getText().fromFirstOccurrenceOf("Email: ", false, true).trim();
+	auto serialKey = mActivatedKey.trim();  // [Claude 2026-10-29] the field shows the key masked; the real one is kept here
+	auto email = LicenseCheck::emailFromField(mTextEditorEmailAddress.getText());   // [Claude 2026-10-29] V-01
 
-    juce::String instance = juce::SystemStats::getDeviceDescription();
+    // The instance it was activated with: the machine ID, or for a 1.0.x activation the device description
+    juce::PropertiesFile props(LicenseCheck::getSettingsOptions());
+    juce::String instance = LicenseCheck::getActivatedInstance(props);
     juce::String platform = juce::SystemStats::getOperatingSystemName();
 
     mLabelStatus.setText("Deactivating...", juce::dontSendNotification);
 
-    juce::Thread::launch([this, serialKey, email, instance, platform]()
+    juce::Component::SafePointer<AboutWindow> safeThis(this);
+    auto server = licenseServer;
+
+    juce::Thread::launch([safeThis, server, serialKey, email, instance, platform]()
     {
-        juce::URL deactivateURL("https://wonderlandaudio.com/wp-json/wcsn/deactivate");
-        deactivateURL = deactivateURL.withParameter("product_id", "45")
-                                     .withParameter("serial_key", serialKey)
-                                     .withParameter("instance", instance)
-                                     .withParameter("platform", platform);
+        auto reply = server->deactivate(serialKey, email, instance, platform);
 
-        if (email.isNotEmpty())
-            deactivateURL = deactivateURL.withParameter("email", email);
-
-        auto stream = deactivateURL.createInputStream(
-            juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
-                .withConnectionTimeoutMs(5000));
-
-        if (stream)
+        juce::MessageManager::callAsync([safeThis, reply]()
         {
-            auto responseStr = stream->readEntireStreamAsString();
-            auto json = juce::JSON::parse(responseStr);
+            if (safeThis == nullptr)
+                return;
 
-            if (auto* obj = json.getDynamicObject())
+            if (!reply.reachable)
+                safeThis->mLabelStatus.setText("Deactivation connection failed.", juce::dontSendNotification);
+
+            else if (reply.code == "key_deactivated" || reply.code == "instance_deactivated")
             {
-                auto code = obj->getProperty("code").toString();
-                auto message = obj->getProperty("message").toString();
+                safeThis->mLabelStatus.setText("Deactivation successful.", juce::dontSendNotification);
 
-                juce::MessageManager::callAsync([this, code, message]()
-                {
-                    if (code == "key_deactivated" || code == "instance_deactivated")
-                    {
-                        mLabelStatus.setText("Deactivation successful.", juce::dontSendNotification);
-
-                        // Optionally clear local props or revert UI to demo mode
-                        updateAppOnActivationChange(false);
-                    }
-                    else
-                    {
-                        mLabelStatus.setText("Deactivation error: " + message, juce::dontSendNotification);
-                        DBG("API Error: " + code + " - " + message);
-                    }
-                });
+                // Optionally clear local props or revert UI to demo mode
+                safeThis->updateAppOnActivationChange(false);
             }
             else
             {
-                juce::MessageManager::callAsync([this]()
-                {
-                    mLabelStatus.setText("Invalid deactivation response.", juce::dontSendNotification);
-                });
+                safeThis->mLabelStatus.setText("Deactivation error: " + reply.message, juce::dontSendNotification);
+                DBG("API Error: " + reply.code + " - " + reply.message);
             }
-        }
-        else
-        {
-            juce::MessageManager::callAsync([this]()
-            {
-                mLabelStatus.setText("Deactivation connection failed.", juce::dontSendNotification);
-            });
-        }
+        });
     });
 }
 
 
 
-void AboutWindow::updateAppOnActivationChange(bool isActivating)
+void AboutWindow::updateAppOnActivationChange(bool isActivating, const juce::String& key, const juce::String& email,
+                                              const juce::String& instance)
 {
 
 // Store Local Key
 	if (isActivating)
-         updateLocalKeyData(true);
+         updateLocalKeyData(true, key, email, instance);
 	else
 	     updateLocalKeyData(false);
 
@@ -642,26 +717,38 @@ void AboutWindow::updateAppOnActivationChange(bool isActivating)
 
 
 	// Reload local changes
+	mIsDemoVersion = !isActivating;
 	setUpSerialKeyEditor();
 	setUpEmailEditor();
 	setUpActionButton();
-
-	repaint();
+	applyLook();
 
 }
 
 
-void AboutWindow::updateLocalKeyData(bool isActivating)
+void AboutWindow::updateLocalKeyData(bool isActivating, const juce::String& key, const juce::String& activatedEmail,
+                                     const juce::String& instance)
 {
     juce::PropertiesFile::Options options;
     options.applicationName = "Tertiary"; // or whatever your plugin name is
     options.filenameSuffix = "settings";
     options.osxLibrarySubFolder = "Application Support"; // macOS-specific
     options.storageFormat = juce::PropertiesFile::StorageFormat::storeAsXML; // Easier to read
+    TestHooks::redirectSettings(options);   // [Claude 2026-10-29] UI tests: a temp folder (TestHooks.h); unchanged otherwise
 
     juce::PropertiesFile props(options);
 
-	juce::String email = mTextEditorEmailAddress.getText().trim();
+	// [Claude 2026-10-29] V-01: an activation saves the key and the email its request used (LicenseCheck::saveActivation).
+	// It took the email from the field after "Email: ", which the field only shows once activated, so it saved an
+	// empty email and the next load was back in demo mode.
+	if (isActivating)
+	{
+		LicenseCheck::saveActivation(props, key, activatedEmail, juce::Time::currentTimeMillis(), instance);   // [Claude 2026-10-30] M-03: the instance activated
+		DBG("Stored license data at: " + props.getFile().getFullPathName());
+		return;
+	}
+
+	juce::String email = LicenseCheck::emailFromField(mTextEditorEmailAddress.getText());  // [Claude 2026-10-29] V-01: "Email: " dropped only if there
 
 	juce::String serialKey = "";
 
@@ -670,6 +757,13 @@ void AboutWindow::updateLocalKeyData(bool isActivating)
 
     props.setValue("licenseKey", serialKey);
     props.setValue("licenseEmail", email);
+
+    // [Claude 2026-10-27] For the weekly re-check: which machine ID was activated, and when it was last confirmed
+    auto now = juce::String(juce::Time::currentTimeMillis());
+    props.setValue("licenseInstance", isActivating ? LicenseCheck::getMachineInstance(props) : juce::String());
+    props.setValue("licenseLastCheck", isActivating ? now : juce::String());
+    props.setValue("licenseLastValid", isActivating ? now : juce::String());
+
     props.saveIfNeeded();
 
     juce::File file = props.getFile();
@@ -677,3 +771,31 @@ void AboutWindow::updateLocalKeyData(bool isActivating)
 }
 
 
+
+// [Claude 2026-10-27] Called by the editor when the weekly re-check has finished (LicenseCheck.h).
+// A message goes in the status line; a newer version turns the website link into "Version X is available".
+//==============================================================================
+void AboutWindow::showLicenseCheckResult(const LicenseCheck::Result& result)
+{
+    if (result.message.isNotEmpty())
+    {
+        mLabelStatus.setText(result.message, juce::dontSendNotification);
+    }
+
+    if (result.newVersion.isNotEmpty())
+        mButtonWebsiteLink.setButtonText("Version " + result.newVersion + " is available at WonderlandAudio.com");
+
+    if (result.revoked)
+        refreshActivationFields();
+}
+
+// [Claude 2026-10-27] Same as the end of updateAppOnActivationChange(), for a change made by the re-check
+//==============================================================================
+void AboutWindow::refreshActivationFields()
+{
+	mIsDemoVersion = audioProcessor.getDemoState();
+	setUpSerialKeyEditor();
+	setUpEmailEditor();
+	setUpActionButton();
+	applyLook();
+}

@@ -1,4 +1,5 @@
 #include "ScopeChannel.h"
+#include "UtilityFunctions.h"   // [Claude 2026-10-29] PixelGrid
 
 /* Constructor */
 // ========================================================
@@ -8,6 +9,8 @@ ScopeChannel::ScopeChannel(juce::AudioProcessorValueTreeState& apvts, LFO& lfo, 
         sliderScroll(scrollPad)
 {
     // Initializes the display's color-scheme based on band type
+    // [Claude 2026-10-29] after reading the bypass (below it, a band bypassed at load kept its colour)
+    updateBandBypass();
     setBandColors();
     
     using namespace Params;             // Create a Local Reference to Parameter Mapping
@@ -24,6 +27,7 @@ ScopeChannel::ScopeChannel(juce::AudioProcessorValueTreeState& apvts, LFO& lfo, 
 
     if (mHostBpm == 0 || mHostBpm == 1)
         mHostBpm = 120;
+    targetBpm = mHostBpm;
 
     localLFO.setDsp(false);
     
@@ -51,10 +55,9 @@ ScopeChannel::ScopeChannel(juce::AudioProcessorValueTreeState& apvts, LFO& lfo, 
     apvts.addParameterListener(params.at(Names::Show_High_Scope), this);
     apvts.addParameterListener(params.at(Names::Stack_Bands_Scope), this);
 
-    // Initially check whether any bands are bypassed
-    updateBandBypass();
-
     localLFO.updateLFO(mSampleRate, mHostBpm);
+
+    startTimerHz(60);   // [Claude 2026-10-29] follows the host tempo and eases the drawn free rate
 }
 
 /* Destructor */
@@ -79,7 +82,9 @@ void ScopeChannel::setBandColors()
 {
     //WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
 
-    auto bounds = getLocalBounds().toFloat();
+    // [Claude 2026-10-29] Always an empty rectangle: this ran only in the constructor, where the bounds are empty, and
+    // the waveform's look is that gradient. Now it also runs on a bypass change, so it must not pick up real bounds.
+    const juce::Rectangle<float> bounds;
     //using namespace AllColors::OscilloscopeColors;
     using namespace ColorScheme::BandColors;
     using namespace Gradients::Oscilloscope;
@@ -87,19 +92,19 @@ void ScopeChannel::setBandColors()
     if (lfo.getLfoID() == 0)
 {
         fillGradient = makeWaveformGradient(bounds, "LOW", isBandBypassed);
-        strokeColor = makeOutlineColor(getLowBandBaseColor());
+        strokeColor = makeOutlineColor(getLowBandBaseColor(), isBandBypassed);
     }
     
     if (lfo.getLfoID() == 1)
     {
         fillGradient = makeWaveformGradient(bounds, "MID", isBandBypassed);
-        strokeColor = makeOutlineColor(getMidBandBaseColor());
+        strokeColor = makeOutlineColor(getMidBandBaseColor(), isBandBypassed);
     }
     
     if (lfo.getLfoID() == 2)
     {
         fillGradient = makeWaveformGradient(bounds, "HIGH", isBandBypassed);
-        strokeColor = makeOutlineColor(getHighBandBaseColor());
+        strokeColor = makeOutlineColor(getHighBandBaseColor(), isBandBypassed);
     }
 }
 
@@ -118,8 +123,28 @@ void ScopeChannel::paint(juce::Graphics& g)
     
     g.setGradientFill(BACKGROUND_GRADIENT(bounds));
     
+    // [Claude 2026-10-29] Each band its own lane (Joe: "I still want the visualization of 3 different lanes"): when
+    // the bands are stacked, a panel a step lighter than the black between lanes, a trace of the band's colour, and a
+    // lit top edge; the crossover's near-black stays the ground.
     if (bandsAreStacked)
+    {
         g.fillRoundedRectangle(bounds, 5.f);
+        // [Claude 2026-10-29] A flat lift and a faint colour wash across the whole width; only the top and bottom
+        // soften, below (Joe: "I only want that wash on the top/bottom not the sides", "still a little too much")
+        g.setColour(juce::Colour(0xff0a0b11));  // just off the black (Joe: "Just enough to distinguish the black background from the lanes")
+        g.fillRect(bounds);
+        g.setColour(strokeColor.withAlpha(0.012f));
+        g.fillRect(bounds);
+
+        // and darker toward the top and bottom, a vignette across the lane's height (Joe: "soften the top/bottom
+        // edges of the lanes")
+        juce::ColourGradient shade(juce::Colour(0xff03010d).withAlpha(0.5f), 0.f, bounds.getY(),
+                                   juce::Colour(0xff03010d).withAlpha(0.5f), 0.f, bounds.getBottom(), false);
+        shade.addColour(0.09, juce::Colour(0xff03010d).withAlpha(0.f));  // tight to the edges (Joe: "tighten the radius? much more")
+        shade.addColour(0.91, juce::Colour(0xff03010d).withAlpha(0.f));
+        g.setGradientFill(shade);
+        g.fillRect(bounds);
+    }
 
     paintGridLines(g);
     paintWaveform(g);
@@ -184,7 +209,14 @@ void ScopeChannel::actionListenerCallback(const juce::String& message)
     {
         float rate = 0.0f;
         rate = paramValue.getFloatValue();
-        localLFO.setWaveRate(rate);
+        targetRate = rate;
+        // [Claude 2026-10-29] the first value (and any while synced, where the rate is not drawn) is taken at once;
+        // later ones are eased toward by timerCallback
+        if (! rateShown || localLFO.isSyncedToHost())
+        {
+            localLFO.setWaveRate(rate);
+            rateShown = true;
+        }
         shouldUpdateScope = true;
     }
 
@@ -201,13 +233,31 @@ void ScopeChannel::actionListenerCallback(const juce::String& message)
         bool sync = false;
         sync = paramValue.getIntValue();
         localLFO.setSyncedToHost(sync);
+        if (rateShown) localLFO.setWaveRate(targetRate);   // [Claude 2026-10-29] no easing across a switch
         shouldUpdateScope = true;
+    }
+
+    // [Claude 2026-10-29] Bypass greys the band's waveform the way it greys the band in the crossover: same message,
+    // same bypass grey (Joe: when a band is bypassed its LFO display should go grey like the crossover does)
+    if (paramName == "BYPASS")
+    {
+        isBandBypassed = paramValue.getIntValue() != 0;
+        setBandColors();
+        repaint();
     }
 
     if (paramName == "SCROLLBAR")
     {
-        scrollZoom = sliderScroll.getScrollZoom();
-        scrollCenter = sliderScroll.getScrollCenter();
+        // [Claude 2026-10-29] The view eases to the scroll bar's (timerCallback), so a zoom or pan drag is smooth;
+        // the first one is taken at once
+        targetZoom = sliderScroll.getScrollZoom();
+        targetCenter = sliderScroll.getScrollCenter();
+        if (! viewShown)
+        {
+            scrollZoom = targetZoom;
+            scrollCenter = targetCenter;
+            viewShown = true;
+        }
         //shouldUpdateScope = true;
 
         generateLFOPathForDrawing(lfoPath, lfoFill, waveTable, localLFO);
@@ -245,6 +295,45 @@ void ScopeChannel::actionListenerCallback(const juce::String& message)
     
 }
 
+// [Claude 2026-10-29] Each frame: the drawn free rate and the host tempo each take one easing step toward their
+// targets (one-pole, about 60 ms), so a rate drag or a tempo change squeezes or stretches a free band's wave smoothly
+// about the centre (Joe: follow live tempo changes). The tempo is the processor's, from its latest block. Synced
+// waves are measured in beats, so the tempo does not change them and they are not redrawn for it.
+void ScopeChannel::timerCallback()
+{
+    if (auto* proc = dynamic_cast<audio_plugin::AudioPluginAudioProcessor*>(&apvts.processor))
+    {
+        const double bpm = proc->getHostBpmForDisplay();
+        if (bpm > 1.0) targetBpm = bpm;
+    }
+
+    const auto ease = [](double shown, double target, double snap)
+    { return std::abs(target - shown) < snap ? target : shown + 0.35 * (target - shown); };
+
+    bool changed = false;
+    if (rateShown && localLFO.getWaveRate() != targetRate)
+    {
+        localLFO.setWaveRate((float) ease(localLFO.getWaveRate(), targetRate, 0.002));
+        changed = true;
+    }
+    if (mHostBpm != targetBpm)
+    {
+        mHostBpm = ease(mHostBpm, targetBpm, 0.01);
+        localLFO.updateTempo(mSampleRate, mHostBpm);
+        changed = true;
+    }
+    bool viewChanged = false;
+    if (viewShown && (scrollZoom != targetZoom || scrollCenter != targetCenter))
+    {
+        scrollZoom = (float) ease(scrollZoom, targetZoom, 0.0005);
+        scrollCenter = (float) ease(scrollCenter, targetCenter, 0.00005);
+        viewChanged = true;
+    }
+
+    if (viewChanged || (changed && ! localLFO.isSyncedToHost()))
+        repaint();   // paint redraws the grid and the path from the view, rate and tempo
+}
+
 /* Paint grid lines */
 // ========================================================
 void ScopeChannel::paintGridLines(juce::Graphics& g)
@@ -277,36 +366,31 @@ void ScopeChannel::paintGridLines(juce::Graphics& g)
     float leftGridLine;
     float rightGridLine;
 
+    const PixelGrid grid(g, this);   // [Claude 2026-10-29] the grid on whole screen pixels at every window size
+
     // Draw Gridlines
     for (int i = bounds.getCentreX(); i <= 2 * bounds.getRight(); i++)
     {
 
         // Draw Markers at Single-Beat Intervals
-        if (i % (int)beatSpacing == 0)
+        if (i % juce::jmax(1, (int)beatSpacing) == 0)   // [Claude 2026-10-27] jmax: (int)beatSpacing could be 0, a divide-by-zero crash
         {
-            g.setColour(juce::Colours::darkgrey);
+            // [Claude 2026-10-29] The crossover's grid: one quiet grey for every beat, the origin a step brighter
+            // (Joe: "make the gridlines the same style as the crossover"). Was dark and light grey alternating at 35 %.
+            g.setColour(juce::Colours::lightgrey.withAlpha(0.12f));  // the origin too (Joe: "match the center one too")
 
-            // Highlight Even Markers
-            if (num % 2 == 0)
-                g.setColour(juce::Colours::lightgrey);
-
-            // Highlight Origin
-            if (num == 0)
-                g.setColour(juce::Colours::slategrey);
-
-            g.setOpacity(0.35f);
-            
             // Draw Twice as Many Gridlines to Account for Panning
             rightGridLine = c + num * beatSpacing;
 
             verticalAxis.setStart(rightGridLine, bounds.getY());
             verticalAxis.setEnd(rightGridLine, bounds.getBottom());
-            g.drawLine(verticalAxis, 1.f);
+            fillVLine(g, grid, rightGridLine - 0.5f, (float) bounds.getY(), (float) bounds.getBottom());   // [Claude 2026-10-29] was a 1 px drawLine at a fractional x
 
             leftGridLine = c - num * beatSpacing;
             verticalAxis.setStart(leftGridLine, bounds.getY());
             verticalAxis.setEnd(leftGridLine, bounds.getBottom());
-            g.drawLine(verticalAxis, 1.f);
+            if (num > 0)    // at the origin both lines fall on one place and drew it twice as bright
+                fillVLine(g, grid, leftGridLine - 0.5f, (float) bounds.getY(), (float) bounds.getBottom());
 
             // Calculate Left-Most Onscreen Valid (Even) Marker
 
@@ -340,7 +424,7 @@ void ScopeChannel::paintGridLines(juce::Graphics& g)
     for (int i = 1; i < numDepthLines; i++)
     {
         auto y = bounds.getY() + i * (bounds.getHeight() / numDepthLines);
-        g.drawHorizontalLine(y, bounds.getX(), bounds.getRight());
+        fillHLine(g, grid, (float) y, (float) bounds.getX(), (float) bounds.getRight());   // [Claude 2026-10-29]
     }
 
     redrawScope();
@@ -363,10 +447,10 @@ void ScopeChannel::paintWaveform(juce::Graphics& g)
     g.fillPath(lfoFill);
 
     /* Stroke */
-    g.setColour(isBandBypassed ? makeOutlineColor(getBypassBaseColor()): strokeColor);
+    g.setColour(strokeColor);   // [Claude 2026-10-29] grey when bypassed: setBandColors uses the crossover's makeOutlineColor
     g.setOpacity(isBandFocused ? 1.f : 0.75f);
-    g.strokePath(lfoPath, isBandFocused?    juce::PathStrokeType(2.25f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded) :
-                                            juce::PathStrokeType(2.f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded));
+    g.strokePath(lfoPath, isBandFocused?    juce::PathStrokeType(1.f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded) :
+                                            juce::PathStrokeType(0.85f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded));
 }
 
 /* Parent method to recalculate scope waveform points*/
@@ -446,59 +530,112 @@ void ScopeChannel::generateLFOPathForDrawing(   juce::Path &lfoStrokePath,
     // Width of Area to Render Paint Data
     auto paintAreaWidth = playBackWidth;
 
-    for (int i = 0; i <= 3 * paintAreaWidth; i++)
+    // Scale WaveTable by Multiplier, or by Rate, but not Both
+    const bool sync = lfoSync;
+    const float scalar = sync ? (float) lfoWaveMultiplier : lfoWaveRate * 60.f / lfoHostBPM;
+
+    // Match Width of 1x Multiplier to Width of One Quarter-Note
+    const float increment = scalar * waveTable.size() / (beatSpacing);
+
+    // [Claude 2026-10-29] Free rate (Joe: changing the rate "goes haywire"): the wave's start (t = 0) is the scope's
+    // origin, the centre gridline (panned with the scroll bar), with the band's phase there, so a rate change squeezes
+    // or stretches the wave evenly about the centre. Before, its phase was counted from point, two playback widths off
+    // screen to the left, so each small rate change slid the visible wave by many cycles. Synced waves use the same
+    // origin. The window is the same span of beats as the synced view, at the host tempo, for every band.
+    const float pixelsPerCycle = increment > 0.f ? (float) waveTable.size() / increment : 1.0e6f;
+
+    // [Claude 2026-10-29] Four points per pixel, so a square's edges draw upright instead of as a one-pixel slant
+    // (Joe: "is there any way to get these square waves cleaner?"); more when the cycles are short, so every cycle
+    // gets at least 16 points (no moire), up to a cap.
+    const int pointsPerPixel = juce::jlimit(4, 64, (int) std::ceil(16.f / juce::jmax(0.01f, pixelsPerCycle)));
+
+    // [Claude 2026-10-29] Denser than 3 pixels a cycle a line only scribbles: draw each pixel column's lowest to
+    // highest value as one filled band, which reads as fast oscillation.
+    const bool dense = pixelsPerCycle < 3.f;
+    juce::Array<float> columnMin, columnMax;
+
+    // Get Relative Phase Shift.
+    // [Claude 2026-10-27] No more divide by 2: LFO::setTempo now gives the phase in wavetable samples, so the
+    // scope draws exactly what it drew before, and the audio now matches it.
+    const auto mRelativePhase = lfoRelativePhase / waveTableDownSampleSize;
+
+    // Get Display Phase Shift
+    const float mDisplayPhase = scrollCenter * bounds.getWidth();
+
+    // Display Offset Establishes Wave Starting Point (In-Line with Grid)
+    const float displayOffsetStart = bounds.getX() + bounds.getCentreX() - paintAreaWidth;
+
+    // Incorporate Pan Shift
+    const int point = displayOffsetStart + mDisplayPhase;
+
+    const float tableSize = (float) waveTable.size();
+    const float origin = bounds.getCentreX() + mDisplayPhase;   // the origin gridline: t = 0
+
+    for (int j = 0; j <= 3 * paintAreaWidth * pointsPerPixel; j++)
     {
-        bool sync = lfoSync;
+        const float i = j / (float) pointsPerPixel;
+        const float x = point + i;
 
-        // Scale WaveTable by Multiplier, or by Rate, but not Both
-        float scalar{ 1.f };
-
-        if (sync)
-            scalar = lfoWaveMultiplier;
-        else
-            scalar = lfoWaveRate * 60.f / lfoHostBPM;
-
-        // Get Relative Phase Shift.  Divide by 2 takes it from 360-deg to 180-deg shift.
-        auto mRelativePhase = lfoRelativePhase / waveTableDownSampleSize / 2;
-
-        // Get Display Phase Shift
-        float mDisplayPhase = scrollCenter * bounds.getWidth();
-        //float mDisplayPhase = sliderScroll.getScrollCenter() * bounds.getWidth();
-
-        // Match Width of 1x Multiplier to Width of One Quarter-Note
-        auto increment = scalar * waveTable.size() / (beatSpacing);
+        if (x < (float) bounds.getX() || x > (float) bounds.getRight())
+            continue;
 
         // Index sweeps through WaveTable Array
-        float index = fmod(i * increment + mRelativePhase, waveTable.size());
+        // [Claude 2026-10-29] Phase counted from the origin gridline itself (origin, as paintGridLines draws it), for
+        // synced and free bands alike. It was counted from point, a whole pixel, so the wave sat up to a pixel off
+        // the origin and jumped by that as a zoom or pan moved it; synced waves are otherwise as before.
+        float index = fmod((x - origin) * increment + mRelativePhase, tableSize);
+        if (index < 0.f) index += tableSize;
 
         // Get value in terms of pixels.  Offset by Region's Midpoint
-        float y = midY + waveTable[index] * (float)bounds.getHeight();
+        float y = midY + waveTable[(size_t) index] * (float)bounds.getHeight();
 
-        // Display Offset Establishes Wave Starting Point (In-Line with Grid)
-        float displayOffsetStart = bounds.getX() + bounds.getCentreX() - paintAreaWidth;
-
-        // Incorporate Pan Shift
-        int point = displayOffsetStart + mDisplayPhase;
+        if (dense)
+        {
+            const int column = juce::jmin((int) (x - (float) bounds.getX()), bounds.getWidth() - 1);
+            while (columnMin.size() <= column) { columnMin.add(1.0e9f); columnMax.add(-1.0e9f); }
+            columnMin.set(column, juce::jmin(columnMin[column], y));
+            columnMax.set(column, juce::jmax(columnMax[column], y));
+            continue;
+        }
 
         /* Of the calculated points, only render those which will be onscreen */
-        if (point + i == bounds.getX())
+        if (x == (float) bounds.getX())
         {
             lfoStrokePath.startNewSubPath(bounds.getX(), y);
             lfoFillPath.startNewSubPath(bounds.getX(), midY);
             lfoFillPath.lineTo(bounds.getX(), y);
         }
 
-        if (point + i > bounds.getX() && point + i < bounds.getRight())
+        if (x > bounds.getX() && x < bounds.getRight())
         {
-            lfoStrokePath.lineTo(point + i, y);
-            lfoFillPath.lineTo(point + i, y);
+            lfoStrokePath.lineTo(x, y);
+            lfoFillPath.lineTo(x, y);
         }
 
-        if (point + i == bounds.getRight())
+        if (x == (float) bounds.getRight())
         {
             lfoFillPath.lineTo(bounds.getRight(), y);
             lfoFillPath.lineTo(bounds.getRight(), midY);
         }
+    }
+
+    // The dense band: along the top edge's highest values, back along the lowest; filled, and its outline stroked
+    if (dense && columnMin.size() > 0)
+    {
+        const float x0 = (float) bounds.getX();
+        lfoStrokePath.startNewSubPath(x0, columnMin[0]);
+        for (int c = 0; c < columnMin.size(); ++c)
+        {
+            lfoStrokePath.lineTo(x0 + c, columnMin[c]);
+            lfoStrokePath.lineTo(x0 + c + 1.f, columnMin[c]);
+        }
+        for (int c = columnMax.size(); --c >= 0;)
+        {
+            lfoStrokePath.lineTo(x0 + c + 1.f, columnMax[c]);
+            lfoStrokePath.lineTo(x0 + c, columnMax[c]);
+        }
+        lfoStrokePath.closeSubPath();
+        lfoFillPath = lfoStrokePath;
     }
 }
 
@@ -528,7 +665,7 @@ void ScopeChannel::resized()
 {
     //WLDebugger::getInstance().printMessage(mNameSpace, __func__, getName());
 
-    while (scrollZoom == 0 && scrollCenter == 0)
+    if (scrollZoom == 0 && scrollCenter == 0)   // [Claude 2026-10-27] was 'while': if both stayed 0 it looped forever
     {
         scrollZoom = sliderScroll.getScrollZoom();
         scrollCenter = sliderScroll.getScrollCenter();

@@ -1,0 +1,16 @@
+{
+  "win": {
+    "unit_sections": 43,
+    "host_vst3_pass": 90,
+    "renders": 36,
+    "ui_assertions": 493
+  },
+  "mac": {
+    "architecture_min_os_assertions": 18,
+    "unit_sections": 43,
+    "host_vst3_pass": 58,
+    "host_au_pass": 57,
+    "renders": 36,
+    "ui_assertions": 493
+  }
+}

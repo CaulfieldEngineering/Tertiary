@@ -22,6 +22,8 @@ struct GlobalControls : juce::Component,
                         juce::ActionBroadcaster,
 	                    juce::Timer
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
 	GlobalControls(audio_plugin::AudioPluginAudioProcessor& p);
 
 	void paint(juce::Graphics& g) override;
@@ -53,6 +55,9 @@ struct GlobalControls : juce::Component,
 	/* Tells this class whether or not the app is in Demo Version */
 	void setDemoState(bool demoState) {mIsDemoVersion = demoState;}
 
+	/* [Claude 2026-10-29] Called when the demo's bypass starts or ends, so the editor can fade the displays and say why */
+	std::function<void(bool)> onDemoBypassChanged;
+
 private:
 
     BandControl lowBandControls{ apvts };
@@ -62,6 +67,8 @@ private:
     bool setDebug{ false };
 
 	bool mIsDemoVersion {true};
+	bool mShowingBypass {false};
+	void showBypass(bool bypassed);
 
     juce::String mNameSpace{ "GlobalControls" };
 

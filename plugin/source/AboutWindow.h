@@ -16,6 +16,8 @@
 #include <ctime>
 #include <juce_core/juce_core.h>
 #include "PluginProcessor.h"
+#include "LicenseServer.h"   // [Claude 2026-10-27]
+#include "LicenseCheck.h"    // [Claude 2026-10-27]
 
 // Forward declaration goes exactly here:
 namespace audio_plugin {
@@ -24,6 +26,8 @@ namespace audio_plugin {
 
 struct AboutWindow : juce::Component, juce::Button::Listener
 {
+    friend struct UiTestAccess;   // [Claude 2026-10-29] the UI test runner reads private state (TestHooks.h)
+
 public:
 	AboutWindow(audio_plugin::AudioPluginAudioProcessor& p, audio_plugin::AudioPluginAudioProcessorEditor& e);
     ~AboutWindow();
@@ -32,9 +36,20 @@ public:
     void resized() override;
     void buttonClicked(juce::Button* button) override;
     void mouseExit(const juce::MouseEvent& event) override;
+    void mouseUp(const juce::MouseEvent& event) override;   // [Claude 2026-10-29] Ctrl+Shift+click the version: the build number
+    bool mShowBuildId { false };
+    juce::Time mLastBuildIdClick;   // [Claude 2026-10-29] the same click reaches mouseUp twice (see mouseUp)
+    juce::uint32 mCopiedAt { 0 };   // [Claude 2026-10-30] when the build line was last copied (shows "Copied" briefly)
+    static constexpr juce::uint32 copiedHintMs = 1200;
 
 	/* Tells this class whether or not the app is in Demo Version */
     void setDemoState(bool demoState){mIsDemoVersion = demoState;}
+
+	/* [Claude 2026-10-27] Shows what the weekly re-check found: a message, and a newer version if any */
+	void showLicenseCheckResult(const LicenseCheck::Result& result);
+
+	/* [Claude 2026-10-27] Re-reads the key fields and button after the license state changed elsewhere */
+	void refreshActivationFields();
 
 private:
 
@@ -44,6 +59,7 @@ private:
     juce::String formatBuildDateTime();
   
 	bool mIsDemoVersion {true};
+	juce::String mActivatedKey;  // [Claude 2026-10-29] the saved key, while the field shows it masked
 
     juce::TextButton mButtonClose;
 
@@ -68,8 +84,9 @@ private:
 	void attemptSerialKeyDeactivation();
 
 
-	void updateAppOnActivationChange(bool isActivating);
-	void updateLocalKeyData(bool isActivating);
+	void updateAppOnActivationChange(bool isActivating, const juce::String& key = {}, const juce::String& email = {},
+	                                 const juce::String& instance = {});   // [Claude 2026-10-29] V-01: the key and email the activation used; [Claude 2026-10-30] M-03: and the instance
+	void updateLocalKeyData(bool isActivating, const juce::String& key = {}, const juce::String& email = {}, const juce::String& instance = {});
 
     float targetTitleWidth{ 350.f };
     float targetTitleHeight{ 60.f };
@@ -89,6 +106,29 @@ private:
     float pluginTitleOriginalAspect = 1.0f;
     float companyTitleOriginalAspect = 1.0f;
 
-    juce::HyperlinkButton mButtonWebsiteLink;
+    // [Claude 2026-10-29] The website link drawn by us on whole screen pixels; JUCE's HyperlinkButton drew its own text,
+    // which went soft at 125 / 150 % (Joe: "is the About window fixable?")
+    struct LinkButton : juce::HyperlinkButton
+    {
+        void paintButton(juce::Graphics& g, bool highlighted, bool down) override;
+       #if WLA_UI_TEST_BUILD
+        void clicked() override { TestHooks::openUrl(getURL()); }   // [Claude 2026-10-29] UI tests: recorded, not opened
+       #endif
+    };
+    LinkButton mButtonWebsiteLink;
+
+	// [Claude 2026-10-29] The window rebuilt in the house style (Joe: "yes rebuild it"): its keys and fields drawn here
+	struct Look : juce::LookAndFeel_V4
+	{
+		void drawButtonBackground(juce::Graphics&, juce::Button&, const juce::Colour&, bool highlighted, bool down) override;
+		void drawButtonText(juce::Graphics&, juce::TextButton&, bool highlighted, bool down) override;
+		void fillTextEditorBackground(juce::Graphics&, int w, int h, juce::TextEditor&) override;
+		void drawTextEditorOutline(juce::Graphics&, int w, int h, juce::TextEditor&) override;
+	};
+	Look look;
+	void applyLook();
+
+	// [Claude 2026-10-27] The server calls, behind an interface (LicenseServer.h). Shared with the request threads.
+	std::shared_ptr<LicenseServer> licenseServer { std::make_shared<WonderlandLicenseServer>() };
 
 };

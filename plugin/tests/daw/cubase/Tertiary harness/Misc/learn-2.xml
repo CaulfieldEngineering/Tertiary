@@ -1,0 +1,2752 @@
+<?xml version="1.0" encoding="utf-8"?>
+<tracklist2>
+   <list name="track" type="obj">
+      <obj class="MAudioTrackEvent" ID="1144628624">
+         <int name="Flags" value="1"/>
+         <float name="Start" value="0"/>
+         <float name="Length" value="658299.4320000000298023223876953125"/>
+         <obj class="MListNode" name="Node" ID="1111198864">
+            <string name="Name" value="harness-input" wide="true"/>
+            <member name="Domain">
+               <int name="Type" value="0"/>
+               <obj class="MTempoTrackEvent" name="Tempo Track" ID="661481824">
+                  <list name="TempoEvent" type="obj">
+                     <obj class="MTempoEvent" ID="970248576">
+                        <float name="BPM" value="120"/>
+                        <float name="PPQ" value="0"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970247344">
+                        <float name="BPM" value="120"/>
+                        <float name="PPQ" value="15360"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970249136">
+                        <float name="BPM" value="119.53124237060546875"/>
+                        <float name="PPQ" value="15480"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970245776">
+                        <float name="BPM" value="119.0625"/>
+                        <float name="PPQ" value="15600"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970246336">
+                        <float name="BPM" value="118.59374237060546875"/>
+                        <float name="PPQ" value="15720"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970245888">
+                        <float name="BPM" value="118.12499237060546875"/>
+                        <float name="PPQ" value="15840"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970243536">
+                        <float name="BPM" value="117.65625"/>
+                        <float name="PPQ" value="15960"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970249584">
+                        <float name="BPM" value="117.18749237060546875"/>
+                        <float name="PPQ" value="16080"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970246896">
+                        <float name="BPM" value="116.71875762939453125"/>
+                        <float name="PPQ" value="16200"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970247792">
+                        <float name="BPM" value="116.25"/>
+                        <float name="PPQ" value="16320"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970249472">
+                        <float name="BPM" value="115.78125"/>
+                        <float name="PPQ" value="16440"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970244656">
+                        <float name="BPM" value="115.31250762939453125"/>
+                        <float name="PPQ" value="16560"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970250368">
+                        <float name="BPM" value="114.84375762939453125"/>
+                        <float name="PPQ" value="16680"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970249920">
+                        <float name="BPM" value="114.37500762939453125"/>
+                        <float name="PPQ" value="16800"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970246000">
+                        <float name="BPM" value="113.90625"/>
+                        <float name="PPQ" value="16920"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970246112">
+                        <float name="BPM" value="113.43750762939453125"/>
+                        <float name="PPQ" value="17040"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970250144">
+                        <float name="BPM" value="112.96874237060546875"/>
+                        <float name="PPQ" value="17160"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970250032">
+                        <float name="BPM" value="112.49999237060546875"/>
+                        <float name="PPQ" value="17280"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970246448">
+                        <float name="BPM" value="112.03125"/>
+                        <float name="PPQ" value="17400"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970246560">
+                        <float name="BPM" value="111.56249237060546875"/>
+                        <float name="PPQ" value="17520"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970247008">
+                        <float name="BPM" value="111.09375762939453125"/>
+                        <float name="PPQ" value="17640"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970247456">
+                        <float name="BPM" value="110.625"/>
+                        <float name="PPQ" value="17760"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970250256">
+                        <float name="BPM" value="110.15625"/>
+                        <float name="PPQ" value="17880"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970243312">
+                        <float name="BPM" value="109.68749237060546875"/>
+                        <float name="PPQ" value="18000"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970243424">
+                        <float name="BPM" value="109.21875"/>
+                        <float name="PPQ" value="18120"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970243648">
+                        <float name="BPM" value="108.75"/>
+                        <float name="PPQ" value="18240"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970243872">
+                        <float name="BPM" value="108.28125"/>
+                        <float name="PPQ" value="18360"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970245440">
+                        <float name="BPM" value="107.81250762939453125"/>
+                        <float name="PPQ" value="18480"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970244096">
+                        <float name="BPM" value="107.34375"/>
+                        <float name="PPQ" value="18600"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970244768">
+                        <float name="BPM" value="106.875"/>
+                        <float name="PPQ" value="18720"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970244320">
+                        <float name="BPM" value="106.40625762939453125"/>
+                        <float name="PPQ" value="18840"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970244432">
+                        <float name="BPM" value="105.9375"/>
+                        <float name="PPQ" value="18960"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970244880">
+                        <float name="BPM" value="105.46875"/>
+                        <float name="PPQ" value="19080"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970245104">
+                        <float name="BPM" value="104.99999237060546875"/>
+                        <float name="PPQ" value="19200"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970245216">
+                        <float name="BPM" value="104.53124237060546875"/>
+                        <float name="PPQ" value="19320"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970254176">
+                        <float name="BPM" value="104.0625"/>
+                        <float name="PPQ" value="19440"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970255520">
+                        <float name="BPM" value="103.59374237060546875"/>
+                        <float name="PPQ" value="19560"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970250816">
+                        <float name="BPM" value="103.125"/>
+                        <float name="PPQ" value="19680"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970255632">
+                        <float name="BPM" value="102.65625762939453125"/>
+                        <float name="PPQ" value="19800"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970255968">
+                        <float name="BPM" value="102.18750762939453125"/>
+                        <float name="PPQ" value="19920"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970256080">
+                        <float name="BPM" value="101.71875"/>
+                        <float name="PPQ" value="20040"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970253280">
+                        <float name="BPM" value="101.25"/>
+                        <float name="PPQ" value="20160"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970253392">
+                        <float name="BPM" value="100.78125"/>
+                        <float name="PPQ" value="20280"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970251712">
+                        <float name="BPM" value="100.3125"/>
+                        <float name="PPQ" value="20400"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970256192">
+                        <float name="BPM" value="99.84375"/>
+                        <float name="PPQ" value="20520"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970250480">
+                        <float name="BPM" value="99.375"/>
+                        <float name="PPQ" value="20640"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970250704">
+                        <float name="BPM" value="98.90625"/>
+                        <float name="PPQ" value="20760"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970251040">
+                        <float name="BPM" value="98.4375"/>
+                        <float name="PPQ" value="20880"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970253504">
+                        <float name="BPM" value="97.96875"/>
+                        <float name="PPQ" value="21000"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970251152">
+                        <float name="BPM" value="97.5"/>
+                        <float name="PPQ" value="21120"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970251264">
+                        <float name="BPM" value="97.03125"/>
+                        <float name="PPQ" value="21240"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970252608">
+                        <float name="BPM" value="96.5625"/>
+                        <float name="PPQ" value="21360"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970251488">
+                        <float name="BPM" value="96.09375"/>
+                        <float name="PPQ" value="21480"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970251600">
+                        <float name="BPM" value="95.625"/>
+                        <float name="PPQ" value="21600"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970251376">
+                        <float name="BPM" value="95.15625"/>
+                        <float name="PPQ" value="21720"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970251824">
+                        <float name="BPM" value="94.6875"/>
+                        <float name="PPQ" value="21840"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970252048">
+                        <float name="BPM" value="94.21875"/>
+                        <float name="PPQ" value="21960"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970252160">
+                        <float name="BPM" value="93.75"/>
+                        <float name="PPQ" value="22080"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970252272">
+                        <float name="BPM" value="93.28125"/>
+                        <float name="PPQ" value="22200"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970252384">
+                        <float name="BPM" value="92.8125"/>
+                        <float name="PPQ" value="22320"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970252832">
+                        <float name="BPM" value="92.34375"/>
+                        <float name="PPQ" value="22440"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970135680">
+                        <float name="BPM" value="91.875"/>
+                        <float name="PPQ" value="22560"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970130752">
+                        <float name="BPM" value="91.40625"/>
+                        <float name="PPQ" value="22680"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970130864">
+                        <float name="BPM" value="90.9375"/>
+                        <float name="PPQ" value="22800"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970133552">
+                        <float name="BPM" value="90.46875"/>
+                        <float name="PPQ" value="22920"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970130976">
+                        <float name="BPM" value="90"/>
+                        <float name="PPQ" value="23040"/>
+                     </obj>
+                     <obj class="MTempoEvent" ID="970131424">
+                        <float name="BPM" value="140"/>
+                        <float name="PPQ" value="38400"/>
+                     </obj>
+                  </list>
+                  <float name="RehearsalTempo" value="120"/>
+                  <member name="Additional Attributes">
+                     <obj class="MTrackVariationCollection" name="TVCi" ID="1137012256">
+                        <int name="ownership" value="2"/>
+                        <list name="obj" type="obj">
+                           <obj class="MTrackVariation" ID="1133105904">
+                              <string name="name" value="v1" wide="true"/>
+                              <obj name="dataNode" ID="989265072"/>
+                              <int name="variationID" value="1"/>
+                           </obj>
+                           <obj class="MTrackVariation" ID="1133106144">
+                              <string name="name" value="v1" wide="true"/>
+                              <int name="variationID" value="2"/>
+                           </obj>
+                        </list>
+                     </obj>
+                  </member>
+               </obj>
+               <obj class="MSignatureTrackEvent" name="Signature Track" ID="945857152">
+                  <list name="SignatureEvent" type="obj">
+                     <obj class="MTimeSignatureEvent" ID="970133664">
+                        <int name="Flags" value="8"/>
+                        <float name="Start" value="0"/>
+                        <float name="Length" value="1"/>
+                        <int name="Bar" value="0"/>
+                        <int name="Numerator" value="4"/>
+                        <int name="Denominator" value="4"/>
+                        <int name="Position" value="0"/>
+                     </obj>
+                  </list>
+                  <member name="Additional Attributes">
+                     <obj class="MTrackVariationCollection" name="TVCi" ID="1137011248">
+                        <int name="ownership" value="2"/>
+                        <list name="obj" type="obj">
+                           <obj class="MTrackVariation" ID="1133105984">
+                              <string name="name" value="v1" wide="true"/>
+                              <obj name="dataNode" ID="993888592"/>
+                              <int name="variationID" value="3"/>
+                           </obj>
+                           <obj class="MTrackVariation" ID="1133108224">
+                              <string name="name" value="v1" wide="true"/>
+                              <int name="variationID" value="4"/>
+                           </obj>
+                        </list>
+                     </obj>
+                  </member>
+               </obj>
+            </member>
+            <list name="Events" type="obj">
+               <obj class="MAudioEvent" ID="1186366464">
+                  <float name="Start" value="0"/>
+                  <float name="Length" value="3072000"/>
+                  <int name="Priority" value="1"/>
+                  <string name="Description" value="harness-input" wide="true"/>
+                  <obj class="PAudioClip" name="AudioClip" ID="1103849840">
+                     <string name="Name" value="harness-input" wide="true"/>
+                     <member name="Domain">
+                        <int name="Type" value="10"/>
+                        <float name="Period" value="2.0833333333333332637636939321801321511884452775121e-05"/>
+                     </member>
+                     <list name="Events" type="obj">
+                        <obj class="MHitPointEvent" ID="961785904">
+                           <float name="Time" value="15"/>
+                           <float name="Weight" value="0.4450333416461944580078125"/>
+                           <int name="Flags" value="0"/>
+                           <int name="FilterFlags" value="0"/>
+                           <float name="Peak" value="0.504896640777587890625"/>
+                        </obj>
+                     </list>
+                     <obj class="FNPath" name="Path" ID="1084348192">
+                        <string name="Name" value="harness-input.wav" wide="true"/>
+                        <string name="Path" value="C:\Users\Joe\Dropbox\Joe's Music\_Production\_PROJECTS\_OTHER\Tertiary harness\Audio\" wide="true"/>
+                        <member name="FileType">
+                           <int name="MacType" value="1463899717"/>
+                           <string name="DosType" value="wav" wide="true"/>
+                           <string name="UnixType" value="wav" wide="true"/>
+                           <string name="Name" value="Wave File" wide="true"/>
+                        </member>
+                     </obj>
+                     <member name="Additional Attributes">
+                        <obj name="GridDef" ID="1084348432"/>
+                        <int name="HPFilterMode" value="0"/>
+                        <float name="HPPeakThreshold" value="0.3048966407775878795227697537484345957636833190918"/>
+                        <float name="HPThreshold" value="0"/>
+                        <obj name="OrigPath" ID="1084348912"/>
+                        <obj name="StretchPreset" ID="459132064"/>
+                     </member>
+                     <obj class="AudioCluster" name="Cluster" ID="1137101152">
+                        <list name="Substreams" type="obj">
+                           <obj class="AudioFile" ID="1111815168">
+                              <obj name="FPath" ID="1084348192"/>
+                              <int name="FrameCount" value="3072000"/>
+                              <int name="Sample Size" value="32"/>
+                              <int name="Frame Size" value="8"/>
+                              <int name="Channels" value="2"/>
+                              <float name="Rate" value="48000"/>
+                              <int name="Format" value="131072"/>
+                              <int name="ByteOrder" value="0"/>
+                              <int name="DataOffset" value="44"/>
+                           </obj>
+                        </list>
+                        <list name="Segments" type="list">
+                           <item>
+                              <obj name="Stream" ID="1111815168"/>
+                              <int name="Offset" value="0"/>
+                              <int name="Length" value="3072000"/>
+                              <int name="Start" value="0"/>
+                           </item>
+                        </list>
+                     </obj>
+                     <int name="version" value="2"/>
+                     <int name="ownership" value="1"/>
+                  </obj>
+                  <int name="Inverted" value="0"/>
+               </obj>
+            </list>
+         </obj>
+         <member name="Additional Attributes">
+            <obj class="MTrackVariationCollection" name="TVCi" ID="1142874144">
+               <int name="ownership" value="2"/>
+               <list name="obj" type="obj">
+                  <obj class="MTrackVariation" ID="986976752">
+                     <string name="name" value="v1" wide="true"/>
+                     <int name="variationID" value="0"/>
+                  </obj>
+               </list>
+            </obj>
+            <obj class="PChordTrackParam" name="CTPi" ID="1142317104">
+               <int name="flags" value="0"/>
+               <int name="mapMode" value="0"/>
+               <int name="liveMapMode" value="0"/>
+               <int name="liveMapInput" value="0"/>
+               <int name="selectedSingleVoiceIndex" value="0"/>
+               <string name="voicingLib" value="chordtrack"/>
+               <member name="voicingSetup">
+                  <int name="bassLow" value="36"/>
+                  <int name="voicingLow" value="52"/>
+                  <int name="voicingHigh" value="86"/>
+                  <int name="activeStyles" value="-1"/>
+                  <int name="flags" value="1"/>
+                  <int name="startIndex" value="0"/>
+               </member>
+               <int name="uniqueID" value="1142317104"/>
+               <int name="catchRange" value="0"/>
+               <int name="chordPadVoicingModuleIndex" value="0"/>
+            </obj>
+            <obj class="PTrackIconData" name="tidm" ID="986987872">
+               <string name="currentImageNameData" value="No Picture" wide="true"/>
+               <int name="magnifyValueData" value="0"/>
+               <int name="tintingValueData" value="0"/>
+               <int name="imageCenterXCoordData" value="0"/>
+               <int name="imageCenterYCoordData" value="0"/>
+               <int name="rotateValueData" value="0"/>
+            </obj>
+            <member name="Insp">
+            </member>
+            <int name="Eths" value="-38323736"/>
+         </member>
+         <obj class="MAudioTrack" name="Track Device" ID="923972128">
+            <int name="Connection Type" value="1"/>
+            <string name="Device Name" value="VST Multitrack"/>
+            <int name="Channel ID" value="1"/>
+            <member name="DeviceAttributes">
+               <int name="RuntimeID" value="304"/>
+               <member name="Name">
+                  <string name="String" value="harness-input" wide="true"/>
+               </member>
+               <int name="Type" value="1"/>
+               <member name="InputFilter">
+                  <member name="Plugin UID">
+                     <string name="GUID" value="D56B9C6CA4F946018EED73EB83A74B58" wide="true"/>
+                  </member>
+                  <string name="Plugin Name" value="Input Filter" wide="true"/>
+                  <int name="Audio Input Count" value="1"/>
+                  <list name="Audio Input Arrangement" type="list">
+                     <item>
+                        <list name="Type" type="int">
+                           <item value="1"/>
+                           <item value="2"/>
+                        </list>
+                     </item>
+                  </list>
+                  <int name="Audio Output Count" value="1"/>
+                  <list name="Audio Output Arrangement" type="list">
+                     <item>
+                        <list name="Type" type="int">
+                           <item value="1"/>
+                           <item value="2"/>
+                        </list>
+                     </item>
+                  </list>
+                  <int name="Event Input Count" value="0"/>
+                  <int name="Event Output Count" value="0"/>
+                  <bin name="audioComponent">
+							30060000696E7075740000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							000000000000000000000000000000007068617365696E766572740000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							000000000000000000000000000000000100000000000000000000006C6F7763
+							75746F6E00000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000002000000
+							00000000000000006C6F77637574667265710000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000030000000000000000003440686967686375746F6E000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000040000000000000000000000
+							6869676863757466726571000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							05000000000000000088D3406279706173730000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000600000000000000000000006163746976650000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000700000000000000
+							000000006C6F77637574736C6F70650000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000009000000000000000000F03F68696768637574736C6F706500000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							000000000000000000000000000000000A000000000000000000F03F66617374
+							706172616D6368616E6765000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000000000000
+							0000000000000000000000000000000000000000000000000000000008000000
+							0000000000000000
+                  </bin>
+                  <bin name="editController">
+                  </bin>
+                  <int name="Version" value="1"/>
+                  <int name="Editor Size Count" value="0"/>
+                  <int name="Active" value="1"/>
+                  <string name="IDString" value="InputFilter"/>
+                  <string name="Bay Program" value="" wide="true"/>
+                  <int name="BypassTag" value="4207"/>
+                  <int name="RuntimeID" value="306"/>
+               </member>
+               <member name="InputGain">
+                  <float name="Value" value="16383.5"/>
+               </member>
+               <int name="InputPhase" value="0"/>
+               <member name="Volume">
+                  <float name="Value" value="25856"/>
+                  <float name="AnchorValue" value="0"/>
+               </member>
+               <int name="hasAudioInserts" value="1"/>
+               <member name="InsertFolder">
+                  <int name="RuntimeID" value="310"/>
+                  <int name="Bypass" value="0"/>
+                  <int name="SeparationPosition" value="14"/>
+                  <list name="Slot" type="list">
+                     <item>
+                        <int name="RuntimeID" value="311"/>
+                        <string name="Plugin isA" value="VstCtrlInternalEffect"/>
+                        <member name="Plugin">
+                           <member name="Plugin UID">
+                              <string name="GUID" value="ABCDEF019182FAEB574C41444558504C" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Tertiary" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										506172616D65746572730001027072657365744E616D65000109054465666175
+										6C7400707265736574497355736572000101030130504152414D000102696400
+										011405427970617373656420486967682042616E640076616C75650001090400
+										0000000000000000504152414D0001026964000113054279706173736564204C
+										6F772042616E640076616C756500010904000000000000000000504152414D00
+										01026964000113054279706173736564204D69642042616E640076616C756500
+										010904000000000000000000504152414D000102696400011105446570746820
+										486967682042616E640076616C7565000109040000000000C052400050415241
+										4D0001026964000110054465707468204C6F772042616E640076616C75650001
+										09040000000000804D4000504152414D0001026964000110054465707468204D
+										69642042616E640076616C7565000109040000000000C0524000504152414D00
+										0102696400011305464654205069636B6F666620506F696E740076616C756500
+										010904000000000000000000504152414D00010269640001120548696768204F
+										7574707574204761696E0076616C756500010904000000000000000000504152
+										414D000102696400010C05496E707574204761696E0076616C75650001090400
+										0000000000000000504152414D000102696400011205496E7665727420486967
+										682042616E640076616C756500010904000000000000000000504152414D0001
+										02696400011105496E76657274204C6F772042616E640076616C756500010904
+										000000000000000000504152414D000102696400011105496E76657274204D69
+										642042616E640076616C756500010904000000000000000000504152414D0001
+										026964000111054C6F77204F7574707574204761696E0076616C756500010904
+										000000000000000000504152414D0001026964000118054C6F772D4D69642043
+										726F73736F76657220467265710076616C7565000109040000000000407F4000
+										504152414D0001026964000111054D6964204F7574707574204761696E007661
+										6C756500010904000000000000000000504152414D0001026964000119054D69
+										642D486967682043726F73736F76657220467265710076616C75650001090400
+										00000000408F4000504152414D0001026964000116054D756C7469706C696572
+										20486967682042616E640076616C756500010904000000000000F03F00504152
+										414D0001026964000115054D756C7469706C696572204C6F772042616E640076
+										616C756500010904000000000000F03F00504152414D0001026964000115054D
+										756C7469706C696572204D69642042616E640076616C75650001090400000000
+										0000F03F00504152414D0001026964000110054D75746520486967682042616E
+										640076616C756500010904000000000000000000504152414D00010269640001
+										0F054D757465204C6F772042616E640076616C75650001090400000000000000
+										0000504152414D000102696400010F054D757465204D69642042616E64007661
+										6C756500010904000000000000000000504152414D000102696400010D054F75
+										74707574204761696E0076616C75650001090400000000000000000050415241
+										4D0001026964000110055261746520486967682042616E640076616C75650001
+										0904000000000000084000504152414D000102696400010F0552617465204C6F
+										772042616E640076616C756500010904000000000000084000504152414D0001
+										02696400010F0552617465204D69642042616E640076616C7565000109040000
+										00000000084000504152414D000102696400011A0552656C6174697665205068
+										61736520486967682042616E640076616C756500010904000000000000000000
+										504152414D00010269640001190552656C6174697665205068617365204C6F77
+										2042616E640076616C756500010904000000000000000000504152414D000102
+										69640001190552656C6174697665205068617365204D69642042616E64007661
+										6C756500010904000000000000000000504152414D000102696400010F055363
+										6F706520506F696E7420310076616C7565000109040000000000003940005041
+										52414D000102696400010F0553636F706520506F696E7420320076616C756500
+										0109040000000000C0524000504152414D000102696400010A0553686F772046
+										46540076616C756500010904000000000000F03F00504152414D000102696400
+										01190553686F7720486967682042616E6420496E2053636F70650076616C7565
+										00010904000000000000F03F00504152414D00010269640001180553686F7720
+										4C6F772042616E6420496E2053636F70650076616C7565000109040000000000
+										00F03F00504152414D00010269640001180553686F77204D69642042616E6420
+										496E2053636F70650076616C756500010904000000000000F03F00504152414D
+										000102696400011005536B657720486967682042616E640076616C7565000109
+										04000000000000494000504152414D000102696400010F05536B6577204C6F77
+										2042616E640076616C756500010904000000000000494000504152414D000102
+										696400010F05536B6577204D69642042616E640076616C756500010904000000
+										000000494000504152414D000102696400011005536F6C6F2048696768204261
+										6E640076616C756500010904000000000000000000504152414D000102696400
+										010F05536F6C6F204C6F772042616E640076616C756500010904000000000000
+										000000504152414D000102696400010F05536F6C6F204D69642042616E640076
+										616C756500010904000000000000000000504152414D00010269640001110553
+										7461636B20416C6C2042616E64730076616C756500010904000000000000F03F
+										00504152414D00010269640001180553796E6320746F20486F73742048696768
+										2042616E640076616C756500010904000000000000F03F00504152414D000102
+										69640001170553796E6320746F20486F7374204C6F772042616E640076616C75
+										6500010904000000000000F03F00504152414D00010269640001170553796E63
+										20746F20486F7374204D69642042616E640076616C7565000109040000000000
+										00F03F00504152414D0001026964000115055761766573686170652048696768
+										2042616E640076616C756500010904000000000000104000504152414D000102
+										696400011405576176657368617065204C6F772042616E640076616C75650001
+										0904000000000000104000504152414D00010269640001140557617665736861
+										7065204D69642042616E640076616C7565000109040000000000001040000000
+										0000000000004A55434550726976617465446174610001014279706173730001
+										0103001D000000000000004A5543455072697661746544617461
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="1"/>
+                           <string name="Editor Name" value="editor"/>
+                           <int name="Editor Width" value="938"/>
+                           <int name="Editor Height" value="598"/>
+                           <int name="Active" value="1"/>
+                           <string name="IDString" value="ABCDEF019182FAEB574C41444558504C-0"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="1652130012"/>
+                           <member name="Quick Control">
+                              <int name="InputPageSelect" value="0"/>
+                              <int name="ShowInPluginWindow" value="0"/>
+                              <int name="NumberOfQuickControls" value="8"/>
+                              <obj name="QCDestinations" ID="924552808"/>
+                              <int name="RuntimeID" value="406"/>
+                              <string name="DeviceNode Name" value="Quick Controls" wide="true"/>
+                              <string name="ClassName" value="Quick Controls"/>
+                              <string name="IDString" value="Quick Controls"/>
+                              <int name="NodeFlags" value="6"/>
+                              <int name="NumberClassIDs" value="2"/>
+                              <list name="ClassIDs" type="string">
+                                 <item value="AB9705CD467B4D7A946C8860C504F492"/>
+                                 <item value="CA1729D088FC4857937F78CC37D45B48"/>
+                              </list>
+                           </member>
+                           <int name="RuntimeID" value="404"/>
+                        </member>
+                        <member name="Patcher">
+                           <list name="Prev Output Connections" type="list">
+                              <item>
+                                 <int name="Prev Output Speaker Type" value="1"/>
+                                 <list name="Prev Output Connection" type="list">
+                                    <item>
+                                       <int name="ID" value="0"/>
+                                       <int name="Arrangement Index" value="0"/>
+                                       <int name="Speaker Type" value="1"/>
+                                    </item>
+                                 </list>
+                              </item>
+                              <item>
+                                 <int name="Prev Output Speaker Type" value="2"/>
+                                 <list name="Prev Output Connection" type="list">
+                                    <item>
+                                       <int name="ID" value="0"/>
+                                       <int name="Arrangement Index" value="0"/>
+                                       <int name="Speaker Type" value="2"/>
+                                    </item>
+                                 </list>
+                              </item>
+                           </list>
+                           <list name="Input Connections" type="list">
+                              <item>
+                                 <int name="Input Speaker Type" value="1"/>
+                                 <list name="Input Connection" type="list">
+                                    <item>
+                                       <int name="ID" value="0"/>
+                                       <int name="Arrangement Index" value="0"/>
+                                       <int name="Speaker Type" value="1"/>
+                                    </item>
+                                 </list>
+                              </item>
+                              <item>
+                                 <int name="Input Speaker Type" value="2"/>
+                                 <list name="Input Connection" type="list">
+                                    <item>
+                                       <int name="ID" value="0"/>
+                                       <int name="Arrangement Index" value="0"/>
+                                       <int name="Speaker Type" value="2"/>
+                                    </item>
+                                 </list>
+                              </item>
+                           </list>
+                        </member>
+                        <int name="WasEnableBeforeFreeze" value="0"/>
+                        <int name="State" value="1"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="312"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="313"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="314"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="315"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="316"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="317"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="318"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="319"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="320"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="321"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="322"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="323"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="324"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="325"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="326"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="-1"/>
+                     </item>
+                  </list>
+                  <int name="SummingMode" value="1"/>
+               </member>
+               <int name="hasAudioStrips" value="1"/>
+               <member name="StripFolder">
+                  <int name="RuntimeID" value="327"/>
+                  <int name="Bypass" value="0"/>
+                  <int name="SeparationPosition" value="6"/>
+                  <list name="Slot" type="list">
+                     <item>
+                        <int name="RuntimeID" value="328"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="5"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="329"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="6"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="330"/>
+                        <string name="Plugin isA" value="VstCtrlEQ"/>
+                        <member name="Plugin">
+                           <member name="Plugin UID">
+                              <string name="GUID" value="297BA567D83144E1AE921DEF07B41156" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="EQ" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										C00F00006F6E3100000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										000000001700000000000000000000006C667479706500000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										000000000000000000000000000000001B00000000000000000014406761696E
+										6C66000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										000000000000000000000000000000000000000000000000000000001F000000
+										0000000000000000667265716C66000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000230000000000000000005940716C66000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										000000000000000000000000000000000000000027000000000000000000F03F
+										6F6E320000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										1800000000000000000000007031747970650000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000001C000000000000000000F03F6761696E70310000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000002000000000000000
+										0000000066726571703100000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000024000000000000000000894071703100000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000028000000000000000000F03F6F6E3300
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000019000000
+										0000000000000000703274797065000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										00000000000000001D000000000000000000F03F6761696E7032000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000210000000000000000000000
+										6672657170320000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										250000000000000000409F407170320000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										00000000000000000000000029000000000000000000F03F6F6E340000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000001A00000000000000
+										0000000068667479706500000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										000000001E00000000000000000014406761696E686600000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000022000000000000000000000066726571
+										6866000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000026000000
+										000000000070C740716866000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										00000000000000002A000000000000000000F03F627970617373000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000030000000000000000000000
+										696E766572743100000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										3D2700000000000000000000696E766572743200000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000003E2700000000000000000000696E766572743300
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000003F27000000000000
+										00000000696E7665727434000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										00000000402700000000000000000000696E76657274416C6C00000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000038270000000000000000000072657365
+										7400000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										000000000000000066617374706172616D6368616E6765000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000000000000000000000000000000000000000000000000000
+										0000000000000000592700000000000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="1"/>
+                           <string name="IDString" value="297BA567D83144E1AE921DEF07B41156-2"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4204"/>
+                           <int name="RuntimeID" value="398"/>
+                        </member>
+                        <member name="Patcher">
+                           <list name="Prev Output Connections" type="list">
+                              <item>
+                                 <int name="Prev Output Speaker Type" value="1"/>
+                                 <list name="Prev Output Connection" type="list">
+                                    <item>
+                                       <int name="ID" value="0"/>
+                                       <int name="Arrangement Index" value="0"/>
+                                       <int name="Speaker Type" value="1"/>
+                                    </item>
+                                 </list>
+                              </item>
+                              <item>
+                                 <int name="Prev Output Speaker Type" value="2"/>
+                                 <list name="Prev Output Connection" type="list">
+                                    <item>
+                                       <int name="ID" value="0"/>
+                                       <int name="Arrangement Index" value="0"/>
+                                       <int name="Speaker Type" value="2"/>
+                                    </item>
+                                 </list>
+                              </item>
+                           </list>
+                           <list name="Input Connections" type="list">
+                              <item>
+                                 <int name="Input Speaker Type" value="1"/>
+                                 <list name="Input Connection" type="list">
+                                    <item>
+                                       <int name="ID" value="0"/>
+                                       <int name="Arrangement Index" value="0"/>
+                                       <int name="Speaker Type" value="1"/>
+                                    </item>
+                                 </list>
+                              </item>
+                              <item>
+                                 <int name="Input Speaker Type" value="2"/>
+                                 <list name="Input Connection" type="list">
+                                    <item>
+                                       <int name="ID" value="0"/>
+                                       <int name="Arrangement Index" value="0"/>
+                                       <int name="Speaker Type" value="2"/>
+                                    </item>
+                                 </list>
+                              </item>
+                           </list>
+                        </member>
+                        <int name="WasEnableBeforeFreeze" value="0"/>
+                        <int name="State" value="1"/>
+                        <int name="SlotType" value="4"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="331"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="9"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="332"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="8"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="333"/>
+                        <int name="State" value="0"/>
+                        <int name="SlotType" value="7"/>
+                     </item>
+                  </list>
+                  <int name="SummingMode" value="1"/>
+               </member>
+               <int name="ChannelStripsPreInserts" value="0"/>
+               <member name="EQ">
+                  <int name="Bypass" value="0"/>
+                  <list name="Band" type="list">
+                     <item>
+                        <int name="Enable" value="0"/>
+                        <int name="Type" value="5"/>
+                        <float name="Gain" value="0"/>
+                        <float name="Freq" value="100.0000152587890625"/>
+                        <float name="Q" value="0.091736115515232086181640625"/>
+                     </item>
+                     <item>
+                        <int name="Enable" value="0"/>
+                        <int name="Type" value="1"/>
+                        <float name="Gain" value="0"/>
+                        <float name="Freq" value="800.0001220703125"/>
+                        <float name="Q" value="0.091736115515232086181640625"/>
+                     </item>
+                     <item>
+                        <int name="Enable" value="0"/>
+                        <int name="Type" value="1"/>
+                        <float name="Gain" value="0"/>
+                        <float name="Freq" value="2000.0003662109375"/>
+                        <float name="Q" value="0.091736115515232086181640625"/>
+                     </item>
+                     <item>
+                        <int name="Enable" value="0"/>
+                        <int name="Type" value="5"/>
+                        <float name="Gain" value="0"/>
+                        <float name="Freq" value="12000"/>
+                        <float name="Q" value="0.091736115515232086181640625"/>
+                     </item>
+                  </list>
+               </member>
+               <member name="SendFolder">
+                  <int name="RuntimeID" value="334"/>
+                  <int name="Bypass" value="0"/>
+                  <int name="SeparationPosition" value="0"/>
+                  <list name="Slot" type="list">
+                     <item>
+                        <int name="RuntimeID" value="335"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="336"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="338"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="339"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="341"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="342"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="344"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="345"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="347"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="348"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="350"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="351"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="353"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="354"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="356"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="357"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                  </list>
+                  <int name="SummingMode" value="1"/>
+               </member>
+               <member name="Panner">
+                  <member name="Default SurroundPan UID V2">
+                     <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                  </member>
+                  <member name="Default SurroundPan UID">
+                     <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                  </member>
+                  <member name="PannerType">
+                     <int name="Value" value="2"/>
+                     <int name="Min" value="0"/>
+                     <int name="Max" value="11"/>
+                  </member>
+                  <member name="Default DownmixPan UID">
+                     <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                  </member>
+                  <member name="Plugin UID">
+                     <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                  </member>
+                  <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                  <int name="Audio Input Count" value="1"/>
+                  <list name="Audio Input Arrangement" type="list">
+                     <item>
+                        <list name="Type" type="int">
+                           <item value="1"/>
+                           <item value="2"/>
+                        </list>
+                     </item>
+                  </list>
+                  <int name="Audio Output Count" value="1"/>
+                  <list name="Audio Output Arrangement" type="list">
+                     <item>
+                        <list name="Type" type="int">
+                           <item value="1"/>
+                           <item value="2"/>
+                        </list>
+                     </item>
+                  </list>
+                  <int name="Event Input Count" value="0"/>
+                  <int name="Event Output Count" value="0"/>
+                  <bin name="audioComponent">
+							0000003F0000003F010000000200000000000000
+                  </bin>
+                  <bin name="editController">
+                  </bin>
+                  <int name="Version" value="1"/>
+                  <int name="Editor Size Count" value="0"/>
+                  <int name="Active" value="1"/>
+                  <string name="IDString" value="Panner"/>
+                  <string name="Bay Program" value="" wide="true"/>
+                  <int name="BypassTag" value="4301"/>
+                  <int name="RuntimeID" value="308"/>
+               </member>
+               <int name="VUSelect" value="1"/>
+               <int name="VURange" value="0"/>
+               <member name="Monitor">
+                  <int name="Value" value="0"/>
+                  <int name="Min" value="0"/>
+                  <int name="Max" value="2"/>
+               </member>
+               <member name="OwnInputBus">
+                  <string name="Name" value="Audio 01" wide="true"/>
+                  <int name="Bus UID" value="16"/>
+                  <int name="Bus Type" value="13"/>
+                  <member name="Input Arrangement">
+                     <list name="Type" type="int">
+                        <item value="1"/>
+                        <item value="2"/>
+                     </list>
+                  </member>
+                  <member name="Output Arrangement">
+                     <list name="Type" type="int">
+                        <item value="1"/>
+                        <item value="2"/>
+                     </list>
+                  </member>
+               </member>
+               <member name="InputBusValue">
+                  <int name="Value" value="2"/>
+               </member>
+               <member name="OutputBusValue">
+                  <int name="Value" value="6"/>
+               </member>
+               <int name="FreezePosition" value="13"/>
+               <int name="Listen Mode" value="0"/>
+               <int name="LinkedPanner" value="0"/>
+               <string name="IDString" value="Audio 01"/>
+               <member name="foldbackSendFolder">
+                  <int name="RuntimeID" value="359"/>
+                  <int name="Bypass" value="0"/>
+                  <int name="SeparationPosition" value="0"/>
+                  <list name="Slot" type="list">
+                     <item>
+                        <int name="RuntimeID" value="360"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="361"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="363"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="364"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="366"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="367"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="369"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="370"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                  </list>
+                  <int name="SummingMode" value="1"/>
+               </member>
+               <member name="Quick Controls">
+                  <int name="NumberOfQuickControls" value="8"/>
+                  <obj class="CmArray" name="QCDestinations" ID="993652040">
+                     <int name="ownership" value="1"/>
+                     <list name="obj" type="obj">
+                        <obj class="QCDestinationValue" ID="1111202032">
+                           <int name="ParameterTag" value="-1"/>
+                           <string name="NodePath" value="" wide="true"/>
+                           <string name="OriginalName" value="" wide="true"/>
+                           <int name="IsRelativePath" value="0"/>
+                           <string name="String" value="" wide="true"/>
+                        </obj>
+                        <obj class="QCDestinationValue" ID="1111198000">
+                           <int name="ParameterTag" value="-1"/>
+                           <string name="NodePath" value="" wide="true"/>
+                           <string name="OriginalName" value="" wide="true"/>
+                           <int name="IsRelativePath" value="0"/>
+                           <string name="String" value="" wide="true"/>
+                        </obj>
+                        <obj class="QCDestinationValue" ID="1111195984">
+                           <int name="ParameterTag" value="-1"/>
+                           <string name="NodePath" value="" wide="true"/>
+                           <string name="OriginalName" value="" wide="true"/>
+                           <int name="IsRelativePath" value="0"/>
+                           <string name="String" value="" wide="true"/>
+                        </obj>
+                        <obj class="QCDestinationValue" ID="1111203184">
+                           <int name="ParameterTag" value="-1"/>
+                           <string name="NodePath" value="" wide="true"/>
+                           <string name="OriginalName" value="" wide="true"/>
+                           <int name="IsRelativePath" value="0"/>
+                           <string name="String" value="" wide="true"/>
+                        </obj>
+                        <obj class="QCDestinationValue" ID="1111200304">
+                           <int name="ParameterTag" value="-1"/>
+                           <string name="NodePath" value="" wide="true"/>
+                           <string name="OriginalName" value="" wide="true"/>
+                           <int name="IsRelativePath" value="0"/>
+                           <string name="String" value="" wide="true"/>
+                        </obj>
+                        <obj class="QCDestinationValue" ID="1111196272">
+                           <int name="ParameterTag" value="-1"/>
+                           <string name="NodePath" value="" wide="true"/>
+                           <string name="OriginalName" value="" wide="true"/>
+                           <int name="IsRelativePath" value="0"/>
+                           <string name="String" value="" wide="true"/>
+                        </obj>
+                        <obj class="QCDestinationValue" ID="1111196560">
+                           <int name="ParameterTag" value="-1"/>
+                           <string name="NodePath" value="" wide="true"/>
+                           <string name="OriginalName" value="" wide="true"/>
+                           <int name="IsRelativePath" value="0"/>
+                           <string name="String" value="" wide="true"/>
+                        </obj>
+                        <obj class="QCDestinationValue" ID="1111196848">
+                           <int name="ParameterTag" value="-1"/>
+                           <string name="NodePath" value="" wide="true"/>
+                           <string name="OriginalName" value="" wide="true"/>
+                           <int name="IsRelativePath" value="0"/>
+                           <string name="String" value="" wide="true"/>
+                        </obj>
+                     </list>
+                  </obj>
+                  <int name="RuntimeID" value="305"/>
+                  <string name="DeviceNode Name" value="Quick Controls" wide="true"/>
+                  <string name="ClassName" value="Quick Controls"/>
+                  <string name="IDString" value="Quick Controls"/>
+                  <int name="NodeFlags" value="0"/>
+                  <int name="NumberClassIDs" value="2"/>
+                  <list name="ClassIDs" type="string">
+                     <item value="AB9705CD467B4D7A946C8860C504F492"/>
+                     <item value="CA1729D088FC4857937F78CC37D45B48"/>
+                  </list>
+               </member>
+               <member name="directRoutingFolder">
+                  <int name="RuntimeID" value="372"/>
+                  <int name="Bypass" value="0"/>
+                  <int name="SeparationPosition" value="0"/>
+                  <list name="Slot" type="list">
+                     <item>
+                        <int name="RuntimeID" value="373"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="374"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="376"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="377"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="379"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="380"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="382"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="383"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="385"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="386"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="388"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="389"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                     <item>
+                        <int name="RuntimeID" value="391"/>
+                        <member name="Volume">
+                           <float name="Value" value="25856"/>
+                           <float name="AnchorValue" value="0"/>
+                        </member>
+                        <member name="Output">
+                           <int name="Value" value="0"/>
+                        </member>
+                        <member name="Panner">
+                           <member name="Default SurroundPan UID V2">
+                              <string name="GUID" value="A3CA1186A3A241FEA552717108932238" wide="true"/>
+                           </member>
+                           <member name="Default SurroundPan UID">
+                              <string name="GUID" value="56535453506132737572726F756E6470" wide="true"/>
+                           </member>
+                           <member name="PannerType">
+                              <int name="Value" value="3"/>
+                              <int name="Min" value="0"/>
+                              <int name="Max" value="11"/>
+                           </member>
+                           <member name="Default DownmixPan UID">
+                              <string name="GUID" value="4A18B5A88A6B44D4B78F6E2FCC4746A2" wide="true"/>
+                           </member>
+                           <member name="Plugin UID">
+                              <string name="GUID" value="44E1149EDB3E4387BDD827FEA3A39EE7" wide="true"/>
+                           </member>
+                           <string name="Plugin Name" value="Standard Panner" wide="true"/>
+                           <int name="Audio Input Count" value="1"/>
+                           <list name="Audio Input Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Audio Output Count" value="1"/>
+                           <list name="Audio Output Arrangement" type="list">
+                              <item>
+                                 <list name="Type" type="int">
+                                    <item value="1"/>
+                                    <item value="2"/>
+                                 </list>
+                              </item>
+                           </list>
+                           <int name="Event Input Count" value="0"/>
+                           <int name="Event Output Count" value="0"/>
+                           <bin name="audioComponent">
+										0000003F0000003F010000000200000000000000
+                           </bin>
+                           <bin name="editController">
+                           </bin>
+                           <int name="Version" value="1"/>
+                           <int name="Editor Size Count" value="0"/>
+                           <int name="Active" value="0"/>
+                           <string name="IDString" value="Panner"/>
+                           <string name="Bay Program" value="" wide="true"/>
+                           <int name="BypassTag" value="4301"/>
+                           <int name="RuntimeID" value="392"/>
+                        </member>
+                        <int name="OldOn" value="0"/>
+                     </item>
+                  </list>
+                  <int name="SummingMode" value="0"/>
+               </member>
+               <member name="outputBusEnable">
+                  <int name="Value" value="1"/>
+                  <int name="Min" value="0"/>
+                  <int name="Max" value="1"/>
+               </member>
+               <int name="InputBusArrangementType" value="1"/>
+            </member>
+            <int name="Flags" value="0"/>
+         </obj>
+         <obj class="MAutomationNode" name="Automation" ID="661515232">
+            <string name="Name" value="Automation" wide="true"/>
+            <member name="Domain">
+               <int name="Type" value="0"/>
+               <obj name="Tempo Track" ID="661481824"/>
+               <obj name="Signature Track" ID="945857152"/>
+            </member>
+            <list name="Tracks" type="obj">
+               <obj class="MAutomationTrackEvent" ID="1145804848">
+                  <float name="Start" value="0"/>
+                  <float name="Length" value="658299.4320000000298023223876953125"/>
+                  <obj class="MAutoListNode" name="Node" ID="924747008">
+                     <member name="Domain">
+                        <int name="Type" value="0"/>
+                        <obj name="Tempo Track" ID="661481824"/>
+                        <obj name="Signature Track" ID="945857152"/>
+                     </member>
+                  </obj>
+                  <member name="Additional Attributes">
+                     <int name="Eths" value="-260498236"/>
+                  </member>
+                  <obj class="MAutomationTrack" name="Track Device" ID="1096063760">
+                     <int name="Connection Type" value="2"/>
+                     <int name="Read" value="0"/>
+                     <int name="Write" value="0"/>
+                  </obj>
+                  <int name="Tag" value="1025"/>
+               </obj>
+               <obj class="MAutomationTrackEvent" ID="1145803840">
+                  <float name="Start" value="0"/>
+                  <float name="Length" value="658299.4320000000298023223876953125"/>
+                  <obj class="MAutoListNode" name="Node" ID="776519792">
+                     <member name="Domain">
+                        <int name="Type" value="0"/>
+                        <obj name="Tempo Track" ID="661481824"/>
+                        <obj name="Signature Track" ID="945857152"/>
+                     </member>
+                     <list name="Events" type="obj">
+                        <obj class="MParamEvent" ID="951259568">
+                           <float name="Start" value="22804.2289999999993597157299518585205078125"/>
+                           <float name="Value" value="0.5"/>
+                        </obj>
+                        <obj class="MParamEvent" ID="951260464">
+                           <float name="Start" value="22811.504000000000814907252788543701171875"/>
+                           <float name="Value" value="0.4444444477558135986328125"/>
+                        </obj>
+                        <obj class="MParamEvent" ID="961786128">
+                           <float name="Start" value="36269.550000000002910383045673370361328125"/>
+                           <float name="Value" value="0.4444444477558135986328125"/>
+                        </obj>
+                        <obj class="MParamEvent" ID="961790944">
+                           <float name="Start" value="36276.75"/>
+                           <float name="Value" value="0.22222222387790679931640625"/>
+                        </obj>
+                     </list>
+                  </obj>
+                  <member name="Additional Attributes">
+                     <int name="Eths" value="-260498236"/>
+                  </member>
+                  <obj class="MAutomationTrack" name="Track Device" ID="1101955456">
+                     <int name="Connection Type" value="7"/>
+                     <string name="Device Name" value="Inserts\Slot\ABCDEF019182FAEB574C41444558504C-0"/>
+                     <int name="Read" value="1"/>
+                     <int name="Write" value="0"/>
+                  </obj>
+                  <int name="Height" value="42"/>
+                  <int name="Tag" value="1173131966"/>
+                  <int name="TrackFlags" value="4"/>
+               </obj>
+            </list>
+            <obj name="Track Device" ID="1096063760"/>
+            <int name="Expanded" value="1"/>
+         </obj>
+      </obj>
+   </list>
+   <obj class="ExternalRouting" name="ExternalRouting" ID="1137563376">
+      <member name="Audio">
+         <list name="Bus" type="list">
+            <item>
+               <string name="Name" value="Stereo In" wide="true"/>
+               <int name="Bus UID" value="2"/>
+               <int name="Bus Type" value="12"/>
+               <member name="Input Arrangement">
+                  <list name="Type" type="int">
+                     <item value="1"/>
+                     <item value="2"/>
+                  </list>
+               </member>
+               <member name="Output Arrangement">
+                  <list name="Type" type="int">
+                     <item value="1"/>
+                     <item value="2"/>
+                  </list>
+               </member>
+            </item>
+            <item>
+               <string name="Name" value="Stereo Out" wide="true"/>
+               <int name="Bus UID" value="6"/>
+               <int name="Bus Type" value="18"/>
+               <member name="Input Arrangement">
+                  <list name="Type" type="int">
+                     <item value="1"/>
+                     <item value="2"/>
+                  </list>
+               </member>
+               <member name="Output Arrangement">
+                  <list name="Type" type="int">
+                     <item value="1"/>
+                     <item value="2"/>
+                  </list>
+               </member>
+            </item>
+         </list>
+      </member>
+   </obj>
+   <obj class="PArrangeSetup" name="Setup" ID="945844272">
+      <member name="Length">
+         <float name="Time" value="600"/>
+         <member name="Domain">
+            <int name="Type" value="1"/>
+            <float name="Period" value="1"/>
+         </member>
+      </member>
+      <int name="BarOffset" value="0"/>
+      <int name="FrameType" value="5"/>
+      <int name="TimeType" value="0"/>
+      <float name="SampleRate" value="48000"/>
+      <int name="SampleSize" value="24"/>
+      <int name="SampleFormatSize" value="3"/>
+      <int name="PanLaw" value="6"/>
+      <member name="RecordFileType">
+         <int name="MacType" value="1463899717"/>
+         <string name="DosType" value="wav" wide="true"/>
+         <string name="UnixType" value="wav" wide="true"/>
+         <string name="Name" value="Wave File" wide="true"/>
+      </member>
+      <int name="VolumeMax" value="0"/>
+      <int name="HmtType" value="0"/>
+      <int name="HmtDepth" value="100"/>
+   </obj>
+
+   <obj class="MTempoTrackNode" ID="989265072">
+      <string name="Name" value="Tempo" wide="true"/>
+      <member name="Domain">
+         <int name="Type" value="0"/>
+         <obj name="Tempo Track" ID="661481824"/>
+         <obj name="Signature Track" ID="945857152"/>
+      </member>
+      <list name="Events" type="obj">
+         <obj class="MTempoEvent" ID="959824160">
+            <float name="BPM" value="120"/>
+            <float name="PPQ" value="0"/>
+         </obj>
+      </list>
+   </obj>
+
+   <obj class="MSignatureTrackNode" ID="993888592">
+      <string name="Name" value="Signature" wide="true"/>
+      <member name="Domain">
+         <int name="Type" value="17"/>
+         <obj name="Tempo Track" ID="661481824"/>
+         <obj name="Signature Track" ID="945857152"/>
+      </member>
+      <list name="Events" type="obj">
+         <obj class="MTimeSignatureEvent" ID="959858880">
+            <int name="Flags" value="8"/>
+            <float name="Start" value="0"/>
+            <float name="Length" value="1"/>
+            <int name="Bar" value="0"/>
+            <int name="Numerator" value="4"/>
+            <int name="Denominator" value="4"/>
+         </obj>
+      </list>
+   </obj>
+
+   <obj class="PGridDefinition" ID="1084348432">
+      <float name="Tempo" value="120"/>
+      <int name="SigNom" value="4"/>
+      <int name="SigDenom" value="4"/>
+      <int name="Beats" value="128"/>
+      <float name="Offset" value="0"/>
+      <float name="offsetTempo" value="120"/>
+   </obj>
+
+   <obj class="FNPath" ID="1084348912">
+      <string name="Name" value="harness-input.wav" wide="true"/>
+      <string name="Path" value="C:\Users\Joe\Dropbox\Joe's Music\_Production\_PROJECTS\_OTHER\Tertiary harness\Misc\" wide="true"/>
+      <member name="FileType">
+         <int name="MacType" value="1463899717"/>
+         <string name="DosType" value="wav" wide="true"/>
+         <string name="UnixType" value="wav" wide="true"/>
+         <string name="Name" value="Wave File" wide="true"/>
+      </member>
+   </obj>
+
+   <obj class="ElastiquePreset" ID="459132064">
+      <string name="processingMode" value="pro default"/>
+      <string name="stereoMode" value="left-right"/>
+      <int name="formantPreservation" value="0"/>
+      <int name="tapeStyleMode" value="0"/>
+      <int name="pitchAccurateMode" value="0"/>
+   </obj>
+
+   <obj class="CmArray" ID="924552808">
+      <int name="ownership" value="1"/>
+      <list name="obj" type="obj">
+         <obj class="QCDestinationValue" ID="1145886432">
+            <int name="ParameterTag" value="1173131966"/>
+            <string name="NodePath" value="QCRELATIVECHANNELID\0"/>
+            <string name="OriginalName" value="Input Gain" wide="true"/>
+            <int name="IsRelativePath" value="1"/>
+            <string name="String" value="Input Gain" wide="true"/>
+         </obj>
+         <obj class="QCDestinationValue" ID="1145887584">
+            <int name="ParameterTag" value="1594319582"/>
+            <string name="NodePath" value="QCRELATIVECHANNELID\0"/>
+            <string name="OriginalName" value="Low-Mid Crossover Freq" wide="true"/>
+            <int name="IsRelativePath" value="1"/>
+            <string name="String" value="Low-Mid Crossover Freq" wide="true"/>
+         </obj>
+         <obj class="QCDestinationValue" ID="1145888736">
+            <int name="ParameterTag" value="60744102"/>
+            <string name="NodePath" value="QCRELATIVECHANNELID\0"/>
+            <string name="OriginalName" value="Mid-High Crossover Freq" wide="true"/>
+            <int name="IsRelativePath" value="1"/>
+            <string name="String" value="Mid-High Crossover Freq" wide="true"/>
+         </obj>
+         <obj class="QCDestinationValue" ID="1147514080">
+            <int name="ParameterTag" value="840953122"/>
+            <string name="NodePath" value="QCRELATIVECHANNELID\0"/>
+            <string name="OriginalName" value="Waveshape Low Band" wide="true"/>
+            <int name="IsRelativePath" value="1"/>
+            <string name="String" value="Waveshape Low Band" wide="true"/>
+         </obj>
+         <obj class="QCDestinationValue" ID="1147511488">
+            <int name="ParameterTag" value="1009754798"/>
+            <string name="NodePath" value="QCRELATIVECHANNELID\0"/>
+            <string name="OriginalName" value="Waveshape Mid Band" wide="true"/>
+            <int name="IsRelativePath" value="1"/>
+            <string name="String" value="Waveshape Mid Band" wide="true"/>
+         </obj>
+         <obj class="QCDestinationValue" ID="1147514368">
+            <int name="ParameterTag" value="2081346660"/>
+            <string name="NodePath" value="QCRELATIVECHANNELID\0"/>
+            <string name="OriginalName" value="Waveshape High Band" wide="true"/>
+            <int name="IsRelativePath" value="1"/>
+            <string name="String" value="Waveshape High Band" wide="true"/>
+         </obj>
+         <obj class="QCDestinationValue" ID="1147515520">
+            <int name="ParameterTag" value="1207467271"/>
+            <string name="NodePath" value="QCRELATIVECHANNELID\0"/>
+            <string name="OriginalName" value="Depth Low Band" wide="true"/>
+            <int name="IsRelativePath" value="1"/>
+            <string name="String" value="Depth Low Band" wide="true"/>
+         </obj>
+         <obj class="QCDestinationValue" ID="1147516672">
+            <int name="ParameterTag" value="1376268947"/>
+            <string name="NodePath" value="QCRELATIVECHANNELID\0"/>
+            <string name="OriginalName" value="Depth Mid Band" wide="true"/>
+            <int name="IsRelativePath" value="1"/>
+            <string name="String" value="Depth Mid Band" wide="true"/>
+         </obj>
+      </list>
+   </obj>
+
+</tracklist2>

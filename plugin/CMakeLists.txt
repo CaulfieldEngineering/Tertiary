@@ -23,6 +23,11 @@ endif()
 # =====================================================================
 set(INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/source")
 
+# [Claude 2026-10-27] Copy the built plugin into the system plugin folders (as before). The local test runner
+# (tests/run_all.ps1) turns it off: on Windows that copy needs administrator rights.
+# =====================================================================
+option(WLA_COPY_PLUGIN_AFTER_BUILD "Copy the plugin to the system plugin folders after building" ON)
+
 # Adds a plugin target (that's basically what the Projucer does).
 # =====================================================================
 juce_add_plugin( ${PROJECT_NAME}
@@ -36,7 +41,15 @@ juce_add_plugin( ${PROJECT_NAME}
     FORMATS ${wFORMATS}
     PRODUCT_NAME "${wPLUGIN_NAME}"
     VST3_CATEGORIES ${wPLUGIN_CATEGORY}
-    COPY_PLUGIN_AFTER_BUILD TRUE
+    COPY_PLUGIN_AFTER_BUILD ${WLA_COPY_PLUGIN_AFTER_BUILD}  # [Claude 2026-10-27] was TRUE; still on by default
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/images/icon/tertiary-icon-1024.png"   # [Claude 2026-10-29] the app icon (Joe chose C1)
+    ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/images/icon/tertiary-icon-256.png"
+    # [Claude 2026-10-30] V-08: the microphone text macOS shows when the standalone first opens an audio input. It
+    # only goes into the Mac bundles' Info.plist (NSMicrophoneUsageDescription); Windows builds don't use it. Without
+    # it, and without the audio-input entitlement the standalone is signed with (package_config/mac/
+    # standalone.entitlements, see workflow.yml), macOS gives the Mac standalone silence. The VST3 and AU use the DAW's.
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "${wPLUGIN_NAME} uses your audio input to process it through the tremolo."
 )
 
 # Explicitly set runtime library for the plugin target (belt and suspenders approach)
@@ -61,8 +74,15 @@ endif()
 
 # Run the Python script to generate the file list
 # =====================================================================
+# [Claude 2026-10-27] Find Python instead of assuming "python3": on Windows "python3" can be the Microsoft Store
+# stub, which fails (it did on the mini PC). Falls back to python3 as before if CMake can't find one.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if (NOT Python3_EXECUTABLE)
+    set(Python3_EXECUTABLE python3)
+endif()
+
 execute_process(
-    COMMAND ${CMAKE_COMMAND} -E env python3 ${CMAKE_CURRENT_SOURCE_DIR}/createSourceList.py
+    COMMAND ${CMAKE_COMMAND} -E env ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/createSourceList.py
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     RESULT_VARIABLE PYTHON_RUN_RESULT
 )
@@ -93,6 +113,15 @@ target_include_directories(${PROJECT_NAME}
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+
+# [Claude 2026-10-29] build_id.h (commit, uncommitted changes, time) written before every build, for the About
+# window's hidden build number (cmake/build_id.cmake)
+add_custom_target(wla_build_id ALL
+    COMMAND ${CMAKE_COMMAND} -DOUT=${CMAKE_CURRENT_BINARY_DIR}/generated/build_id.h -DSRC=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/build_id.cmake
+    BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/generated/build_id.h)
+add_dependencies(${PROJECT_NAME} wla_build_id)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/generated)
 
 # Links to all necessary dependencies. The present ones are recommended by JUCE.
 # If you use one of the additional modules, like the DSP module, you need to specify it here.
@@ -138,3 +167,99 @@ target_compile_definitions(${PROJECT_NAME}
 # =====================================================================
 file(GLOB_RECURSE ALL_JUCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../libs/juce/modules/juce_*")
 source_group("JUCE Modules" FILES ${ALL_JUCE_FILES})
+# ReviewRender (only with -DWLA_REVIEW_RENDER=ON; release and CI builds leave it out): runs Tertiary's processor and
+# editor offline for promo and review material, the audio and the UI's frames in sync. See review/ReviewRender.cpp.
+option(WLA_REVIEW_RENDER "Build the offline ReviewRender tool" OFF)
+if (WLA_REVIEW_RENDER)
+    juce_add_console_app(ReviewRender PRODUCT_NAME "ReviewRender")
+    target_sources(ReviewRender PRIVATE ${PLUGIN_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/review/ReviewRender.cpp)
+    target_compile_definitions(ReviewRender PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0
+        JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1 WLA_REVIEW_RENDER_BUILD=1
+        # The plugin macros its sources read, as juce_add_plugin would set them
+        JucePlugin_Name="${wPLUGIN_NAME}" JucePlugin_VersionString="${wPROJECT_VERSION}" JucePlugin_IsSynth=0
+        JucePlugin_WantsMidiInput=0 JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0)
+    target_include_directories(ReviewRender PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_BINARY_DIR}/generated)
+    add_dependencies(ReviewRender wla_build_id)
+    target_link_libraries(ReviewRender PRIVATE ${PROJECT_NAME}BinaryData juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
+    if (MSVC)
+        set_property(TARGET ReviewRender PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+endif()
+
+# [Claude 2026-10-27] TertiaryTests (only with -DWLA_TESTS=ON; release builds leave it out): unit tests for the 1.1
+# changes (license re-check with a pretend server, sample-rate and tempo changes, no allocation in processBlock,
+# state save/restore, demo mode). Run: TertiaryTests  (exit code 0 = all passed). See tests/TertiaryTests.cpp.
+option(WLA_TESTS "Build the TertiaryTests unit tests" OFF)
+if (WLA_TESTS)
+    juce_add_console_app(TertiaryTests PRODUCT_NAME "TertiaryTests")
+    target_sources(TertiaryTests PRIVATE ${PLUGIN_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/tests/TertiaryTests.cpp)
+    target_compile_definitions(TertiaryTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0
+        JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1 JUCE_UNIT_TESTS=0
+        JucePlugin_Name="${wPLUGIN_NAME}" JucePlugin_VersionString="${wPROJECT_VERSION}" JucePlugin_IsSynth=0
+        JucePlugin_WantsMidiInput=0 JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0)
+    target_include_directories(TertiaryTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source ${CMAKE_CURRENT_BINARY_DIR}/generated)
+    add_dependencies(TertiaryTests wla_build_id)   # [Claude 2026-10-29] V-07: the About window includes the generated build_id.h, as in ReviewRender
+    target_link_libraries(TertiaryTests PRIVATE ${PROJECT_NAME}BinaryData juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
+    if (MSVC)
+        set_property(TARGET TertiaryTests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+
+    # [Claude 2026-10-27] HostTest: loads the BUILT plugin (VST3, or the installed AU on a Mac) as a DAW does and runs
+    # the manual checklist automatically. See tests/HostTest.cpp. Also built only with -DWLA_TESTS=ON.
+    juce_add_console_app(HostTest PRODUCT_NAME "HostTest")
+    target_sources(HostTest PRIVATE ${PLUGIN_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/tests/HostTest.cpp)
+    target_compile_definitions(HostTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0
+        JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1 JUCE_PLUGINHOST_VST3=1 JUCE_PLUGINHOST_AU=$<BOOL:${APPLE}>
+        JucePlugin_Name="${wPLUGIN_NAME}" JucePlugin_VersionString="${wPROJECT_VERSION}" JucePlugin_IsSynth=0
+        JucePlugin_WantsMidiInput=0 JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0)
+    target_include_directories(HostTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source ${CMAKE_CURRENT_BINARY_DIR}/generated)
+    add_dependencies(HostTest wla_build_id)   # [Claude 2026-10-29] V-07: the About window includes the generated build_id.h, as in ReviewRender
+    target_link_libraries(HostTest PRIVATE ${PROJECT_NAME}BinaryData juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
+    if (MSVC)
+        set_property(TARGET HostTest PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+
+    # [Claude 2026-10-29] UiTest: the real processor and editor in an off-screen window, driven by mouse and keyboard
+    # events, checked after every step (parameters, components, the scope, the audio). See tests/UiTest.cpp. Also only
+    # with -DWLA_TESTS=ON. WLA_UI_TEST_BUILD points the settings and presets at a temp folder and records links instead
+    # of opening them (source/TestHooks.h); no other target defines it.
+    # -DWLA_UI_TEST_ASAN=ON builds it with the address sanitiser (for the open/close check, U-22).
+    option(WLA_UI_TEST_ASAN "Build UiTest with the address sanitiser" OFF)
+    juce_add_console_app(UiTest PRODUCT_NAME "UiTest")
+    target_sources(UiTest PRIVATE ${PLUGIN_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/tests/UiTest.cpp)
+    target_compile_definitions(UiTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0
+        JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=0 JUCE_WIN_PER_MONITOR_DPI_AWARE=1 WLA_UI_TEST_BUILD=1
+        UIROBOT_ASAN=$<BOOL:${WLA_UI_TEST_ASAN}>
+        JucePlugin_Name="${wPLUGIN_NAME}" JucePlugin_VersionString="${wPROJECT_VERSION}" JucePlugin_IsSynth=0
+        JucePlugin_WantsMidiInput=0 JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0)
+    target_include_directories(UiTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source ${CMAKE_CURRENT_BINARY_DIR}/generated)
+    add_dependencies(UiTest wla_build_id)
+    target_link_libraries(UiTest PRIVATE ${PROJECT_NAME}BinaryData juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
+    if (MSVC)
+        set_property(TARGET UiTest PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+        # symbols, so a crash or a hang prints the functions it was in
+        target_compile_options(UiTest PRIVATE /Zi)
+        target_link_options(UiTest PRIVATE /DEBUG)
+    endif()
+    if (WLA_UI_TEST_ASAN)
+        if (MSVC)
+            target_compile_options(UiTest PRIVATE /fsanitize=address /Zi)
+            target_link_options(UiTest PRIVATE /INCREMENTAL:NO /DEBUG)
+        else()
+            target_compile_options(UiTest PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+            target_link_options(UiTest PRIVATE -fsanitize=address)
+        endif()
+    endif()
+
+    # [Claude 2026-10-30] PerfTest: the performance rows T2-01 to T2-03 (DSP cost, CPU and memory with the window open,
+    # closed and idle, 30 instances). A plain host with no plugin sources: it loads a BUILT Tertiary.vst3, so the same
+    # program measures 1.0.2 and the release candidate. See tests/PerfTest.cpp. Also only with -DWLA_TESTS=ON.
+    juce_add_console_app(PerfTest PRODUCT_NAME "PerfTest")
+    target_sources(PerfTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/PerfTest.cpp)
+    target_compile_definitions(PerfTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0
+        JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1 JUCE_PLUGINHOST_VST3=1 JUCE_PLUGINHOST_AU=$<BOOL:${APPLE}>)
+    target_link_libraries(PerfTest PRIVATE juce::juce_audio_utils juce::juce_recommended_config_flags)
+    if (MSVC)
+        set_property(TARGET PerfTest PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+endif()

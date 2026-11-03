@@ -1,0 +1,158 @@
+# [Claude 2026-10-31] One command for the release candidate's one test run (Joe approved, 2026-10-31).
+#
+#   powershell -NoProfile -ExecutionPolicy Bypass -File tests\Run-Release-Check.ps1 -Report rc-1.1.0
+#
+# 1. Records this checkout's commit (it must be clean) and starts or reuses the live dashboard (port 4120).
+# 2. Brings the Mac checkout to the same commit (git bundle over SSH; the Mac has no GitHub credentials),
+#    then runs both machines at the same time: Windows builds and runs Run-All (web included), the Mac
+#    builds and runs tests/mac/release-check.sh (Run-All with Logic and the microphone).
+# 3. Only if both are green locally, pushes that commit to `development` (fast-forward only). If anything
+#    failed locally it pushes nothing and stops with FAIL.
+# 4. Waits for the GitHub run that push started, then writes the single report with tests/lib/combine.py:
+#    tests/reports/<Report>.md and the same view as the dashboard, tests/reports/<Report>.html.
+#    Prints PASS or FAIL and exits 0 or 1.
+#
+# Machine settings live outside the repo: $HOME\.wla-test\env.ps1 here, ~/.wla-test/env.sh on the Mac. Both are optional
+# overrides only (2026-10-31): tools default to the pinned copies in .tools (scripts/lib/tools.json).
+# The Mac comes from config.cmake (wTEST_DASHBOARD_MAC, wTEST_DASHBOARD_MAC_REPO).
+param([Parameter(Mandatory)][string]$Report, [string]$Branch = 'development', [switch]$NoWeb)
+# [Claude 2026-11-02] Continue, not Stop: in Windows PowerShell 5.1 a native command's stderr (a Python or CMake warning)
+# becomes an error record, and under Stop that ended the script with no FAIL line. Every step is judged by its exit code;
+# the trap below turns anything else that throws into the usual FAIL line and run time.
+$ErrorActionPreference = 'Continue'
+$Root = Split-Path $PSScriptRoot -Parent
+Set-Location $Root
+$Python = if ($env:WLA_TEST_PYTHON) { $env:WLA_TEST_PYTHON } else { 'python' }
+$envFile = Join-Path $HOME '.wla-test\env.ps1'
+if (Test-Path $envFile) { . $envFile }
+function Say($text) { Write-Host ("[{0:HH:mm:ss}] {1}" -f (Get-Date), $text) }
+# [Claude 2026-10-31] Joe: "test suite started at xxx and ended at yyy so I can feel for how long they all take."
+$RunStart = Get-Date
+function RunTime { $end = Get-Date; $t = $end - $RunStart
+    Say ("Release check started {0:yyyy-MM-dd HH:mm:ss}, ended {1:yyyy-MM-dd HH:mm:ss}, took {2} h {3} min {4} s" -f $RunStart, $end, [int][math]::Floor($t.TotalHours), $t.Minutes, $t.Seconds) }
+# [Claude 2026-11-02] A Windows failure no longer leaves the Mac half running on its own (the 2026-11-02 12:37 run
+# did): Fail waits for it, so no test on the Mac is cut off with a host or plug-in staged.
+function Fail($text) {
+    if ($script:mac -and -not $script:mac.HasExited) { Say "Waiting for the Mac half to finish before stopping (its log: $script:macLog)"; $script:mac.WaitForExit() }
+    Say "FAIL: $text"; RunTime; exit 1 }
+trap { Fail "unexpected error: $_" }
+
+# 1. Commit and dashboard ----------------------------------------------------------------------------
+$commit = (git rev-parse HEAD).Trim()
+if (git status --porcelain --untracked-files=no) { Fail 'this checkout has uncommitted changes; commit first' }
+$cfg = & $Python -c "import sys;sys.path.insert(0,'tests/lib');from common import config;c=config();print(c.get('wTEST_DASHBOARD_MAC',''));print(c.get('wTEST_DASHBOARD_MAC_REPO',''));print(c['wPLUGIN_NAME'])"
+$macHost, $macRepo, $product = $cfg[0].Trim(), $cfg[1].Trim(), $cfg[2].Trim()
+$stamp = (Get-Date -Format 'yyyy-MM-dd_HHmm') + '-release'
+Say "Release check of $commit as $Report; results tests/results/$stamp"
+if (-not (Get-NetTCPConnection -LocalPort 4120 -State Listen -ErrorAction SilentlyContinue)) {
+    Start-Process -WindowStyle Hidden -FilePath $Python -ArgumentList @('tests/dashboard/server.py', '--port', '4120')
+    Say 'Started the dashboard: http://127.0.0.1:4120/'
+} else { Say 'Dashboard already running on port 4120' }
+# [Claude 2026-10-31] Open it on the whole plan (every test, in run order, filling in as it runs).
+for ($i = 0; $i -lt 20 -and -not (Get-NetTCPConnection -LocalPort 4120 -State Listen -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 500 }
+Start-Process 'http://127.0.0.1:4120/?plan=all'
+
+# 2. Same commit on the Mac, then both machines at once -----------------------------------------------
+$mac = $null
+if ($macHost) {
+    $macHead = "$(ssh -o BatchMode=yes $macHost "cd $macRepo && git rev-parse HEAD")".Trim()
+    if ($LASTEXITCODE) { Fail "the Mac ($macHost) is not reachable" }
+    if ($macHead -ne $commit) {
+        $bundle = Join-Path $env:TEMP "release-$stamp.bundle"
+        git bundle create $bundle "$macHead..HEAD" 2>$null
+        if ($LASTEXITCODE) { Fail "could not bundle $macHead..$commit (is the Mac on a commit this checkout has?)" }
+        scp -q -o BatchMode=yes $bundle "${macHost}:/tmp/release.bundle"
+        ssh -o BatchMode=yes $macHost "cd $macRepo && git checkout -q -- .DS_Store 2>/dev/null; git fetch -q /tmp/release.bundle HEAD && git merge -q --ff-only $commit"
+        if ($LASTEXITCODE) { Fail 'the Mac checkout could not fast-forward to this commit' }
+    }
+    Say "Mac on $commit; starting its build and Run-All"
+    $macLog = Join-Path $Root "tests/results/$stamp-mac-console.log"
+    New-Item -ItemType Directory -Force (Join-Path $Root 'tests/results') | Out-Null
+    $mac = Start-Process -PassThru -WindowStyle Hidden -FilePath 'ssh' -RedirectStandardOutput $macLog -RedirectStandardError "$macLog.err" `
+        -ArgumentList @('-o', 'BatchMode=yes', $macHost, "bash $macRepo/tests/mac/release-check.sh $commit $stamp")
+    # [Claude 2026-11-02] Without this, Windows PowerShell 5.1 loses the exit code of a process started with
+    # redirection: every run so far printed "Mac exit " (empty), so a failed Mac half would have counted as 0 and
+    # been pushed. Same fix as plugin/tests/ci/installer_test_windows.ps1.
+    $null = $mac.Handle
+}
+New-Item -ItemType Directory -Force (Join-Path $Root 'tests/results') | Out-Null
+# A fresh checkout has no build folder, web packages or Cubase input audio (none are in git). Make them here so the
+# release check runs from a clean pull, as Joe wants (2026-10-31: "remove the folders that are not in git so it looks like a fresh pull").
+if (-not (Test-Path (Join-Path $Root 'build-tests/CMakeCache.txt'))) {
+    Say 'Windows: configuring build-tests (fresh checkout)'
+    cmake -S $Root -B (Join-Path $Root 'build-tests') -DWLA_TESTS=ON -DWLA_REVIEW_RENDER=ON -DWLA_COPY_PLUGIN_AFTER_BUILD=OFF | Out-File (Join-Path $Root "tests/results/$stamp-win-configure.log")
+    if ($LASTEXITCODE) { Fail 'Windows configure failed' }
+}
+if (-not $NoWeb -and -not (Test-Path (Join-Path $Root 'plugin/tests/web/node_modules'))) {
+    Say 'Web: installing test packages (fresh checkout)'
+    Push-Location plugin/tests/web; npm ci *> (Join-Path $Root "tests/results/$stamp-web-setup.log"); npx playwright install chromium webkit firefox *>> (Join-Path $Root "tests/results/$stamp-web-setup.log"); $setupCode = $LASTEXITCODE; Pop-Location
+    if ($setupCode) { Fail 'web test setup failed' }
+}
+Say 'Windows: building'
+cmake --build build-tests --config Release -j 8 | Out-File (Join-Path $Root "tests/results/$stamp-win-build.log")
+if ($LASTEXITCODE) { Fail 'Windows build failed' }
+# [Claude 2026-11-02] After the build: the harness audio is rendered by HostTest, which a fresh checkout has only now.
+if (-not (Test-Path (Join-Path $Root 'plugin/tests/daw/cubase/Tertiary harness/Audio/harness-input.wav'))) {
+    Say 'Cubase: making the harness input audio (fresh checkout)'
+    & $Python (Join-Path $Root 'plugin/tests/daw/cubase/tertiary_harness_build.py') audio *> (Join-Path $Root "tests/results/$stamp-cubase-media.log")
+    if ($LASTEXITCODE) { Fail "Cubase harness audio could not be made; see tests/results/$stamp-cubase-media.log" }
+}
+if (-not $NoWeb) {
+    # [Claude 2026-10-31] The one web build script (scripts/web/build-web.ps1 -Test: the same plugin/tests/web/build.mjs as
+    # `npm run build`). It takes Emscripten and Wonderlab from WLA_EMSDK_ENV / EMSDK and WONDERLAB_DIR when env.ps1 sets
+    # them, else the pinned copies in .tools (scripts/lib/tools.json), so a fresh machine needs no settings file.
+    & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web/build-web.ps1 -Test *> (Join-Path $Root "tests/results/$stamp-web-build.log"); $webCode = $LASTEXITCODE
+    if ($webCode) { Fail "web build failed; see tests/results/$stamp-web-build.log" }
+}
+Say 'Windows: Run-All'
+& powershell -NoProfile -ExecutionPolicy Bypass -File tests/win/Run-All.ps1 -ResultsDir "tests/results/$stamp"
+$winCode = $LASTEXITCODE
+$macCode = 0
+if ($mac) {
+    Say 'Waiting for the Mac'
+    $mac.WaitForExit(); $macCode = $mac.ExitCode
+    if ($null -eq $macCode) { Fail 'the Mac half ended without an exit code; nothing pushed' }
+    $macCopy = Join-Path $Root "tests/results/$stamp-mac"
+    scp -q -r -o BatchMode=yes "${macHost}:$macRepo/tests/results/$stamp" $macCopy
+    if ($LASTEXITCODE) { Fail 'could not copy the Mac results' }
+}
+$runs = @('--run', "win=tests/results/$stamp") + $(if ($mac) { @('--run', "mac=tests/results/$stamp-mac") } else { @() })
+if ($winCode -or $macCode) {
+    & $Python tests/dashboard/server.py --export "tests/results/$stamp/report.html" @runs | Out-Null
+    Fail "local tests failed (Windows exit $winCode, Mac exit $macCode); nothing pushed. View: tests/results/$stamp/report.html"
+}
+
+# 3. Push to the work branch only after local green ----------------------------------------------------
+Say "Local green; pushing $commit to $Branch"
+git push origin "${commit}:refs/heads/$Branch"
+if ($LASTEXITCODE) { Fail "push to $Branch was refused (not a fast-forward?)" }
+
+# 4. The GitHub run for that push, then the one report -------------------------------------------------
+# [Claude 2026-11-02] The token comes the dashboard's way (server.py github_token, git credential fill from Python):
+# piped from Windows PowerShell 5.1, git refused the request ("missing protocol field"), the token was empty and
+# GitHub answered every "Bearer " request with 401. No token, or a token GitHub refuses: ask the public API without one.
+$token = "$(& $Python -c "import sys;sys.path.insert(0,'tests/dashboard');from server import github_token;print(github_token() or '')")".Trim()
+$slug = ((git remote get-url origin) -replace '.*github\.com[:/]', '' -replace '\.git$', '')
+$headers = @{ Accept = 'application/vnd.github+json' }
+if ($token) { $headers.Authorization = "Bearer $token" } else { Say 'No GitHub token from git credential; using the public API without one' }
+$runId = $null
+for ($i = 0; $i -lt 240; $i++) {
+    # [Claude 2026-11-02] A dropped request while waiting is retried on the next poll, not a FAIL.
+    $found = try { (Invoke-RestMethod -Headers $headers "https://api.github.com/repos/$slug/actions/runs?head_sha=$commit&branch=$Branch&event=push").workflow_runs |
+        Where-Object { $_.name -like 'Tests*' } | Select-Object -First 1 } catch {
+        if ($headers.Authorization -and "$($_.Exception.Message)" -match '\(401\)') { $headers.Remove('Authorization'); Say 'GitHub refused the token (401); using the public API without one' }
+        else { Say "GitHub API did not answer ($($_.Exception.Message)); retrying" }
+        $null }
+    if ($found) {
+        $runId = $found.id
+        if ($found.status -eq 'completed') { break }
+    }
+    Start-Sleep -Seconds 30
+}
+if (-not $runId) { Fail "no GitHub test run appeared for $commit on $Branch" }
+Say "GitHub run $runId finished"
+& $Python tests/lib/combine.py @runs --github-run $runId --out "tests/results/$stamp/release" --report "tests/reports/$Report.md" --title "$product $Report test report"
+$code = $LASTEXITCODE
+Say $(if ($code) { "FAIL. Report: tests/reports/$Report.md and .html" } else { "PASS. Report: tests/reports/$Report.md and .html" })
+RunTime
+exit $code
