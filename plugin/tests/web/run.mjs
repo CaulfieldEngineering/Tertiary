@@ -145,8 +145,11 @@ try {
     let ctx,errors;
     const ok=await check(`W-01-${view.name}`,'Loads, ready, correct config build ID and isolation',async()=>{
       ({ctx,errors}=await context(view));
-      const state=await page.evaluate(()=>({id:WONDERLAB_CONFIG.buildId,isolated:crossOriginIsolated,state:audioCtx?.state||'not-created',playing}));
+      const state=await page.evaluate(()=>({id:WONDERLAB_CONFIG.buildId,isolated:crossOriginIsolated,state:audioCtx?.state||'not-created',playing,
+        overlay:!!document.querySelector('#shield')&&!document.querySelector('#shield').hidden&&getComputedStyle(document.querySelector('#shield')).display!=='none'}));
       assert.equal(state.id,meta.commit.slice(0,8)); assert.equal(state.isolated,true);
+      // [Claude 2026-11-03] Joe: no "Play demo" overlay to press first; once loaded the plugin is in view at once
+      assert.equal(state.overlay,false,'The Play overlay is still over the plugin after it loaded');
       assert.equal(state.playing,false); assert.notEqual(state.state,'running');
       assert.deepEqual(errors,[]); return state;
     });
@@ -196,6 +199,9 @@ try {
   const {ctx,errors}=await context(desktop);
   await start(page);
   await check('W-07',config.adapter==='passthrough'?'Template passthrough preserves the measured output':'Tremolo changes measured output against bypass',async()=>{
+    // [Claude 2026-11-03] Measured on Default (75 % depth, the sound this check was written for): the demo now opens on
+    // Gentle Movement, whose gentler depths fall under the envelope threshold.
+    await choosePreset(0);
     await page.locator('#file-upload').setInputFiles({name:'web-test-tone.wav',mimeType:'audio/wav',buffer:toneWav()});
     await page.waitForFunction(()=>playing && audioBuffer?.duration>5);
     await page.waitForTimeout(400);
@@ -230,7 +236,9 @@ try {
   }
   for(const c0 of controls(initial,'cursor')) {
     await check(`W-18-${c0.name}`,'Crossover/gain handle changes its parameter and frequency display',async()=>{
-      await choosePreset(9); // Three Rhythms makes the bands audibly distinct.
+      // Three Rhythms makes the bands audibly distinct. [Claude 2026-11-03] Found by name: the 1.1.1 presets moved it.
+      const threeRhythms=initial.programs.indexOf('Three Rhythms');assert.ok(threeRhythms>0,'Factory preset Three Rhythms missing');
+      await choosePreset(threeRhythms);
       const before=await snapshot(page),c=before.controls.find(x=>x.key===c0.key);
       const region={x:376,y:79,width:365,height:173};
       const imageBefore=await cropScope(region),p=await point(page,c.x+c.width/2,c.y+c.height/2);

@@ -1,6 +1,8 @@
 // [Codex 2026-10-30] Test Wonderlab's real player controls independently of a plugin's parameter layout.
 import assert from 'node:assert/strict';
 import { audioSummary, toneWav } from './browser.mjs';
+// Wonderlab schedules a start 25 ms ahead (START_LEAD in web/index.html); 50 ms leaves room for timer jitter
+const START_LEAD_SLACK = 0.05;
 
 export async function testPlayer({ page, check }) {
   const initial = await page.evaluate(() => ({
@@ -117,7 +119,10 @@ export async function testPlayer({ page, check }) {
     // [Claude 2026-10-31] W-25 failed once on 2026-10-31 with resumed 1.059410430839002 vs paused 1.0594104308390022:
     // the same instant, 2e-16 s apart from floating-point rounding. Compare to 1 microsecond; a real lost
     // offset is a whole buffer or more, and the upper bound (within 1 s) is unchanged.
-    assert.ok(resumed.time >= paused.offset - 1e-6 && resumed.time < paused.offset + 1,
+    // [Claude 2026-11-03] Wonderlab 11f991a schedules every start on an exact audio frame START_LEAD (25 ms) ahead, so the
+    // shown time can sit up to that much before the offset until the sound starts. The offset itself must be kept exactly.
+    assert.ok(Math.abs(resumed.offset - paused.offset) < 1e-6, `Resume changed the offset: ${JSON.stringify({ paused, resumed })}`);
+    assert.ok(resumed.time >= paused.offset - START_LEAD_SLACK && resumed.time < paused.offset + 1,
       `Resume did not preserve the paused offset: ${JSON.stringify({ paused, resumed })}`);
     await page.waitForTimeout(250);
     const audio = await audioSummary(page, 500);
@@ -154,7 +159,8 @@ export async function testPlayer({ page, check }) {
     await page.locator('#btn-play').click();
     await playingReady();
     const resumed = await read();
-    assert.ok(resumed.time >= expected && resumed.time < expected + 1,
+    assert.ok(Math.abs(resumed.offset - expected) < 1e-6, `Play changed the sought offset: ${JSON.stringify({ expected, resumed })}`);
+    assert.ok(resumed.time >= expected - START_LEAD_SLACK && resumed.time < expected + 1,   // see W-25 (scheduled start)
       `Play ignored the seek position: ${JSON.stringify({ expected, resumed })}`);
     return { value, expected, sought, resumed };
   });

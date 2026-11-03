@@ -565,7 +565,7 @@ def installer_title(plugin, version, platform):
 
 
 def publish(site, entries, version, page_id, plugin, dry_run=False, release_date=None, lookup=tag_date,
-            version_class=VERSION_CLASS):
+            version_class=VERSION_CLASS, version_page_id=None):
     check(entries, version)
     drafts = [e["version"] for e in entries if e["draft"] and vkey(e["version"]) <= vkey(version)]
     if drafts:
@@ -600,7 +600,10 @@ def publish(site, entries, version, page_id, plugin, dry_run=False, release_date
     block = render(entries, version, prev)
     kind, new_value = replace_block(page, block)
 
-    home_id = site.front_page_id()
+    # [Claude 2026-11-03] The version line lives on the product page (wPRODUCT_PAGE_ID, Tertiary 4865 at /tertiary/) once
+    # the site has one; the front page is only the fallback. After the 1.1 site switch the front page (4864) has no
+    # version line, so 1.1.1 would have logged 'no version line' and left /tertiary/ on 1.1.0.
+    home_id = version_page_id or site.front_page_id()
     home_new = None
     if home_id and home_id != page_id:
         home = site.page(home_id)
@@ -732,8 +735,10 @@ def publish(site, entries, version, page_id, plugin, dry_run=False, release_date
     log(f"✓ Live changelog page shows exactly the new block ({version} first, every older entry)")
     if home_new is not None:
         want = visible_text(version_line_texts(hb, version_class)[0])
-        live(site.site + "/", lambda body: served_widget(body, version_class), lambda w: visible_text(w) == want,
-             "The live home page", 36)   # the front page (its own link redirects to /)
+        # The front page is read at / (its own link redirects there); a product page (version_page_id) at its link
+        url = hb["link"] if version_page_id and hb.get("link") else site.site + "/"
+        live(url, lambda body: served_widget(body, version_class), lambda w: visible_text(w) == want,
+             "The live version-line page" if version_page_id else "The live home page", 36)
         log(f"✓ Live home page reads '{want}'")
 
 
@@ -746,6 +751,7 @@ def main(argv=None):
     ap.add_argument("--prev-mac")
     ap.add_argument("--prev-win")
     ap.add_argument("--page-id", type=int, help="the changelog page (wCHANGELOG_PAGE_ID in config.cmake)")
+    ap.add_argument("--version-page-id", type=int, help="the page with the version line (wPRODUCT_PAGE_ID); default: the front page")
     ap.add_argument("--plugin-name", help="wPLUGIN_NAME, for the installer titles in the media library")
     ap.add_argument("--version-class", default=VERSION_CLASS,
                     help="CSS class of the home page's version line for this product (default wla-version)")
@@ -776,7 +782,7 @@ def main(argv=None):
             else:
                 site = LiveSite()
             publish(site, entries, a.version, a.page_id, a.plugin_name, a.dry_run, a.release_date,
-                    version_class=a.version_class)
+                    version_class=a.version_class, version_page_id=a.version_page_id)
     except Fail as e:
         print(f"::error::{e}")
         return 1

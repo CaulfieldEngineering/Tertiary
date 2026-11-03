@@ -4,7 +4,7 @@ The suite builds the real Wonderlab/Emscripten demo and drives it with Playwrigh
 
 ## Setup and run
 
-Use Node 24, Python 3, CMake, Ninja, FFmpeg, Visual Studio C++ tools, and Emscripten **5.0.3**. Wonderlab is pinned at `5248a157cfdf472caf1fafc7b9b71dec09485947`. Set `WONDERLAB_DIR` to that checkout (default `build/Wonderlab`). `CPM_JUCE_SOURCE` may point to a native JUCE 8.0.8 checkout; the web build uses Wonderlab's fork. Template builds also set `WIZARDCORE_DIR` to a WizardCore checkout. Never put credentials in these files.
+Use Node 24, Python 3, CMake, Ninja, FFmpeg, Visual Studio C++ tools, and Emscripten **5.0.3**. Wonderlab is pinned at `11f991a3a6fda4e6837ae45e3742a0b8443c84fe`. Set `WONDERLAB_DIR` to that checkout (default `build/Wonderlab`). `CPM_JUCE_SOURCE` may point to a native JUCE 8.0.8 checkout; the web build uses Wonderlab's fork. Template builds also set `WIZARDCORE_DIR` to a WizardCore checkout. Never put credentials in these files.
 
 Activate the SDK in the build shell, then from `plugin/tests/web`:
 

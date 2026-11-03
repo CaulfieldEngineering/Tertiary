@@ -50,6 +50,15 @@ namespace audio_plugin {
           samplesUntilEnable = demoBypassTimeLimit * getSampleRate();
         }
         //#endif
+
+       #ifdef WLA_WEB_DEFAULT_PRESET
+        // [Claude 2026-11-03] The web demo opens on a preset that shows the bands working separately (Joe, 2026-11-02:
+        // "doesn't present itself well on the web demo"). Web build only (plugin/web/wonderlab.cmake); the plug-in
+        // still opens on "Default".
+        for (int i = 0; i < (int) PresetManager::getFactoryPresets().size(); ++i)
+            if (PresetManager::getFactoryPresets()[(size_t) i].name == WLA_WEB_DEFAULT_PRESET)
+                presets.loadPreset(i);
+       #endif
     }
 
     //==============================================================================

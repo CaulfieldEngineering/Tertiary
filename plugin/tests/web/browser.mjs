@@ -121,6 +121,8 @@ export function toneWav(seconds = 6) {
   return b;
 }
 export async function start(page) {
-  await page.locator('#big-play').click();
+  // [Claude 2026-11-03] Wonderlab 11f991a has no Play overlay once the plugin has loaded (Joe: "get rid of the 'Play
+  // demo' button you have to initially press"); the player's own Play button is the one click that starts sound.
+  await page.locator('#btn-play').click();
   await page.waitForFunction(() => typeof audioCtx !== 'undefined' && audioCtx?.state === 'running' && juceReady && playing, null, { timeout: 20000 });
 }

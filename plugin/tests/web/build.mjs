@@ -20,6 +20,14 @@ function run(exe, args, cwd = root) {
 const wonderlab = path.resolve(process.env.WONDERLAB_DIR || path.join(root, 'build/Wonderlab'));
 if (!fs.existsSync(path.join(wonderlab, 'cmake/WonderlabBuild.cmake')))
   throw new Error('Set WONDERLAB_DIR to a Wonderlab checkout (see README.md).');
+// [Claude 2026-11-03] The checkout must be the commit the workflows pin (config.wonderlabCommit), as Emscripten must be
+// its pinned version below. Found before 1.1.1: this PC's WONDERLAB_DIR is a working checkout that sat on main, so a
+// local run would have tested a different Wonderlab than GitHub builds. WLA_ALLOW_OTHER_WONDERLAB=1 allows it on purpose.
+{
+  const head = spawnSync('git', ['-C', wonderlab, 'rev-parse', 'HEAD'], { encoding: 'utf8', shell: false }).stdout?.trim() || '';
+  if (config.wonderlabCommit && !head.startsWith(config.wonderlabCommit) && process.env.WLA_ALLOW_OTHER_WONDERLAB !== '1')
+    throw new Error(`Wonderlab at ${wonderlab} is ${head.slice(0, 7) || 'not a git checkout'}, not the pinned ${config.wonderlabCommit}; point WONDERLAB_DIR at that commit`);
+}
 // Template projects also compile WizardCore into the web targets, as their CI pipeline does.
 const wizardcore = process.env.WIZARDCORE_DIR ? path.resolve(process.env.WIZARDCORE_DIR) : undefined;
 if (wizardcore && !fs.existsSync(path.join(wizardcore, 'plugin/source')))
