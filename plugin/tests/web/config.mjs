@@ -1,7 +1,7 @@
 // [Codex 2026-10-30] Product data only; the runner, inspector and build are shared with the template.
 export default {
   approvedCommit: '7760137',
-  wonderlabCommit: '6268e87',
+  wonderlabCommit: 'fe3e72d',
   emsdkVersion: '5.0.3',
   processorHeader: 'PluginProcessor.h',
   processorClass: 'audio_plugin::AudioPluginAudioProcessor',

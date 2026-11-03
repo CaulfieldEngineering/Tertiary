@@ -1100,7 +1100,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: CaulfieldEngineering/Wonderlab
-        ref: 6268e87f0cdc59f7b6887dccd06f2c42a2d16108
+        ref: fe3e72dc9574765ea560101286b1df7373c01869
         path: Wonderlab
         token: ${{ secrets.CE_GITHUB_PAT }}
 

@@ -34,11 +34,11 @@
     "git": {"url": "https://github.com/emscripten-core/emsdk.git", "ref": "a620cf1d71c62dfdfbb0c01fe0a371e2af2dda6c"}
   },
   "wonderlab": {
-    "version": "6268e87",
+    "version": "fe3e72d",
     "override": "WONDERLAB_DIR",
     "auto": true,
     "_comment": "Private repo: cloned with this machine's own git credentials. Same commit as the workflows' 'Checkout Wonderlab' steps; change both together.",
-    "git": {"url": "https://github.com/CaulfieldEngineering/Wonderlab.git", "ref": "6268e87f0cdc59f7b6887dccd06f2c42a2d16108"}
+    "git": {"url": "https://github.com/CaulfieldEngineering/Wonderlab.git", "ref": "fe3e72dc9574765ea560101286b1df7373c01869"}
   },
   "reaper": {
     "version": "7.84",
