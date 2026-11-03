@@ -342,8 +342,9 @@ with `scripts/lib/stepwatch.py`; no agent has to remember to check in.
   job (`WLA_WATCHDOG_JOB`, for example `tertiary-win-release-<stamp>`, `tertiary-win-all-<results folder>`) and
   closes it; everything it launches joins it. Windows writes into `HQ\scripts\watchdog\jobs` beside this repo (none
   when HQ is not there); the Mac writes `~/.wla-test/watchdog`, which the HQ check reads over SSH. `WLA_WATCHDOG_DIR`
-  moves it, `WLA_WATCHDOG=0` turns the reporting off; on GitHub there is no reporting and the profile `ci` keeps the
-  jobs' own `timeout-minutes` (a script run alone with `--profile ci` runs in place, as before).
+  moves it, `WLA_WATCHDOG=0` turns the reporting off. On GitHub there is no reporting; Run-All's tests keep their
+  limits, doubled for the slower shared runners, inside the jobs' own `timeout-minutes`, and a script run alone with
+  `--profile ci` runs in place, as before.
 
 One command under a limit, for anything else a desk runs by hand:
 
