@@ -199,6 +199,9 @@ try {
   const {ctx,errors}=await context(desktop);
   await start(page);
   await check('W-07',config.adapter==='passthrough'?'Template passthrough preserves the measured output':'Tremolo changes measured output against bypass',async()=>{
+    // [Claude 2026-11-03] Measured on Default (75 % depth, the sound this check was written for): the demo now opens on
+    // Gentle Movement, whose gentler depths fall under the envelope threshold.
+    await choosePreset(0);
     await page.locator('#file-upload').setInputFiles({name:'web-test-tone.wav',mimeType:'audio/wav',buffer:toneWav()});
     await page.waitForFunction(()=>playing && audioBuffer?.duration>5);
     await page.waitForTimeout(400);

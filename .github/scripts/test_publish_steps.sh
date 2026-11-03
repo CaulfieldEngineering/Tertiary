@@ -44,11 +44,15 @@ done
 st="$FAKE/state.json" code=200 resp=""
 case "$url" in
   */group) resp='{"items":[{"id":1}]}' ;;
-  *redirect\?search=*)
-    q=${url#*search=}
+  *redirect\?filterBy%5Burl%5D=*)
+    # [Claude 2026-11-03] As the real Redirection API: filterBy[url] matches part of the URL (the step then matches exactly)
+    q=${url#*filterBy%5Burl%5D=}; q=${q%%&*}
     if [ "$q" = "${READ_FAIL_SOURCE:-}" ] && [ -f "$FAKE/posted" ] && [ ! -f "$FAKE/read-failed" ]; then
       touch "$FAKE/read-failed"; code=500; resp='<html>error</html>'
-    else resp=$(jq -c --arg u "$q" '{items: [.[] | select(.url == $u)]}' "$st"); fi ;;
+    else resp=$(jq -c --arg u "$q" '{items: [.[] | select(.url | contains($u))]}' "$st"); fi ;;
+  *redirect\?search=*)
+    # The real API ignores search= and lists every rule; the step must not depend on it
+    resp=$(jq -c '{items: .}' "$st") ;;
   */redirect|*/redirect/*)
     u=$(jq -r .url <<< "$body"); t=$(jq -r .action_data.url <<< "$body")
     if [ "$u" = "${FAIL_SOURCE:-}" ]; then code=500; resp='<html>error</html>'

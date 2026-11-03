@@ -8,7 +8,12 @@
      deleting that line; the pipeline refuses to release a version whose entry still has it.
      Comments like this one are never published. -->
 
-## 1.1.0 (release date)
+## 1.1.1 (release date)
+- Presets: new factory presets that set each band apart, each band with its own shape, rhythm and phase, and a few that keep one part of the sound still while the rest moves.
+- The web demo follows each track's tempo, so synced settings land on the beat, and it starts with one click on Play.
+- Bug fixes and stability improvements.
+
+## 1.1.0 (2026-11-03)
 - Mac: runs natively on Apple Silicon and Intel Macs, on macOS 11 (Big Sur) and later, and now comes as an Audio Unit (AU) as well as a VST3.
 - Presets: a preset bar at the top of the window with 14 factory presets, plus your own presets, shared by the VST3, AU and standalone app. Your DAW's preset list shows them too, and sessions from 1.0 open with all their settings.
 - A redesigned window with a new menu, drawn sharp at four sizes (100, 125, 150 and 200%). The scope zooms smoothly, follows tempo and rate changes as you make them, and greys out a bypassed band.

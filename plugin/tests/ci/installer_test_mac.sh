@@ -56,7 +56,20 @@ echo "=== $(sw_vers -productName) $(sw_vers -productVersion), $(uname -m), insta
 # 1. The installer as downloaded: signed, notarized, ticket stapled, accepted by Gatekeeper
 signed_step "installer signature"      pkgutil --check-signature "$PKG"
 signed_step "installer Gatekeeper"     spctl --assess --type install -vv "$PKG"
-signed_step "installer notarization"   xcrun stapler validate "$PKG"
+# [Claude 2026-11-03] stapler validate also asks Apple's ticket server; on 2026-11-02 the Intel runner lost that connection
+# ("NSURLErrorDomain Code=-1005 The network connection was lost", Error 68) while the same installer validated everywhere
+# else. A network error is tried again, up to 3 times, 20 s apart; a ticket that is missing or invalid still fails at once.
+stapler_validate() {
+    local out n
+    for n in 1 2 3; do
+        out=$(xcrun stapler validate "$1" 2>&1) && { echo "$out"; return 0; }
+        echo "$out"
+        grep -q -E 'NSURLErrorDomain|network connection|timed out|offline' <<< "$out" || return 1
+        [ "$n" -lt 3 ] && { echo "network error talking to Apple (try $n of 3); trying again in 20 s"; sleep 20; }
+    done
+    return 1
+}
+signed_step "installer notarization"   stapler_validate "$PKG"
 
 # 2. Install it, as a customer does (all components)
 step "install"                  sudo installer -pkg "$PKG" -target /

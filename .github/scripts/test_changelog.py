@@ -318,6 +318,17 @@ class Publish(unittest.TestCase):
         self.assertIn("Joe's footnote", cl.visible_text(body))
         self.assertIn("1.1.0, released 30 October 2026", s.served[20])
 
+    # [Claude 2026-11-03] After the 1.1 site switch the front page has no version line; the product page has it.
+    def test_version_line_on_the_product_page_not_the_front_page(self):
+        product = home("<p>1.1.0, released 3 November 2026</p>")
+        product.update(id=30, link="https://s/tertiary/")
+        front = home("<p>Welcome</p>")
+        s = FakeLive([page(), front, product], front=20)
+        self.run_publish(s, version_page_id=30)
+        self.assertEqual(s.writes, [(10, "elementor"), (30, "elementor")])
+        self.assertIn("1.1.0, released 30 October 2026", s.served[30])
+        self.assertNotIn(20, [w[0] for w in s.writes])
+
     def test_refuses_draft_before_touching_anything(self):
         s = FakeLive([page(), home()])
         with self.assertRaisesRegex(cl.Fail, "draft"):
