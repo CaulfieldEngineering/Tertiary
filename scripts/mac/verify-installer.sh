@@ -33,6 +33,11 @@ echo "Every bundle inside the installer is signed (Developer ID Application, har
 X="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pkg-expanded"
 rm -rf "$X"
 pkgutil --expand-full "$PKG" "$X" || fail "could not expand $PKG"
+# [Claude 2026-11-02] Without hostArchitectures the Installer treats the package as Intel-only, and an Apple Silicon Mac
+# without Rosetta refuses it. GitHub's Macs have Rosetta, so only this check would notice (the 1.1.0 customer test did).
+echo "Installs on Apple Silicon without Rosetta (hostArchitectures)..."
+grep -q 'hostArchitectures="[^"]*arm64' "$X/Distribution" \
+  || fail "$PKG does not declare hostArchitectures with arm64; Apple Silicon Macs without Rosetta can't install it"
 for want in $wFORMATS; do
   case "$want" in
     VST3) ext="vst3" ;;

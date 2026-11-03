@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <installer-script minSpecVersion="1">
   <title>@wPLUGIN_NAME@ v@wPROJECT_VERSION@ by @wCOMPANY_NAME@</title>
-  <options customize="always" require-scripts="false" allow-external-scripts="no"/>
+  <!-- [Claude 2026-11-02] hostArchitectures: without it macOS Installer treats the package as Intel-only and, on an
+       Apple Silicon Mac without Rosetta, refuses it ("can't be installed on this computer"; the 1.1.0 customer
+       install check on the Mac mini, macOS 26.6, no Rosetta). The plug-ins are universal. -->
+  <options hostArchitectures="arm64,x86_64" customize="always" require-scripts="false" allow-external-scripts="no"/>
 
   <choices-outline>
     <line choice="vst3"/>

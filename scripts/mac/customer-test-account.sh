@@ -23,7 +23,7 @@ exists() { dscl . -read "/Users/$USER_NAME" >/dev/null 2>&1; }
 product_paths() {
   local p
   for p in "/Library/Audio/Plug-Ins/Components/$PRODUCT.component" "/Library/Audio/Plug-Ins/VST3/$PRODUCT.vst3" \
-           "/Applications/$PRODUCT.app"; do
+           "/Applications/$PRODUCT.app" "/Applications/$PRODUCT"; do   # [Claude 2026-11-02] the installer puts the app in /Applications/<product>/
     [ -e "$p" ] && echo "$p"
   done
   return 0
