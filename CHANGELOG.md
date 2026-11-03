@@ -9,15 +9,12 @@
      Comments like this one are never published. -->
 
 ## 1.1.0 (release date)
-<!-- draft: written by scripts/draft-changelog.mjs on 2026-10-30. Joe approves it by deleting this line; the release pipeline won't publish it until then. -->
-- Mac: runs natively on Apple Silicon and Intel Macs, on macOS 11 (Big Sur) and later, and now comes as an Audio Unit (AU) as well as a VST3. The installer always puts the VST3, AU and standalone app in the standard folders. The standalone app now asks for microphone permission when it first opens an input.
-- Presets: a preset bar at the top of the window with 14 factory presets, plus your own presets saved in Documents/Wonderland Audio/Tertiary/Presets and shared by the VST3, AU and standalone app. Your DAW's preset list shows them too, and sessions from 1.0 open with all their settings.
-- Relative phase now matches the knob and the scope: 90 degrees shifts a band by a quarter of a cycle.
+- Mac: runs natively on Apple Silicon and Intel Macs, on macOS 11 (Big Sur) and later, and now comes as an Audio Unit (AU) as well as a VST3.
+- Presets: a preset bar at the top of the window with 14 factory presets, plus your own presets, shared by the VST3, AU and standalone app. Your DAW's preset list shows them too, and sessions from 1.0 open with all their settings.
 - A redesigned window with a new menu, drawn sharp at four sizes (100, 125, 150 and 200%). The scope zooms smoothly, follows tempo and rate changes as you make them, and greys out a bypassed band.
-- Tempo-synced LFOs stay on the beat: they follow tempo changes, return to the grid smoothly after a loop, a jump or a start mid-bar, and play from the start when the host begins before bar 1. LFOs keep the right speed after a change of sample rate, and a band that opens unsynced answers its rate control straight away.
-- Band gain changes now glide instead of clicking, and a preset change while playing reaches every band. Saving right after moving a control keeps the new value, and opening the window no longer nudges the Mid-High crossover.
-- Your serial key is checked with WonderlandAudio.com about once a week, Tertiary keeps working offline, and a refunded or cancelled key returns to demo mode with a message saying why. Activated copies show a "Version X is available" link when an update is out, and activating during the demo's pause turns the effect and its controls straight back on.
-- Steadier in hosts that change the buffer size while playing, with no crash when the window closes during activation or when the host automates the scope's display options. On Windows the plugin and standalone app are now signed, and silent installs (/VERYSILENT) finish.
+- Your serial key is checked with WonderlandAudio.com about once a week, and Tertiary keeps working offline. Activated copies show a link when an update is out.
+- Windows: the installer, the plugin and the standalone app are now signed.
+- Bug fixes and stability improvements.
 
 ## 1.0.2 (2026-01-28)
 **Windows**

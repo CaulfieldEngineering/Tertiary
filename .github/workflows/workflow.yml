@@ -1264,6 +1264,29 @@ jobs:
       run: bash scripts/web/deploy-staging.sh
 
 
+    # [Claude 2026-11-02] Pre-tag check (review of the tag-only paths): the WonderlandAudio.com demo deploy below has
+    # never run, and it needs an SSH shell on sftp.wp.com (mkdir, ls, rm), not only SFTP. Staging logs in, runs one
+    # read-only command and warns if it can't, so a missing login or SSH turned off shows up before a tag. Changes nothing.
+    - name: Check the WonderlandAudio.com SSH Login (staging, warning only)
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      env:
+        SSHPASS: ${{ secrets.WORDPRESS_SFTP_PASS }}
+      shell: bash
+      run: |
+        if [ -z "${SSHPASS}" ]; then
+          echo "::warning::WORDPRESS_SFTP_PASS is not set; a v* tag could not deploy the WonderlandAudio.com demo."
+          exit 0
+        fi
+        sudo apt-get install -y -q sshpass > /dev/null 2>&1
+        if out=$(sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=20 wonderlandaudio.wordpress.com@sftp.wp.com \
+              'test -d /srv/htdocs && ls -1A /srv/htdocs/demo 2>/dev/null | head -20; echo ssh-shell-ok' < /dev/null 2>&1) \
+           && grep -q ssh-shell-ok <<< "$out"; then
+          echo "SSH login and shell on sftp.wp.com work; demo folders: $(grep -v ssh-shell-ok <<< "$out" | tr '\n' ' ')"
+        else
+          echo "::warning::The WonderlandAudio.com SSH login or shell failed, so a v* tag's demo deploy would fail: $(tail -c 300 <<< "$out")"
+        fi
+
+
     # Still the Newest Release (tag only): a re-run of an older release must not put its demo back live
     # ==========================================================================================
     - name: Still the Newest Release Tag (web demo)
