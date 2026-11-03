@@ -183,6 +183,10 @@ jobs:
       if: inputs.step == 'preview'
       env:
         PROD_SHA: ${{ steps.prod.outputs.sha }}
+        # [Claude 2026-11-03] build.mjs refuses a Wonderlab other than config.mjs's pin (since f0eed61). Building
+        # production with another Wonderlab is this workflow's whole purpose, and the check below this build makes
+        # sure the checkout is exactly the requested commit, so that guard is lifted here, on purpose, and only here.
+        WLA_ALLOW_OTHER_WONDERLAB: '1'
       shell: bash
       run: |
         set -euo pipefail
