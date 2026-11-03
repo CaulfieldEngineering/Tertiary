@@ -188,6 +188,7 @@ jobs:
         WORDPRESS_SITE: ${{ secrets.WORDPRESS_SITE }}
         WORDPRESS_SFTP_PASS: ${{ secrets.WORDPRESS_SFTP_PASS }}
         CE_GITHUB_PAT: ${{ secrets.CE_GITHUB_PAT }}
+        SSH_ID: ${{ secrets.SSH_ID }}
       run: |
         missing_in() {   # $1 = group name, rest = variable names; prints the missing ones
           local group=$1; shift
@@ -209,6 +210,9 @@ jobs:
           missing_in "WordPress upload" WORDPRESS_USERNAME WORDPRESS_APPLICATION_PASSWORD WORDPRESS_SITE
           missing_in "WonderlandAudio.com web demo" WORDPRESS_SFTP_PASS
           missing_in "Wonderlab checkout (web demo)" CE_GITHUB_PAT
+          # [Claude 2026-11-02] Review of the tag-only paths: without it the installers/ upload and the live
+          # CaulfieldEngineering.com demo skip silently and a tag still goes green.
+          missing_in "CaulfieldEngineering.com upload (SSH)" SSH_ID
         )
 
         if [ -z "$WIN_MISSING" ]; then echo "sign_win=true" >> "$GITHUB_OUTPUT"; else echo "sign_win=false" >> "$GITHUB_OUTPUT"; fi

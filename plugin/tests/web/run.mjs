@@ -28,7 +28,13 @@ const commit = execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'
 const rows=[], differences=[];
 let page, browser, mobileWebkit, server;
 function safe(s) { return s.replace(/[^a-zA-Z0-9_-]+/g,'-').slice(0,140); }
+// [Claude 2026-11-02] --only=W-11,M-06 runs just those checks (by ID prefix) plus the ones that load a page and
+// unlock its audio (W-00, W-01, M-01, M-02), to re-check one fix alone before the full suite (Joe, 2026-11-02:
+// "fix the test and rerun the test in isolation before rerunning the whole suite"). The release run never passes it.
+const only=process.argv.find(a=>a.startsWith('--only='))?.slice(7).split(',').filter(Boolean);
+const setupCheck=id=>/^(W-00|W-01-|M-01-|M-02-)/.test(id);
 async function check(id, title, fn) {
+  if(only && !setupCheck(id) && !only.some(p=>id.startsWith(p))) return true;
   const row = {id,title,status:'pass'};
   try { row.data = await fn(); }
   catch(e) {
@@ -91,10 +97,20 @@ async function choosePreset(index=0) {
   await until(()=>snapshot(page),s=>s.program===index&&!s.controls.some(c=>c.key.startsWith('popup/')),'Preset did not close and load');
   await page.mouse.move(1,1);await page.waitForTimeout(300);
 }
+// [Claude 2026-11-02] W-11 failed once in the a07a068 release run: "UI changed without any parameter change
+// (editor/0/1/3/2)", with the screenshot showing 1/16 Note chosen and the faster wave drawn. JUCE's ComboBox sets
+// its text at once but tells its listeners (the parameter attachment) on the next message-loop pass
+// (juce_ComboBox.cpp: setSelectedId -> sendChange -> triggerAsyncUpdate), and the web build runs that loop
+// between our snapshots, so an 80 ms poll could see the new text a pass before the new parameter value. Wait for
+// both, up to PARAMETER_SETTLE_MS after the control changed; a parameter that never follows still fails below.
+const PARAMETER_SETTLE_MS=2000;
 async function changedState(before,c) {
-  return until(()=>snapshot(page),s=>controlChanged(c,s.controls.find(x=>x.key===c.key)),`Control ${c.key} did not change`);
+  const ui=await until(()=>snapshot(page),s=>controlChanged(c,s.controls.find(x=>x.key===c.key)),`Control ${c.key} did not change`);
+  if(parameterChanges(before,ui).length)return ui;
+  try {return await until(()=>snapshot(page),s=>parameterChanges(before,s).length>0,'parameter did not follow',PARAMETER_SETTLE_MS);}
+  catch {return ui;}
 }
-async function gestureCheck(id,c,gesture,{reset=true, prepare}={}) {
+async function gestureCheck(id,c,gesture,{reset=true, prepare, expectText}={}) {
   await check(id,`${c.kind} ${c.name || c.tooltip || c.text || c.key}`,async()=>{
     if(reset)await choosePreset(0);
     if(prepare)await prepare();
@@ -106,6 +122,9 @@ async function gestureCheck(id,c,gesture,{reset=true, prepare}={}) {
     await gesture(c);
     const after=await changedState(before,c), params=parameterChanges(before,after);
     assert.ok(params.length,`UI changed without any parameter change (${c.key})`);
+    // [Claude 2026-11-02] A menu choice must land on the parameter as the item chosen, not just change it.
+    if(expectText!==undefined){const texts=params.map(n=>after.parameters.find(p=>p.name===n)?.text);
+      assert.ok(texts.includes(expectText),`Chose ${expectText}, but the parameter reads ${JSON.stringify(texts)} (${c.key})`);}
     await page.waitForTimeout(500);
     const settled=await snapshot(page);
     const scopeChanged=JSON.stringify(before.scopes)!==JSON.stringify(settled.scopes);
@@ -234,7 +253,16 @@ try {
   for(const c0 of controls(initial,'combo')) {
     for(const item of c0.items) {
       await gestureCheck(`W-11-menu-${safe(c0.key)}-${safe(item)}`,c0,async current=>selectItem(page,current,item),
-        {prepare:async()=>{const c=(await snapshot(page)).controls.find(c=>c.key===c0.key);if(c.text===item)await selectItem(page,c,c.items.find(x=>x!==item));}});
+        {expectText:item,prepare:async()=>{
+          const pre=await snapshot(page),c=pre.controls.find(c=>c.key===c0.key);if(c.text!==item)return;
+          // [Claude 2026-11-02] The step away from the item under test has the same text-before-parameter gap
+          // (see changedState). Isolated re-check: "Parameters changed but scope path/state did not" once in 3,
+          // because "before" was taken while this choice was still landing. Wait for its parameter, then the
+          // same 500 ms the scope gets after the real choice.
+          const other=c.items.find(x=>x!==item);await selectItem(page,c,other);
+          await until(()=>snapshot(page),s=>parameterChanges(pre,s).some(n=>s.parameters.find(p=>p.name===n)?.text===other),
+            `Set-up choice ${other} did not reach its parameter (${c0.key})`,PARAMETER_SETTLE_MS);
+          await page.waitForTimeout(500);}});
     }
   }
   // Each band toggle is checked in both directions. Sync also exposes the free-rate slider.

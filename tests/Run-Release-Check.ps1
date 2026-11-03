@@ -30,7 +30,11 @@ function Say($text) { Write-Host ("[{0:HH:mm:ss}] {1}" -f (Get-Date), $text) }
 $RunStart = Get-Date
 function RunTime { $end = Get-Date; $t = $end - $RunStart
     Say ("Release check started {0:yyyy-MM-dd HH:mm:ss}, ended {1:yyyy-MM-dd HH:mm:ss}, took {2} h {3} min {4} s" -f $RunStart, $end, [int][math]::Floor($t.TotalHours), $t.Minutes, $t.Seconds) }
-function Fail($text) { Say "FAIL: $text"; RunTime; exit 1 }
+# [Claude 2026-11-02] A Windows failure no longer leaves the Mac half running on its own (the 2026-11-02 12:37 run
+# did): Fail waits for it, so no test on the Mac is cut off with a host or plug-in staged.
+function Fail($text) {
+    if ($script:mac -and -not $script:mac.HasExited) { Say "Waiting for the Mac half to finish before stopping (its log: $script:macLog)"; $script:mac.WaitForExit() }
+    Say "FAIL: $text"; RunTime; exit 1 }
 trap { Fail "unexpected error: $_" }
 
 # 1. Commit and dashboard ----------------------------------------------------------------------------
@@ -66,6 +70,10 @@ if ($macHost) {
     New-Item -ItemType Directory -Force (Join-Path $Root 'tests/results') | Out-Null
     $mac = Start-Process -PassThru -WindowStyle Hidden -FilePath 'ssh' -RedirectStandardOutput $macLog -RedirectStandardError "$macLog.err" `
         -ArgumentList @('-o', 'BatchMode=yes', $macHost, "bash $macRepo/tests/mac/release-check.sh $commit $stamp")
+    # [Claude 2026-11-02] Without this, Windows PowerShell 5.1 loses the exit code of a process started with
+    # redirection: every run so far printed "Mac exit " (empty), so a failed Mac half would have counted as 0 and
+    # been pushed. Same fix as plugin/tests/ci/installer_test_windows.ps1.
+    $null = $mac.Handle
 }
 New-Item -ItemType Directory -Force (Join-Path $Root 'tests/results') | Out-Null
 # A fresh checkout has no build folder, web packages or Cubase input audio (none are in git). Make them here so the
@@ -103,6 +111,7 @@ $macCode = 0
 if ($mac) {
     Say 'Waiting for the Mac'
     $mac.WaitForExit(); $macCode = $mac.ExitCode
+    if ($null -eq $macCode) { Fail 'the Mac half ended without an exit code; nothing pushed' }
     $macCopy = Join-Path $Root "tests/results/$stamp-mac"
     scp -q -r -o BatchMode=yes "${macHost}:$macRepo/tests/results/$stamp" $macCopy
     if ($LASTEXITCODE) { Fail 'could not copy the Mac results' }

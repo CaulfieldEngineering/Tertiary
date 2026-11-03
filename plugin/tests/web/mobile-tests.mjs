@@ -113,7 +113,9 @@ export async function testMobile({context,check,shot,outDir,meta,engine}) {
             `Touch menu outside the screen: ${JSON.stringify(r)}`);
           const item=menu.controls.find(c=>c.visible&&c.key.startsWith('popup/')&&combo.items.includes(c.title)&&c.title!==combo.text);assert.ok(item);
           await page.waitForTimeout(MENU_GUARD_MS);await tapControl(page,item); // [Claude 2026-10-31] past JUCE's 250 ms menu guard
-          const after=await until(()=>snapshot(page),s=>s.controls.find(c=>c.key===combo.key)?.text===item.title,'Touch menu did not select the item');
+          // [Claude 2026-11-02] The menu text changes a message-loop pass before the parameter (see changedState in
+          // run.mjs); wait for both, so the parameters reported here are the choice and not the moment before it.
+          const after=await until(()=>snapshot(page),s=>s.controls.find(c=>c.key===combo.key)?.text===item.title&&parameterChanges(before,s).some(n=>s.parameters.find(p=>p.name===n)?.text===item.title),'Touch menu did not select the item and set its parameter');
           const audit=await targets(page);
           fs.writeFileSync(path.join(outDir,`${id}-zoom-touch-targets.json`),JSON.stringify(audit,null,2));
           return {gesture,parameters:parameterChanges(before,after),zoomSmallTargets:audit.smallTargets};
