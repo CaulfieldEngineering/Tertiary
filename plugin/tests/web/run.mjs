@@ -230,7 +230,9 @@ try {
   }
   for(const c0 of controls(initial,'cursor')) {
     await check(`W-18-${c0.name}`,'Crossover/gain handle changes its parameter and frequency display',async()=>{
-      await choosePreset(9); // Three Rhythms makes the bands audibly distinct.
+      // Three Rhythms makes the bands audibly distinct. [Claude 2026-11-03] Found by name: the 1.1.1 presets moved it.
+      const threeRhythms=initial.programs.indexOf('Three Rhythms');assert.ok(threeRhythms>0,'Factory preset Three Rhythms missing');
+      await choosePreset(threeRhythms);
       const before=await snapshot(page),c=before.controls.find(x=>x.key===c0.key);
       const region={x:376,y:79,width:365,height:173};
       const imageBefore=await cropScope(region),p=await point(page,c.x+c.width/2,c.y+c.height/2);

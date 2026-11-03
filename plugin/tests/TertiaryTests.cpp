@@ -1085,6 +1085,30 @@ struct PresetTests : juce::UnitTest
             logMessage (names.joinIntoString (", "));
         }
 
+        // [Claude 2026-11-03] Joe, 1.1.1: "too many presets that use the same settings across bands, which defeats the
+        // purpose of the plugin". Apart from Default, no factory preset sets all three bands the same.
+        beginTest ("Factory presets: no preset but Default has three identical bands");
+        {
+            const juce::StringArray settings { "Waveshape", "Multiplier", "Depth", "Skew", "Relative Phase", "Invert",
+                                               "Sync to Host", "Rate", "Bypassed", "Mute" };
+            for (size_t i = 1; i < factory.size(); ++i)
+            {
+                std::map<juce::String, float> v (factory[i].values.begin(), factory[i].values.end());
+                auto band = [&] (const juce::String& b)
+                {
+                    juce::String key;
+                    for (auto& s : settings)
+                    {
+                        const auto id = (s == "Bypassed" ? "Bypassed " + b + " Band" : s + " " + b + " Band");
+                        key << s << "=" << (v.count (id) ? juce::String (v[id]) : juce::String ("default")) << ";";
+                    }
+                    return key;
+                };
+                expect (! (band ("Low") == band ("Mid") && band ("Mid") == band ("High")),
+                        factory[i].name + " has the same settings on every band");
+            }
+        }
+
         beginTest ("Default = the plugin defaults; a new instance is on Default, not modified");
         {
             audio_plugin::AudioPluginAudioProcessor p;
