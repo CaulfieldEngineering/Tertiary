@@ -90,7 +90,7 @@ optional overrides only.
 | Inno Setup | 6.7.4 | `WLA_ISCC` | automatically, its installer in per-user portable mode into `.tools` (no registry entry, no admin) |
 | ninja | v1.13.2 | `WLA_NINJA` (or on PATH) | automatically, for the web build |
 | Emscripten SDK | 5.0.3 (CI's version) | `EMSDK` (activated), or `WLA_EMSDK_ENV` (an `emsdk_env.ps1`) | automatically: emsdk at the 5.0.3 tag, then `emsdk install/activate 5.0.3` (about 1 GB, once) |
-| Wonderlab | 11f991a (the workflows' pin) | `WONDERLAB_DIR` | automatically, cloned with this machine's own git credentials (private repo) |
+| Wonderlab | 6268e87 (the workflows' pin) | `WONDERLAB_DIR` | automatically, cloned with this machine's own git credentials (private repo) |
 | REAPER | 7.84 | `WLA_REAPER` | **opt-in only**: `python scripts/lib/tools.py install reaper` (portable install). Its licence is a 60-day evaluation, then a paid licence; an installed REAPER is used when no `.tools` copy exists |
 
 `python scripts/lib/tools.py list` shows what is present; `path <tool>` fetches one and prints it.
