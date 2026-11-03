@@ -1,0 +1,367 @@
+# Deploy web demo only
+# ==========================================================================================
+# [Claude 2026-11-03] A manual run that updates ONLY the web demo, for a Wonderlab change that needs no new release
+# (Joe, 2026-11-02: "Tempo is a push to wonderlab only so we can probably sneak that in without impacting the
+# installers"). Nothing else is built or published: no installers, no changelog, no store version, no tag.
+#
+# It is the tag release's web path, in two runs, with the Wonderlab commit as the one thing that changes:
+#
+#   1. step = preview   Builds the web demo from the CURRENT production commit with the given Wonderlab commit
+#                       (instead of the pin in workflow.yml), and puts it on the private staging preview,
+#                       CaulfieldEngineering.com/plug-ins/{repo}/web-staging/ (noindex, linked from nowhere),
+#                       exactly as a staging push does. Look at it there.
+#   2. step = promote   Downloads that preview and checks it the way a v* tag does: every file matches its checksum,
+#                       no file the manifest does not list, built from the current production commit (so production
+#                       has not moved since the preview), with the same Wonderlab commit, and production is a
+#                       released commit (the newest v* tag, or a commit with the same source). Only then it puts those
+#                       exact files on the two live demos (CaulfieldEngineering.com /web/ and WonderlandAudio.com
+#                       /demo/{repo}/), with the same deploy steps as workflow.yml.
+#
+# Run it from the Actions tab ("Deploy web demo only", Run workflow), or:
+#   gh workflow run deploy-web-demo.yml -f step=preview -f wonderlab=<40-character commit>
+#   gh workflow run deploy-web-demo.yml -f step=promote -f wonderlab=<the same commit>
+#
+# Notes:
+#   - GitHub lists a workflow_dispatch workflow only once this file is on the default branch (staging).
+#   - A staging push after step 1 replaces the preview with staging's own build; then step 2 refuses (the preview is
+#     no longer this build). Run step 1 again.
+#   - The next v* tag builds with workflow.yml's pin again. Move that pin (and test.yml's, plugin/tests/web/config.mjs,
+#     scripts/lib/tools.json) to the same Wonderlab commit before the next release, or the next release puts the
+#     older demo back.
+# ==========================================================================================
+
+name: Deploy web demo only
+
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: 'preview: build and put it on the private staging preview. promote: put that checked preview on the live demos.'
+        type: choice
+        options: [preview, promote]
+        default: preview
+      wonderlab:
+        description: 'Wonderlab commit to build the demo with (the full 40-character id)'
+        required: true
+        type: string
+
+# One web demo deploy at a time, shared with the tag release's web-build job (its group for tags)
+concurrency:
+  group: web-demo-release
+  cancel-in-progress: false
+
+jobs:
+  web-demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      WONDERLAB_DIR: ${{ github.workspace }}/Wonderlab
+      WONDERLAB_SHA: ${{ inputs.wonderlab }}
+
+    steps:
+
+    - name: Check the Inputs
+      shell: bash
+      run: |
+        if ! [[ "$WONDERLAB_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "::error::wonderlab must be a full 40-character commit id (got '$WONDERLAB_SHA')"
+          exit 1
+        fi
+
+
+    # The current production commit, whatever branch this run was started from
+    # ==========================================================================================
+    - name: Checkout Production
+      uses: actions/checkout@v4
+      with:
+        ref: production
+        fetch-depth: 0
+
+    - name: Record the Production Commit
+      id: prod
+      shell: bash
+      run: |
+        set -euo pipefail
+        SHA=$(git rev-parse HEAD)
+        echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+        echo "Production is ${SHA}"
+
+
+    - name: Checkout Wonderlab
+      uses: actions/checkout@v4
+      with:
+        repository: CaulfieldEngineering/Wonderlab
+        ref: ${{ inputs.wonderlab }}
+        path: Wonderlab
+        token: ${{ secrets.CE_GITHUB_PAT }}
+
+
+    - name: Read Project Configuration
+      shell: bash
+      run: |
+        while IFS=' ' read -r key value; do
+          value=$(echo $value | tr -d '"')
+          echo "$key=$value" >> $GITHUB_ENV
+        done < <(grep 'set(w' ${GITHUB_WORKSPACE}/config.cmake | sed -e 's/set(//g' -e 's/)//g' -e 's/\s\+/ /g')
+
+
+    # Same folder names and checks as workflow.yml
+    - name: Check the Web Demo Folder Names
+      id: webdirs
+      shell: bash
+      run: |
+        set -euo pipefail
+        STAGING_DIR="${wWEB_STAGING_DIR:-web-staging}"
+        LIVE_DIR="${wWEB_LIVE_DIR:-web}"
+        for d in "$STAGING_DIR" "$LIVE_DIR"; do
+          if ! [[ "$d" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; then
+            echo "::error::Web demo folder name '$d' (config.cmake wWEB_STAGING_DIR / wWEB_LIVE_DIR) must be letters, digits, - or _"
+            exit 1
+          fi
+        done
+        if [ "$STAGING_DIR" = "$LIVE_DIR" ]; then
+          echo "::error::wWEB_STAGING_DIR and wWEB_LIVE_DIR are both '$LIVE_DIR'; the preview must not be the live demo"
+          exit 1
+        fi
+        echo "staging_dir=${STAGING_DIR}" >> "$GITHUB_OUTPUT"
+        echo "live_dir=${LIVE_DIR}" >> "$GITHUB_OUTPUT"
+
+
+    # SSH to CaulfieldEngineering.com (both steps: the preview is uploaded to it, and downloaded from it)
+    # ==========================================================================================
+    - name: Check SSH Credentials
+      shell: bash
+      run: |
+        if [ -z "${{ secrets.SSH_ID }}" ] || [ "${{ secrets.SSH_ID }}" = "SKIP" ]; then
+          echo "::error::SSH_ID is not set: the preview cannot be uploaded or read. Nothing was deployed."
+          exit 1
+        fi
+
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.5.3
+      with:
+        ssh-private-key: ${{ secrets.SSH_ID }}
+
+    - name: Add Host Key and SSH Config
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -p 7822 CaulfieldEngineering.com >> ~/.ssh/known_hosts
+        echo "Host CaulfieldEngineering.com
+          HostName CaulfieldEngineering.com
+          User caulfiel
+          Port 7822
+          MACs hmac-sha2-256
+          StrictHostKeyChecking no" > ~/.ssh/config
+
+
+    # ==========================================================================================
+    # Step 1: preview
+    # ==========================================================================================
+
+    - name: Install Emscripten SDK
+      if: inputs.step == 'preview'
+      uses: mymindstorm/setup-emsdk@v14
+      with:
+        version: 5.0.3
+
+    - name: Install Build Tools
+      if: inputs.step == 'preview'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ninja-build ffmpeg \
+          libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxcomposite-dev \
+          libfreetype-dev libfontconfig1-dev libasound2-dev libgl-dev libcurl4-openssl-dev \
+          libwebkit2gtk-4.1-dev libgtk-3-dev
+
+    # The same build as workflow.yml's web-build job (scripts/web/build-web.sh, no test inspector), with
+    # WONDERLAB_DIR at the requested commit. The bundle is then made again with the production commit, because
+    # bundle.mjs takes GITHUB_SHA, which here is the commit this workflow was started from, not production.
+    - name: Build the Web Demo
+      if: inputs.step == 'preview'
+      env:
+        PROD_SHA: ${{ steps.prod.outputs.sha }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        bash scripts/web/build-web.sh
+        node scripts/web/bundle.mjs --commit "$PROD_SHA"
+        B="${GITHUB_WORKSPACE}/build/web-bundle"
+        # Which Wonderlab built it, so the promote step can check it; then the manifest again, over every file
+        # (the same "<sha256>  <path>" list bundle.mjs writes)
+        echo "$WONDERLAB_SHA" > "$B/wonderlab-commit.txt"
+        ( cd "$B" && find . -type f ! -name build-manifest.sha256 -printf '%P\n' | LC_ALL=C sort \
+            | while IFS= read -r f; do sha256sum -- "$f"; done ) > "${RUNNER_TEMP}/manifest" && mv "${RUNNER_TEMP}/manifest" "$B/build-manifest.sha256"
+        grep -q "\"buildId\": \"${PROD_SHA::8}\"" "$B/plugin-config.js" || { echo "::error::plugin-config.js does not carry build id ${PROD_SHA::8}"; exit 1; }
+        [ "$(git -C "$WONDERLAB_DIR" rev-parse HEAD)" = "$WONDERLAB_SHA" ] || { echo "::error::Wonderlab checkout is not $WONDERLAB_SHA"; exit 1; }
+        echo "Bundle: production ${PROD_SHA}, Wonderlab ${WONDERLAB_SHA}"
+        cat "$B/build-manifest.sha256"
+
+    # Same upload as scripts/web/deploy-staging.sh (noindex .htaccess, upload to <staging>.incoming-<run>, whole-folder
+    # swap), without its "staging is still this commit" check, which does not apply: this is production's build.
+    - name: Deploy to the Staging Preview
+      if: inputs.step == 'preview'
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        STAGING_DIR: ${{ steps.webdirs.outputs.staging_dir }}
+        PROD_SHA: ${{ steps.prod.outputs.sha }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        B="${GITHUB_WORKSPACE}/build/web-bundle"
+        CE_SERVER="CaulfieldEngineering.com"
+        STG="/home/caulfiel/public_html/plug-ins/${REPOSITORY_NAME}/${STAGING_DIR}"
+        INC="${STG}.incoming-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+        HT="${RUNNER_TEMP}/staging-htaccess"
+        cat "${WONDERLAB_DIR}/web/htaccess" > "$HT"
+        printf '\n# Staging preview: never indexed\nHeader always set X-Robots-Tag "noindex, nofollow, noarchive"\n' >> "$HT"
+        ssh "$CE_SERVER" "rm -rf '${INC}' && mkdir -p '${INC}'"
+        scp -r "${B}/"* "${CE_SERVER}:${INC}/"
+        scp "$HT" "${CE_SERVER}:${INC}/.htaccess"
+        ssh "$CE_SERVER" "rm -rf '${STG}.old' && if [ -d '${STG}' ]; then mv '${STG}' '${STG}.old'; fi && [ ! -e '${STG}' ] && mv '${INC}' '${STG}' && rm -rf '${STG}.old'"
+        URL="https://caulfieldengineering.com/plug-ins/${REPOSITORY_NAME}/${STAGING_DIR}/"
+        {
+          echo "### Web demo preview (demo only)"
+          echo ""
+          echo "Preview: ${URL}"
+          echo ""
+          echo "Production \`${PROD_SHA}\` built with Wonderlab \`${WONDERLAB_SHA}\`. Not indexed, linked from nowhere."
+          echo "The live demos were not changed. To put these exact files live, run this workflow again with step = promote and the same Wonderlab commit."
+        } >> "$GITHUB_STEP_SUMMARY"
+        echo "Preview deployed: ${URL}"
+
+
+    # ==========================================================================================
+    # Step 2: promote (the checks of workflow.yml's "Choose the Web Demo to Release", then its two deploys)
+    # ==========================================================================================
+
+    - name: Check the Preview
+      id: release_web
+      if: inputs.step == 'promote'
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        STAGING_DIR: ${{ steps.webdirs.outputs.staging_dir }}
+        PROD_SHA: ${{ steps.prod.outputs.sha }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        DL="${RUNNER_TEMP}/web-staging-download"
+        STG="/home/caulfiel/public_html/plug-ins/${REPOSITORY_NAME}/${STAGING_DIR}"
+        no() { echo "::error::Not promoting the preview: $1. Nothing was deployed."; exit 1; }
+
+        # Production must be a released commit: the newest v* tag's, or one with the same source (the merge)
+        NEWEST=$(git tag --list 'v*' --sort=-v:refname | head -n 1)
+        [ -n "$NEWEST" ] || no "there is no v* tag"
+        [ "$(git rev-parse "${NEWEST}^{tree}")" = "$(git rev-parse "${PROD_SHA}^{tree}")" ] \
+          || no "production (${PROD_SHA::8}) has changes that are not in the newest release ${NEWEST}"
+
+        scp -r "CaulfieldEngineering.com:${STG}" "$DL" || no "could not download ${STG}"
+        rm -f "${DL}/.htaccess"
+        [ -f "${DL}/build-commit.txt" ] && [ -f "${DL}/build-manifest.sha256" ] && [ -f "${DL}/wonderlab-commit.txt" ] \
+          || no "the preview is not a demo-only build (no build-commit.txt, wonderlab-commit.txt or manifest); run step = preview first"
+        STG_SHA=$(tr -d '[:space:]' < "${DL}/build-commit.txt")
+        STG_WL=$(tr -d '[:space:]' < "${DL}/wonderlab-commit.txt")
+        [ "$STG_SHA" = "$PROD_SHA" ] || no "the preview was built from ${STG_SHA::8}, but production is now ${PROD_SHA::8}"
+        [ "$STG_WL" = "$WONDERLAB_SHA" ] || no "the preview was built with Wonderlab ${STG_WL::8}, not ${WONDERLAB_SHA::8}"
+        ( cd "$DL" && sha256sum --check --strict --quiet build-manifest.sha256 ) || no "a preview file does not match its checksum"
+        listed=$(sed -E 's/^[0-9a-f]{64} [ *]//' "${DL}/build-manifest.sha256" | sort)
+        present=$(cd "$DL" && find . -type f ! -name build-manifest.sha256 -printf '%P\n' | sort)
+        [ "$listed" = "$present" ] || no "the preview folder holds files the manifest does not list"
+        for f in index.html plugin-config.js "${wPLUGIN_NAME}Web.js" "${wPLUGIN_NAME}Web.wasm"; do
+          [ -f "${DL}/${f}" ] || no "the preview has no ${f}"
+        done
+        grep -q "\"buildId\": \"${PROD_SHA::8}\"" "${DL}/plugin-config.js" || no "plugin-config.js build id is not ${PROD_SHA::8}"
+
+        echo "dir=${DL}" >> "$GITHUB_OUTPUT"
+        {
+          echo "### Web demo release (demo only)"
+          echo ""
+          echo "Promoted the preview unchanged: production \`${PROD_SHA}\` (release ${NEWEST}), Wonderlab \`${WONDERLAB_SHA}\`, every file checked."
+        } >> "$GITHUB_STEP_SUMMARY"
+
+
+    # From here on, the same two steps as workflow.yml's tag deploys
+    - name: Deploy Web App to CaulfieldEngineering.com
+      if: inputs.step == 'promote'
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        LIVE_DIR: ${{ steps.webdirs.outputs.live_dir }}
+        RELEASE_DIR: ${{ steps.release_web.outputs.dir }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        [ -n "$RELEASE_DIR" ] && [ -f "${RELEASE_DIR}/index.html" ] || { echo "::error::No web demo to release"; exit 1; }
+        CE_SERVER="CaulfieldEngineering.com"
+        LIVE="/home/caulfiel/public_html/plug-ins/${REPOSITORY_NAME}/${LIVE_DIR}"
+        INC="${LIVE}.incoming-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+        echo "Deploying web app to ${CE_SERVER}:${LIVE}/ ..."
+        ssh "$CE_SERVER" "rm -rf '${INC}' && mkdir -p '${INC}'"
+        scp -r "${RELEASE_DIR}/"* "${CE_SERVER}:${INC}/"
+        scp "${GITHUB_WORKSPACE}/Wonderlab/web/htaccess" "${CE_SERVER}:${INC}/.htaccess"
+        # Swap the folder; the one it replaces is kept as <live>.previous for a quick rollback
+        ssh "$CE_SERVER" "rm -rf '${LIVE}.previous' && if [ -d '${LIVE}' ]; then mv '${LIVE}' '${LIVE}.previous'; fi && [ ! -e '${LIVE}' ] && mv '${INC}' '${LIVE}'"
+
+        URL="https://caulfieldengineering.com/plug-ins/${REPOSITORY_NAME}/${LIVE_DIR}/"
+        echo "CaulfieldEngineering.com deployed: ${URL}"
+        echo "- CaulfieldEngineering.com: ${URL}" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Deploy Web App to WonderlandAudio.com
+      if: inputs.step == 'promote'
+      env:
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        RELEASE_DIR: ${{ steps.release_web.outputs.dir }}
+        SSHPASS: ${{ secrets.WORDPRESS_SFTP_PASS }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        [ -n "$RELEASE_DIR" ] && [ -f "${RELEASE_DIR}/index.html" ] || { echo "::error::No web demo to release"; exit 1; }
+        [ -n "${SSHPASS}" ] || { echo "::error::WORDPRESS_SFTP_PASS is not set; WonderlandAudio.com was not deployed (CaulfieldEngineering.com was)"; exit 1; }
+        WONDERLAB_DIR="${GITHUB_WORKSPACE}/Wonderlab"
+
+        WP_HOST="sftp.wp.com"
+        WP_USER="wonderlandaudio.wordpress.com"
+        WP_DEST="/srv/htdocs/demo/${REPOSITORY_NAME}"
+        WP_SSH_OPTS=(-o StrictHostKeyChecking=no)
+
+        sudo apt-get install -y -q sshpass > /dev/null 2>&1
+
+        sshpass -e ssh "${WP_SSH_OPTS[@]}" "${WP_USER}@${WP_HOST}" "mkdir -p ${WP_DEST}/audio"
+
+        # Files the previous release put there and this one does not have are removed (same as workflow.yml)
+        OLD_LIST="${RUNNER_TEMP}/wp-old-files.txt"
+        if sshpass -e scp "${WP_SSH_OPTS[@]}" "${WP_USER}@${WP_HOST}:${WP_DEST}/build-manifest.sha256" "${RUNNER_TEMP}/wp-old-manifest.sha256" 2>/dev/null; then
+          sed -E 's/^[0-9a-f]{64} [ *]//' "${RUNNER_TEMP}/wp-old-manifest.sha256" | sort -u > "$OLD_LIST"
+        else
+          echo "No manifest on WordPress yet: comparing audio/ and the fallback build with this release."
+          { sshpass -e ssh "${WP_SSH_OPTS[@]}" "${WP_USER}@${WP_HOST}" "cd '${WP_DEST}/audio' 2>/dev/null && ls -1A" < /dev/null | sed 's#^#audio/#' || true
+            printf '%s\n' "${wPLUGIN_NAME}WebFallback.js" "${wPLUGIN_NAME}WebFallback.wasm"; } | sort -u > "$OLD_LIST"
+        fi
+        sed -E 's/^[0-9a-f]{64} [ *]//' "${RELEASE_DIR}/build-manifest.sha256" | sort -u > "${RUNNER_TEMP}/wp-new-files.txt"
+        comm -23 "$OLD_LIST" "${RUNNER_TEMP}/wp-new-files.txt" > "${RUNNER_TEMP}/wp-stale.txt"
+        CLEAN=true
+        while IFS= read -r f; do
+          case "$f" in ""|/*|*..*|*\'*|*\\*) echo "::warning::Not removing '$f' from WordPress (unexpected name)"; continue ;; esac
+          echo "Removing ${f} (not in this release)"
+          if ! sshpass -e ssh "${WP_SSH_OPTS[@]}" "${WP_USER}@${WP_HOST}" "rm -f -- '${WP_DEST}/${f}'" < /dev/null; then
+            echo "::warning::Could not remove ${f} from WordPress; the next release tries again"
+            CLEAN=false
+          fi
+        done < "${RUNNER_TEMP}/wp-stale.txt"
+
+        echo "Uploading web files to WordPress..."
+        UPLOAD=()
+        for p in "${RELEASE_DIR}/"*; do
+          [ "$(basename "$p")" = "build-manifest.sha256" ] || UPLOAD+=("$p")
+        done
+        sshpass -e scp "${WP_SSH_OPTS[@]}" -r "${UPLOAD[@]}" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
+        if [ "$CLEAN" = "true" ]; then
+          sshpass -e scp "${WP_SSH_OPTS[@]}" "${RELEASE_DIR}/build-manifest.sha256" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
+        fi
+
+        echo "Uploading PHP wrappers..."
+        sshpass -e scp "${WP_SSH_OPTS[@]}" "${WONDERLAB_DIR}/web/index.php" "${WONDERLAB_DIR}/web/serve.php" "${WP_USER}@${WP_HOST}:${WP_DEST}/"
+
+        echo "- WonderlandAudio.com: https://wonderlandaudio.com/demo/${REPOSITORY_NAME}/" >> "$GITHUB_STEP_SUMMARY"
